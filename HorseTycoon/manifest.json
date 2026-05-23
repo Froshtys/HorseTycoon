@@ -1,0 +1,16 @@
+{
+  "Name": "HorseTycoon",
+  "Author": "Froshty",
+  "Version": "1.0.0",
+  "Description": "Breed and race horses in stardew!",
+  "UniqueID": "Froshty.HorseTycoon",
+  "EntryDll": "HorseTycoon.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": [],
+  "Dependencies": [
+  {
+    "UniqueID": "Pathoschild.ContentPatcher",
+    "MinimumVersion": "2.0.0"
+  }
+]
+}
