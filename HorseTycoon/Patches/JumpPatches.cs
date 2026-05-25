@@ -77,5 +77,21 @@ namespace HorseTycoon
             }
             return true;
         }
+
+        public static void Farmer_getMovementSpeed_Postfix(Farmer __instance, ref float __result)
+        {
+            // Ensure the player is on a horse and the mount exists
+            if (__instance.isRidingHorse() && __instance.mount != null)
+            {
+                // Use your HorseHelper to link the mount back to the FarmAnimal
+                var horse = HorseHelper.GetFarmAnimalForHorse(__instance.mount);
+                if (horse != null)
+                {
+                    // Apply the speed boost calculated in HorseStats
+                    var stats = horse.GetHorseStats();
+                    __result += stats.SpeedBoost;
+                }
+            }
+        }
     }
 }

@@ -30,6 +30,10 @@ namespace HorseTycoon
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
 
+            helper.ConsoleCommands.Add("set_horse_stat",
+            "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
+            this.HandleSetStat);
+
             var harmony = new Harmony(this.ModManifest.UniqueID);
             FarmAnimalPatches.Apply(harmony);
 
@@ -281,14 +285,43 @@ namespace HorseTycoon
                 displayName: "Horse Exhausted",
                 duration: durationMs,
                 isDebuff: true
-            );
-
-            tiredBuff.iconTexture = Game1.buffsIcons;
-            tiredBuff.iconSheetIndex = 25;   // Using index 25 (the red 'sick' debuff
-
-            tiredBuff.description = "Your horse needs a break before another sprint!";
-
+            )
+            {
+                iconTexture = Game1.buffsIcons,
+                iconSheetIndex = 25,   // Index 25 (the red 'sick' debuff)
+                description = "Your horse needs a break before another sprint!"
+            };
             Game1.player.applyBuff(tiredBuff);
+        }
+
+        private void HandleSetStat(string command, string[] args)
+        {
+            if (!Context.IsWorldReady || Game1.player.mount == null)
+            {
+                this.Monitor.Log("You must be riding a horse!", LogLevel.Error);
+                return;
+            }
+
+            if (args.Length < 3)
+            {
+                this.Monitor.Log("Usage: set_horse_stat <Stat> <IV/EV> <Value>", LogLevel.Error);
+                return;
+            }
+
+            var horse = HorseHelper.GetFarmAnimalForHorse(Game1.player.mount);
+            if (horse == null) return;
+
+            var stats = horse.GetHorseStats();
+
+            // Attempt to apply the stat via our new class method
+            if (int.TryParse(args[2], out int val) && stats.ApplyDebugStat(args[0], args[1], val))
+            {
+                this.Monitor.Log($"Updated {horse.Name}: {args[0]} {args[1]} set to {val}.", LogLevel.Info);
+            }
+            else
+            {
+                this.Monitor.Log("Invalid stat name or type. Use: Jump/Speed/Stamina and IV/EV.", LogLevel.Error);
+            }
         }
     }
 }

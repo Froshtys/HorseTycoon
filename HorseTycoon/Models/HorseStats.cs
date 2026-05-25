@@ -42,6 +42,30 @@ namespace HorseTycoon.Models
         public int SpeedEV { get => GetStat(nameof(SpeedEV)); set => SetStat(nameof(SpeedEV), value); }
         public int TotalSpeed => Math.Min(STAT_MAX, SpeedIV + SpeedEV);
 
+        public int JumpDistance
+        {
+            get
+            {
+                int skill = this.TotalJump;
+                return skill switch
+                {
+                    < 30 => 3,
+                    >= 30 and < 60 => 4,
+                    >= 60 and < 80 => 5,
+                    >= 80 and < 95 => 6,
+                    >= 95 => 7
+                };
+            }
+        }
+
+        public float SpeedBoost
+        {
+            get
+            {
+                return this.TotalSpeed / 25f;
+            }
+        }
+
         // --- Stamina (Total Max 100) ---
         public int StaminaIV { get => GetStat(nameof(StaminaIV)); set => SetStat(nameof(StaminaIV), value); }
         public int StaminaEV { get => GetStat(nameof(StaminaEV)); set => SetStat(nameof(StaminaEV), value); }
@@ -121,6 +145,35 @@ namespace HorseTycoon.Models
             this.SpeedEV = 0;
             this.StaminaEV = 0;
             this.JumpEV = 0;
+        }
+
+        public bool ApplyDebugStat(string stat, string type, int value)
+        {
+            value = Math.Clamp(value, 0, 50);
+            type = type.ToLower();
+            stat = stat.ToLower();
+
+            switch (stat)
+            {
+                case "jump":
+                    if (type == "iv") this.JumpIV = value;
+                    else if (type == "ev") this.JumpEV = value;
+                    else return false;
+                    break;
+                case "speed":
+                    if (type == "iv") this.SpeedIV = value;
+                    else if (type == "ev") this.SpeedEV = value;
+                    else return false;
+                    break;
+                case "stamina":
+                    if (type == "iv") this.StaminaIV = value;
+                    else if (type == "ev") this.StaminaEV = value;
+                    else return false;
+                    break;
+                default:
+                    return false;
+            }
+            return true;
         }
     }
 }

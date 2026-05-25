@@ -29,16 +29,13 @@ namespace HorseTycoon
             }
             var stats = new HorseTycoon.Models.HorseStats(horseAnimal);
 
-            // Map TotalJump (0-100) to actual jump values
-            int maxJumpDistance = 2 + (int)(stats.TotalJump / 10f);
-
             // --- LOGGING ---
             Manager.Monitor.Log($"Horse: {horseAnimal.Name} | TotalJump Stat: {stats.TotalJump}", LogLevel.Debug);
-            Manager.Monitor.Log($"Calculated Jump -> Distance: {maxJumpDistance} tiles", LogLevel.Debug);
+            Manager.Monitor.Log($"Calculated Jump -> Distance: {stats.JumpDistance} tiles", LogLevel.Debug);
 
             GameLocation location = Game1.player.currentLocation;
             (int ox, int oy) = GetDirectionOffset(Game1.player.FacingDirection);
-            List<bool> collisions = GetCollisions(location, ox, oy, maxJumpDistance);
+            List<bool> collisions = GetCollisions(location, ox, oy, stats.JumpDistance);
             Game1.playSound("dwop");
 
             Manager.PlayerJumpingWithHorse = Game1.player.isRidingHorse();
@@ -48,7 +45,7 @@ namespace HorseTycoon
 
             if (!collisions[0] && !collisions[1])
             {
-                PerformBlockedJump(maxJumpDistance);
+                PerformBlockedJump(stats.JumpDistance);
                 return;
             }
 
@@ -60,7 +57,7 @@ namespace HorseTycoon
                     return;
                 }
             }
-            PerformBlockedJump(maxJumpDistance);
+            PerformBlockedJump(stats.JumpDistance);
         }
 
         private static (int ox, int oy) GetDirectionOffset(int facingDirection)
@@ -120,7 +117,7 @@ namespace HorseTycoon
         private static void PerformBlockedJump(int jumpHeight)
         {
             Manager.BlockedJump = true;
-            PerformJump(jumpHeight);
+            PerformJump(2 + jumpHeight);
 
             if (Game1.player.mount != null)
             {

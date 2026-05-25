@@ -110,6 +110,12 @@ namespace HorseTycoon
                     original: AccessTools.Method(typeof(Farmer), nameof(Farmer.getDrawLayer)),
                     prefix: new HarmonyMethod(typeof(JumpPatches), nameof(JumpPatches.Farmer_getDrawLayer_Prefix))
                 );
+
+                // Patch for updating horse speed
+                harmony.Patch(
+                original: AccessTools.Method(typeof(Farmer), nameof(Farmer.getMovementSpeed)),
+                postfix: new HarmonyMethod(typeof(JumpPatches), nameof(JumpPatches.Farmer_getMovementSpeed_Postfix))
+                );
             }
             catch (Exception e)
             {
