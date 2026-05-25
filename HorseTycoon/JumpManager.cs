@@ -36,6 +36,14 @@ namespace HorseTycoon
 
         private readonly PerScreen<bool> gettingLocalPositionForShadow = new(() => false);
 
+        private readonly PerScreen<int> dailyJumpCount = new(() => 0);
+
+        public int DailyJumpCount
+        {
+            get => dailyJumpCount.Value;
+            set => dailyJumpCount.Value = value;
+        }
+
         internal bool GettingLocalPositionForShadow
         {
             get => gettingLocalPositionForShadow.Value;
@@ -58,9 +66,27 @@ namespace HorseTycoon
             this.Helper.Events.Input.ButtonPressed += OnButtonPressed;
             this.Helper.Events.Content.AssetRequested += OnAssetRequested;
             this.Helper.Events.GameLoop.GameLaunched += OnGameLaunched;
+            // Add the daily reset
+            this.Helper.Events.GameLoop.DayStarted += (s, e) =>
+            {
+                this.DailyJumpCount = 0;
+                // You could also add DailySpeedDistance = 0, etc. here later
+            };
+
+            this.Helper.Events.GameLoop.DayStarted += (s, e) =>
+            {
+                foreach (var horse in HorseHelper.GetAllBarnHorses())
+                {
+                    var stats = horse.GetHorseStats();
+                    // Only reset if they haven't earned the point yet
+                    // If they did earn it, LastTrainDate handles the block
+                    stats.DailyJumps = 0;
+                }
+            };
 
             JumpPatches.Initialize(this);
             JumpLogic.Initialize(this);
+            TrainingManager.Initialize(this);
 
             // Load Harmony patches
             try

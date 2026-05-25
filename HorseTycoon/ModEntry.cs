@@ -200,7 +200,7 @@ namespace HorseTycoon
             }
 
             // 4. Calculate Duration (Total Stamina / 4) in milliseconds
-            int durationMs = Math.Clamp((stats.TotalStamina / 4) * 1000, 500, 100000);
+            int durationMs = Math.Clamp((stats.TotalStamina / 4) * 1000, 1000, 100000);
 
             // 5. Apply Sprint Buff
             Buff sprintBuff = new Buff(
@@ -213,6 +213,7 @@ namespace HorseTycoon
 
             // Play a sound to indicate the sprint started
             Game1.playSound("fireball");
+            TrainingManager.ProcessSprint(Game1.player.mount);
         }
 
         private bool WasSprintingLastCheck = false;
@@ -238,6 +239,33 @@ namespace HorseTycoon
 
             // 4. Update the state for the next tick
             WasSprintingLastCheck = isCurrentlySprinting;
+
+            OnUpdateTickedProcessDistance(sender, e);
+        }
+
+        private readonly PerScreen<Vector2> lastPosition = new(() => Vector2.Zero);
+
+        private void OnUpdateTickedProcessDistance(object sender, UpdateTickedEventArgs e)
+        {
+            if (!Context.IsWorldReady || Game1.player.mount == null)
+            {
+                lastPosition.Value = Vector2.Zero;
+                return;
+            }
+
+            // Calculate distance moved since last tick
+            if (lastPosition.Value != Vector2.Zero)
+            {
+                float distance = Vector2.Distance(lastPosition.Value, Game1.player.Position);
+
+                // Ignore teleporting (loading screens)
+                if (distance > 0 && distance < 100)
+                {
+                    TrainingManager.ProcessMovement(Game1.player.mount, distance);
+                }
+            }
+
+            lastPosition.Value = Game1.player.Position;
         }
 
         private void ApplyExhaustion()

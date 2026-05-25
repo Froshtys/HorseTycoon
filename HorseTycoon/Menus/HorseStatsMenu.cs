@@ -47,9 +47,9 @@ namespace HorseTycoon.Menus
             int startX = this.xPositionOnScreen + 80;
             int startY = this.yPositionOnScreen + 160 + YPadding;
 
-            DrawStatBar(b, "Speed", startX, startY, stats.SpeedIV, stats.SpeedEV + 10);
-            DrawStatBar(b, "Stamina", startX, startY + 80, stats.StaminaIV, stats.StaminaEV + 10);
-            DrawStatBar(b, "Jump", startX, startY + 160, stats.JumpIV, stats.JumpEV + 10);
+            DrawStatBar(b, "Speed", startX, startY, stats.SpeedIV, stats.SpeedEV);
+            DrawStatBar(b, "Stamina", startX, startY + 80, stats.StaminaIV, stats.StaminaEV);
+            DrawStatBar(b, "Jump", startX, startY + 160, stats.JumpIV, stats.JumpEV);
 
             this.BackButton.draw(b);
             this.drawMouse(b);

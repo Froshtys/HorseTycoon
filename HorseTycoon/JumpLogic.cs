@@ -48,7 +48,7 @@ namespace HorseTycoon
 
             if (!collisions[0] && !collisions[1])
             {
-                PerformBlockedJump();
+                PerformBlockedJump(maxJumpDistance);
                 return;
             }
 
@@ -60,7 +60,7 @@ namespace HorseTycoon
                     return;
                 }
             }
-            PerformBlockedJump();
+            PerformBlockedJump(maxJumpDistance);
         }
 
         private static (int ox, int oy) GetDirectionOffset(int facingDirection)
@@ -110,12 +110,22 @@ namespace HorseTycoon
             Manager.LastYJumpVelocity = 0;
             Game1.player.CanMove = false;
             PerformJump(power);
+
+            if (Game1.player.mount != null)
+            {
+                TrainingManager.ProcessJump(Game1.player.mount);
+            }
         }
 
-        private static void PerformBlockedJump()
+        private static void PerformBlockedJump(int jumpHeight)
         {
             Manager.BlockedJump = true;
-            PerformJump(5);
+            PerformJump(jumpHeight);
+
+            if (Game1.player.mount != null)
+            {
+                TrainingManager.ProcessJump(Game1.player.mount);
+            }
         }
 
         private static void PerformJump(float v)
