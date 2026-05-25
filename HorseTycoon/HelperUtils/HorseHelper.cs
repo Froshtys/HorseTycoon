@@ -56,12 +56,12 @@ namespace HorseTycoon
 
         /// <summary>Finds the FarmAnimal data associated with a specific mountable Horse.</summary>
         /// <param name="mount">The horse character the player is riding.</param>
-        public static FarmAnimal GetFarmAnimalForHorse(Horse mount)
+        public static FarmAnimal? GetFarmAnimalForHorse(Horse mount)
         {
             if (mount == null) return null;
 
             // 1. Get the stable associated with this horse
-            Stable stable = Game1.getFarm().buildings.OfType<Stable>().FirstOrDefault(s => s.HorseId == mount.HorseId);
+            Stable? stable = Game1.getFarm().buildings.OfType<Stable>().FirstOrDefault(s => s.HorseId == mount.HorseId);
 
             if (stable != null && stable.modData.TryGetValue(CurrentFarmHorseIdKey, out string idStr))
             {

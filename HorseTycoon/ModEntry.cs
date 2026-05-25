@@ -21,6 +21,7 @@ namespace HorseTycoon
     /// <summary>The mod entry point.</summary>
     internal sealed class ModEntry : Mod
     {
+        private JumpManager? jumpManager;
         public override void Entry(IModHelper helper)
         {
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
@@ -35,6 +36,10 @@ namespace HorseTycoon
             MenuPatches.Initialize(helper, this.Monitor);
             // 3. Apply the patches
             MenuPatches.Apply(harmony);
+
+            // Create and start the jump logic
+            this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);
+            this.jumpManager.Initialize();
         }
 
         private void OnGameLaunched(object sender, GameLaunchedEventArgs e)

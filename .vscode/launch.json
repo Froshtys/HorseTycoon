@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Stardew Valley",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "/Users/kemurray/Library/Application Support/Steam/steamapps/common/Stardew Valley/Contents/MacOS/StardewModdingAPI.dll",
+            "args": [],
+            "cwd": "/Users/kemurray/Library/Application Support/Steam/steamapps/common/Stardew Valley/Contents/MacOS",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "targetArchitecture": "x86_64",
+            "env": {
+                "DOTNET_ROOT": "/usr/local/share/dotnet/x64",
+                "DOTNET_MODIFIABLE_ASSEMBLIES": "debug"
+            },
+         "symbolOptions": {
+                "searchPaths": [ "${workspaceFolder}/bin/Debug/net6.0" ],
+                "searchMicrosoftSymbolServer": false,
+                "moduleLoadCondition": "always"
+            },
+        },
+        {
+            "name": ".NET Core Attach (Mac Rosetta)",
+            "type": "coreclr",
+            "request": "attach",
+            "justMyCode": false,
+            "targetArchitecture": "x86_64",
+            "processName": "StardewModdingAPI",
+            "requireExactSource": false,
+        }
+    ]
+}

@@ -12,16 +12,14 @@ namespace HorseTycoon.Patches
 {
     public class MenuPatches
     {
-        public static ClickableTextureComponent StatsButton;
+        public static ClickableTextureComponent? StatsButton;
 
-        private static IModHelper Helper; // This holds the reference to SMAPI's helper
-        private static Texture2D StatsIconTexture;
+        private static IModHelper? Helper;
+        private static Texture2D? StatsIconTexture;
 
         public static void Initialize(IModHelper helper, IMonitor monitor)
         {
-            Helper = helper; // Store the helper passed from ModEntry
-
-            // Now you can load your content safely
+            Helper = helper;
             StatsIconTexture = Helper.ModContent.Load<Texture2D>("assets/horse_stats_icon.png");
         }
         public static void Apply(Harmony harmony)

@@ -11,9 +11,9 @@ namespace HorseTycoon.Models
 
         public enum HorseSourceQuality
         {
-            Starter,  // Basic stats
-            Special,  // High-end or rare finds
-            Legendary // Elite genetics
+            Starter,
+            Special,
+            Legendary
         }
 
         // ModData Keys
@@ -21,7 +21,7 @@ namespace HorseTycoon.Models
         private const string IV_Suffix = "_IV"; // Genetic (0-50)
         private const string EV_Suffix = "_EV"; // Trained (0-50)
 
-        // Individual Stat Keys (Exposed for ContainsKey checks)
+        // Individual Stat Keys
         public const string SpeedIVKey = Prefix + "Speed" + IV_Suffix;
         public const string SpeedEVKey = Prefix + "Speed" + EV_Suffix;
 
