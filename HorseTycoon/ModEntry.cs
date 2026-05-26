@@ -22,10 +22,10 @@ namespace HorseTycoon
         public override void Entry(IModHelper helper)
         {
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
-            helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
+            helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
 
             helper.ConsoleCommands.Add("set_horse_stat",
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
@@ -43,9 +43,29 @@ namespace HorseTycoon
             this.jumpManager.Initialize();
         }
 
-        private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
+        private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
+            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
+            {
+                // 1. Check if this stable already has a FarmAnimal assigned
+                if (stable.modData.ContainsKey(HorseHelper.CurrentFarmHorseIdKey))
+                    continue;
 
+                Horse horse = stable.getStableHorse();
+                if (horse == null) continue;
+
+                // 2. Try to find a home (any barn)
+                Building? barn = HorseHelper.GetAvailableBarn();
+
+                if (barn != null)
+                {
+                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, Monitor);
+                }
+                else
+                {
+                    this.Monitor.Log($"Stable horse '{horse.Name}' found, but no barn exists. It will be converted once a barn is built.", LogLevel.Info);
+                }
+            }
         }
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)

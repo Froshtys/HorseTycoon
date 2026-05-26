@@ -199,5 +199,55 @@ namespace HorseTycoon
             if (Game1.player.mount != null)
                 Game1.player.mount.Name = activeHorse.Name;
         }
+
+        public static void ConvertStableHorseToFarmAnimal(Stable stable, Horse horse, Building barn, IMonitor monitor)
+        {
+            // 1. Generate unique ID via Game1
+            long newId = Game1.Multiplayer.getNewID();
+            FarmAnimal newHorse = new FarmAnimal("Horse", newId, Game1.player.UniqueMultiplayerID);
+
+            newHorse.Name = horse.Name;
+            newHorse.modData[HideKey] = "true"; // Use the HideKey from your helper
+
+            // 2. Initialize Stats using your extension method
+            var stats = newHorse.GetHorseStats();
+            stats.RandomizeStats(HorseStats.HorseSourceQuality.Starter);
+
+            // 3. Link to Stable
+            stable.modData[CurrentFarmHorseIdKey] = newHorse.myID.Value.ToString();
+
+            // 4. Assign to Barn
+            newHorse.homeInterior = barn.GetIndoors() as AnimalHouse;
+            newHorse.home = barn;
+
+            // Force into Barn list (bypassing capacity)
+            barn.GetIndoors().animals.Add(newHorse.myID.Value, newHorse);
+
+            monitor.Log($"Successfully converted stable horse '{horse.Name}' and moved to {barn.buildingType.Value}.", LogLevel.Info);
+        }
+
+        public static Building? GetAvailableBarn()
+        {
+            // 1. Get all buildings that are barns
+            var barns = Game1.getFarm().buildings
+                .Where(b => b.buildingType.Value.Contains("Barn"))
+                .ToList();
+
+            if (!barns.Any()) return null;
+
+            // 2. Find a barn using GetIndoors() instead of animalHouse
+            foreach (var b in barns)
+            {
+                if (b.GetIndoors() is AnimalHouse house)
+                {
+                    // If there is room, take it. Otherwise, we'll fallback to the first one.
+                    if (house.animals.Count() < b.maxOccupants.Value)
+                        return b;
+                }
+            }
+
+            // 3. Fallback: Return the first barn's interior even if full
+            return barns.First();
+        }
     }
 }
