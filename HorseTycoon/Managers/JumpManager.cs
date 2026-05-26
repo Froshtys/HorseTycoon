@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using HarmonyLib;
+﻿using HarmonyLib;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -124,18 +122,18 @@ namespace HorseTycoon
 
         }
 
-        private void OnButtonPressed(object sender, ButtonPressedEventArgs e)
+        private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
         {
             if (!Context.IsPlayerFree || Game1.player.IsSitting() || Game1.player.swimming.Value || Game1.currentMinigame is not null || Game1.player.yJumpVelocity != 0 || !Game1.player.isRidingHorse())
                 return;
 
-            if (e.Button == Config.JumpButton)
+            if (e.Button == Config?.JumpButton)
             {
                 JumpLogic.TryToJump();
             }
         }
 
-        private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
+        private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
             if (Game1.player.yJumpVelocity == 0f && LastYJumpVelocity < 0f)
             {
@@ -150,7 +148,7 @@ namespace HorseTycoon
             LastYJumpVelocity = Game1.player.yJumpVelocity;
         }
 
-        private void OnAssetRequested(object sender, AssetRequestedEventArgs e)
+        private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
 
             if (e.NameWithoutLocale.IsEquivalentTo("Animals/horse"))
@@ -159,7 +157,7 @@ namespace HorseTycoon
             }
         }
 
-        private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
+        private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
         {
             var configMenu = this.Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
             if (configMenu is null)
@@ -170,9 +168,6 @@ namespace HorseTycoon
                 reset: () => Config = new ModConfig(),
                 save: () => this.Helper.WriteConfig(Config)
             );
-
-            // Add GMCM options using this.Helper.Translation...
-            // (Keep original GMCM code here, just replace 'ModManifest' with 'this.Manifest')
         }
 
         public void SubscribeToUpdate()

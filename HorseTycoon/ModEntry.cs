@@ -1,10 +1,7 @@
-﻿using System;
-using HarmonyLib;
-using HorseTycoon.Menus;
+﻿using HarmonyLib;
 using HorseTycoon.Models;
 using HorseTycoon.Patches;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
@@ -46,12 +43,12 @@ namespace HorseTycoon
             this.jumpManager.Initialize();
         }
 
-        private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
+        private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
         {
 
         }
 
-        private void OnDayStarted(object sender, DayStartedEventArgs e)
+        private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
             Utility.ForEachLocation(location =>
             {
@@ -113,8 +110,20 @@ namespace HorseTycoon
             // Only trigger on Left-Click
             if (!e.Button.IsUseToolButton()) return;
 
+            // Don't open the menu if they are trying to fill the stable with water for horse overhaul mod
             if (Game1.player.CurrentItem is StardewValley.Tools.WateringCan)
                 return;
+
+            Vector2 clickedTile = e.Cursor.Tile;
+            Rectangle mouseRect = new Rectangle((int)e.Cursor.AbsolutePixels.X, (int)e.Cursor.AbsolutePixels.Y, 64, 64);
+            Horse? clickedHorse = Game1.currentLocation.characters.OfType<Horse>()
+                .FirstOrDefault(h => h.GetBoundingBox().Intersects(mouseRect));
+
+            if (clickedHorse != null)
+            {
+                this.OpenStatMenuForHorse(clickedHorse);
+                return;
+            }
 
             Vector2 tile = e.Cursor.GrabTile;
             Building building = Game1.currentLocation.getBuildingAt(tile);
@@ -122,7 +131,23 @@ namespace HorseTycoon
             if (building is Stable stable)
             {
                 this.ShowHorseSwapMenu(stable);
+                return;
+            }
+        }
 
+        private void OpenStatMenuForHorse(Horse horse)
+        {
+            if (horse == null) return;
+
+            FarmAnimal? animalData = HorseHelper.GetFarmAnimalForHorse(horse);
+
+            if (animalData != null)
+            {
+                Game1.activeClickableMenu = new AnimalQueryMenu(animalData);
+            }
+            else
+            {
+                this.Monitor.Log($"Could not find FarmAnimal data for horse: {horse.name}", LogLevel.Warn);
             }
         }
 
@@ -148,7 +173,7 @@ namespace HorseTycoon
             });
         }
 
-        private void OnRenderedActiveMenu(object sender, RenderedActiveMenuEventArgs e)
+        private void OnRenderedActiveMenu(object? sender, RenderedActiveMenuEventArgs e)
         {
             // 1. Only draw if the AnimalQueryMenu is open
             if (Game1.activeClickableMenu is AnimalQueryMenu menu)
@@ -222,7 +247,7 @@ namespace HorseTycoon
 
         private bool WasSprintingLastCheck = false;
 
-        private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
+        private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
             // 1. Basic safety checks (Runs every tick)
             if (!Context.IsWorldReady || Game1.player.mount == null)
@@ -249,7 +274,7 @@ namespace HorseTycoon
 
         private readonly PerScreen<Vector2> lastPosition = new(() => Vector2.Zero);
 
-        private void OnUpdateTickedProcessDistance(object sender, UpdateTickedEventArgs e)
+        private void OnUpdateTickedProcessDistance(object? sender, UpdateTickedEventArgs e)
         {
             if (!Context.IsWorldReady || Game1.player.mount == null)
             {

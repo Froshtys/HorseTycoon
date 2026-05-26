@@ -1,4 +1,3 @@
-using System;
 using HorseTycoon.Models;
 using StardewModdingAPI;
 using StardewValley;
