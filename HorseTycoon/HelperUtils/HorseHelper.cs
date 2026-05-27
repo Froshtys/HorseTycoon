@@ -11,6 +11,7 @@ namespace HorseTycoon
     {
         public const string CurrentFarmHorseIdKey = "Froshty.HorseTycoon/CurrentFarmHorseId";
         public const string HideKey = "Froshty.HorseTycoon/IsHidden";
+        public const string StableEmptyKey = "Froshty.HorseTycoon/IsIntentionallyEmpty";
 
         public static List<FarmAnimal> GetAllBarnHorses()
         {
@@ -156,6 +157,11 @@ namespace HorseTycoon
             {
                 monitor.Log($"Stable has no active horse. Instantiating a new active mount for {selectedBarnHorse.Name}.", LogLevel.Info);
 
+                if (targetStable.modData.ContainsKey(StableEmptyKey))
+                {
+                    // Remove the lock since a new horse is moving in
+                    targetStable.modData.Remove(StableEmptyKey);
+                }
                 // Stardew 1.6 overrode Stable tracking to utilize unique Guids mapped to the farm layout
                 Guid newHorseGuid = Guid.NewGuid();
 
@@ -223,13 +229,6 @@ namespace HorseTycoon
             // 5. Cache Sync for 1.6 Asset Pipeline
             helper.GameContent.InvalidateCache("Animals/Horse");
             monitor.Log($"Successfully swapped active mount to {activeHorse.Name}!", LogLevel.Info);
-
-            // 6. Active Ride Verification
-            if (Game1.player.mount != null && Game1.player.mount.HorseId == activeHorse.HorseId)
-            {
-                Game1.player.mount.Name = activeHorse.Name;
-                Game1.player.mount.displayName = activeHorse.displayName;
-            }
         }
 
         public static void ConvertStableHorseToFarmAnimal(Stable stable, Horse horse, Building barn, IMonitor monitor, IModHelper helper)

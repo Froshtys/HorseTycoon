@@ -92,6 +92,23 @@ namespace HorseTycoon
                 return true; // Continue to next location
             });
 
+            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
+            {
+                // Check if our custom modData confirms this stable should be empty and clear repaired clone
+                if (stable.modData.TryGetValue(HorseHelper.StableEmptyKey, out string isEmptyStr) && isEmptyStr == "true")
+                {
+                    Horse overnightClone = stable.getStableHorse();
+                    if (overnightClone != null)
+                    {
+                        Game1.getFarm().characters.Remove(overnightClone);
+                        if (overnightClone.currentLocation != null)
+                        {
+                            overnightClone.currentLocation.characters.Remove(overnightClone);
+                        }
+                    }
+                    stable.HorseId = Guid.Empty;
+                }
+            }
         }
 
 
@@ -106,6 +123,9 @@ namespace HorseTycoon
             // ignore if player hasn't loaded a save yet
             if (!Context.IsWorldReady)
                 return;
+
+            // If any menu is currently active, ignore the click entirely for world interactions
+            if (Game1.activeClickableMenu != null) return;
 
             processHorseSprint(sender, e);
 
@@ -133,6 +153,11 @@ namespace HorseTycoon
             if (building is Stable stable)
             {
                 this.ShowHorseSwapMenu(stable);
+                // Dismount if the player is mounted
+                if (Game1.player.mount != null)
+                {
+                    Game1.player.mount.dismount();
+                }
                 return;
             }
         }
@@ -171,6 +196,7 @@ namespace HorseTycoon
 
                 Game1.exitActiveMenu();
             });
+            this.Helper.Input.Suppress(SButton.MouseLeft);
         }
 
         private void OnRenderedActiveMenu(object? sender, RenderedActiveMenuEventArgs e)

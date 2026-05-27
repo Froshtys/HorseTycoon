@@ -96,7 +96,7 @@ namespace HorseTycoon
                         if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string linkedId) && linkedId == soldId.ToString())
                         {
                             stable.modData.Remove(HorseHelper.CurrentFarmHorseIdKey);
-
+                            stable.modData["Froshty.HorseTycoon/IsIntentionallyEmpty"] = "true";
                             Horse stableHorse = stable.getStableHorse();
                             if (stableHorse != null)
                             {
