@@ -59,7 +59,7 @@ namespace HorseTycoon
 
                 if (barn != null)
                 {
-                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, Monitor);
+                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, Monitor, Helper);
                 }
                 else
                 {
@@ -91,24 +91,6 @@ namespace HorseTycoon
                 }
                 return true; // Continue to next location
             });
-
-        }
-
-        private void SetHorseSkin(Horse horse, string variation)
-        {
-            const string AlternativeTextureOwner = "Froshty.HorseTycoonAT";
-            const string AlternativeTextureName = "Froshty.HorseTycoonAT.Character_Horse";
-
-            horse.modData["AlternativeTextureOwner"] = AlternativeTextureOwner;
-            horse.modData["AlternativeTextureName"] = AlternativeTextureName;
-            horse.modData["AlternativeTextureVariation"] = variation;
-
-            foreach (var key in horse.modData.Keys)
-            {
-                {
-                    this.Monitor.Log($"Horse ModData Key: {key} | Value: {horse.modData[key]}", LogLevel.Info);
-                }
-            }
 
         }
 
@@ -185,9 +167,7 @@ namespace HorseTycoon
                     selectedHorse,
                     targetStable,
                     this.Monitor,
-                    this.Helper,
-                    this.SetHorseSkin
-                );
+                    this.Helper);
 
                 Game1.exitActiveMenu();
             });

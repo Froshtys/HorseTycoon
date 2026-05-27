@@ -2,6 +2,9 @@ using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
+using StardewValley.Buildings;
+using StardewValley.Characters;
+using StardewValley.Menus;
 
 namespace HorseTycoon
 {
@@ -31,6 +34,12 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.GetBoundingBox)),
                 prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(GetBoundingBox_Prefix))
             );
+
+            // --- Menu Confirm Interceptor ---
+            harmony.Patch(
+                original: AccessTools.Method(typeof(AnimalQueryMenu), nameof(AnimalQueryMenu.receiveLeftClick)),
+                postfix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(AnimalQueryMenu_receiveLeftClick_Postfix))
+            );
         }
 
         // --- Patch Implementations ---
@@ -53,6 +62,53 @@ namespace HorseTycoon
                 return false;
             }
             return true;
+        }
+
+        public static void AnimalQueryMenu_receiveLeftClick_Postfix(AnimalQueryMenu __instance, int x, int y)
+        {
+            // 1. Confirm the "Yes" confirmation button for selling was clicked
+            if (__instance.confirmingSell && __instance.yesButton != null && __instance.yesButton.containsPoint(x, y))
+            {
+
+                FarmAnimal? animal = __instance.animal;
+                if (animal != null && animal.type.Value != null && animal.type.Value.Contains("Horse"))
+                {
+                    long soldId = animal.myID.Value;
+
+                    // This ensures it completely disappears from the game's global collections and animal listings.
+                    Utility.ForEachLocation(location =>
+                    {
+                        if (location.animals.ContainsKey(soldId))
+                        {
+                            location.animals.Remove(soldId);
+                        }
+
+                        if (location is AnimalHouse barnInterior && barnInterior.animals.ContainsKey(soldId))
+                        {
+                            barnInterior.animals.Remove(soldId);
+                        }
+                        return true;
+                    });
+
+                    // Scan all stables to safely unlink the physical entity
+                    foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
+                    {
+                        if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string linkedId) && linkedId == soldId.ToString())
+                        {
+                            stable.modData.Remove(HorseHelper.CurrentFarmHorseIdKey);
+
+                            Horse stableHorse = stable.getStableHorse();
+                            if (stableHorse != null)
+                            {
+                                Game1.currentLocation?.characters.Remove(stableHorse);
+                                stableHorse.currentLocation?.characters.Remove(stableHorse);
+                            }
+                            stable.HorseId = Guid.Empty;
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 }

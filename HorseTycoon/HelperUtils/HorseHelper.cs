@@ -141,42 +141,69 @@ namespace HorseTycoon
             }
         }
 
-        public static void SwapStableHorse(FarmAnimal selectedBarnHorse, Stable targetStable, IMonitor monitor, IModHelper helper, Action<Horse, string> setSkinAction)
+        public static void SwapStableHorse(FarmAnimal selectedBarnHorse, Stable targetStable, IMonitor monitor, IModHelper helper)
         {
-            Horse? activeHorse = targetStable?.getStableHorse();
-
-            if (activeHorse == null || selectedBarnHorse == null || targetStable == null)
+            if (selectedBarnHorse == null || targetStable == null)
             {
                 monitor.Log("Could not find stable horse or selected barn horse.", LogLevel.Error);
                 return;
             }
 
-            // Handle Existing Hidden Horse
-            if (targetStable.modData.TryGetValue(CurrentFarmHorseIdKey, out string farmAnimalIdStr))
+            Horse? activeHorse = targetStable.getStableHorse();
+
+            // If the horse that was in this stable was sold
+            if (activeHorse == null)
+            {
+                monitor.Log($"Stable has no active horse. Instantiating a new active mount for {selectedBarnHorse.Name}.", LogLevel.Info);
+
+                // Stardew 1.6 overrode Stable tracking to utilize unique Guids mapped to the farm layout
+                Guid newHorseGuid = Guid.NewGuid();
+
+                // Spawn coordinates matching the stable structure's placement position
+                int tileX = targetStable.tileX.Get() + 1;
+                int tileY = targetStable.tileY.Get() + 1;
+
+                // Instantiate the canonical 1.6 Horse character object
+                activeHorse = new Horse(newHorseGuid, tileX, tileY);
+
+                // Link the stable's architectural data profile to the newly spawned character Guid
+                targetStable.HorseId = newHorseGuid;
+
+                // Force register the character into the active farm simulation zone
+                Game1.getFarm().characters.Add(activeHorse);
+            }
+            // 2. Handle Existing Hidden Horse (Only runs if a horse was already assigned)
+            else if (targetStable.modData.TryGetValue(CurrentFarmHorseIdKey, out string farmAnimalIdStr))
             {
                 if (long.TryParse(farmAnimalIdStr, out long farmAnimalId))
                 {
                     FarmAnimal? hiddenHorse = GetHiddenHorseById(farmAnimalId);
                     if (hiddenHorse != null)
+                    {
                         RestoreHorse(hiddenHorse);
+                    }
                     else
+                    {
                         monitor.Log($"Could not find a hidden horse with ID {farmAnimalId} in any game location.", LogLevel.Warn);
+                    }
                 }
             }
 
-            // Hide and Assign the New Horse
+            // 3. Hide and Assign the New Horse
             activeHorse.Name = selectedBarnHorse.Name;
             activeHorse.displayName = selectedBarnHorse.displayName;
 
+            // Track internal placement variables using standard 1.6 properties
             selectedBarnHorse.modData["Froshty.HorseTycoon/CurrentStableId"] = targetStable.id.ToString();
             selectedBarnHorse.modData[HideKey] = "true";
-            targetStable.modData[CurrentFarmHorseIdKey] = selectedBarnHorse.myID.ToString();
+            targetStable.modData[CurrentFarmHorseIdKey] = selectedBarnHorse.myID.Value.ToString(); // Use .Value for 1.6 netfields
+
+            // Synchronize spatial ties
             targetStable.grabHorse();
+            monitor.Log($"Save hidden horse with ID {selectedBarnHorse.myID}.", LogLevel.Debug);
 
-            monitor.Log($"Save hidden horse with ID {selectedBarnHorse.myID}.", LogLevel.Warn);
-
-            // Visual Swapping
-            string skinTag = selectedBarnHorse.skinID.ToString();
+            // 4. Visual Swapping
+            string skinTag = selectedBarnHorse.skinID.Value ?? "0"; // Handle null-safety on NetStrings
             monitor.Log($"Horse Type Selected: {skinTag}", LogLevel.Info);
 
             string variation = skinTag switch
@@ -191,23 +218,33 @@ namespace HorseTycoon
                 _ => "0"
             };
 
-            setSkinAction(activeHorse, variation);
-            helper.GameContent.InvalidateCache("Animals/Horse");
+            SetHorseSkin(activeHorse, variation, monitor);
 
+            // 5. Cache Sync for 1.6 Asset Pipeline
+            helper.GameContent.InvalidateCache("Animals/Horse");
             monitor.Log($"Successfully swapped active mount to {activeHorse.Name}!", LogLevel.Info);
 
-            if (Game1.player.mount != null)
+            // 6. Active Ride Verification
+            if (Game1.player.mount != null && Game1.player.mount.HorseId == activeHorse.HorseId)
+            {
                 Game1.player.mount.Name = activeHorse.Name;
+                Game1.player.mount.displayName = activeHorse.displayName;
+            }
         }
 
-        public static void ConvertStableHorseToFarmAnimal(Stable stable, Horse horse, Building barn, IMonitor monitor)
+        public static void ConvertStableHorseToFarmAnimal(Stable stable, Horse horse, Building barn, IMonitor monitor, IModHelper helper)
         {
             // 1. Generate unique ID via Game1
             long newId = Game1.Multiplayer.getNewID();
-            FarmAnimal newHorse = new FarmAnimal("Horse", newId, Game1.player.UniqueMultiplayerID);
+            FarmAnimal newHorse = new FarmAnimal("Ems.Horse", newId, Game1.player.UniqueMultiplayerID);
 
             newHorse.Name = horse.Name;
-            newHorse.modData[HideKey] = "true"; // Use the HideKey from your helper
+            newHorse.modData[HideKey] = "true";
+
+            // Set the new horse age to adult either 28 days or total days player has played.
+            int totalDaysPlayed = (int)Game1.stats.DaysPlayed;
+            int matureAge = Math.Max(28, totalDaysPlayed);
+            newHorse.age.Value = matureAge;
 
             // 2. Initialize Stats using your extension method
             var stats = newHorse.GetHorseStats();
@@ -222,6 +259,24 @@ namespace HorseTycoon
 
             // Force into Barn list (bypassing capacity)
             barn.GetIndoors().animals.Add(newHorse.myID.Value, newHorse);
+
+            string skinTag = newHorse.skinID.ToString();
+            monitor.Log($"Horse Type Selected: {skinTag}", LogLevel.Info);
+
+            string variation = skinTag switch
+            {
+                "RedRoan" => "0",
+                "Shire" => "1",
+                "Dapple" => "2",
+                "Bay" => "3",
+                "Belgian" => "4",
+                "BlueRoan" => "5",
+                "Chesnut" => "6",
+                _ => "0"
+            };
+
+            SetHorseSkin(horse, variation, monitor);
+            helper.GameContent.InvalidateCache("Animals/Horse");
 
             monitor.Log($"Successfully converted stable horse '{horse.Name}' and moved to {barn.buildingType.Value}.", LogLevel.Info);
         }
@@ -248,6 +303,24 @@ namespace HorseTycoon
 
             // 3. Fallback: Return the first barn's interior even if full
             return barns.First();
+        }
+
+        private static void SetHorseSkin(Horse horse, string variation, IMonitor monitor)
+        {
+            const string AlternativeTextureOwner = "Froshty.HorseTycoonAT";
+            const string AlternativeTextureName = "Froshty.HorseTycoonAT.Character_Horse";
+
+            horse.modData["AlternativeTextureOwner"] = AlternativeTextureOwner;
+            horse.modData["AlternativeTextureName"] = AlternativeTextureName;
+            horse.modData["AlternativeTextureVariation"] = variation;
+
+            foreach (var key in horse.modData.Keys)
+            {
+                {
+                    monitor.Log($"Horse ModData Key: {key} | Value: {horse.modData[key]}", LogLevel.Info);
+                }
+            }
+
         }
     }
 }
