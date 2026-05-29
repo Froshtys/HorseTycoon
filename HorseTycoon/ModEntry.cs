@@ -180,11 +180,11 @@ namespace HorseTycoon
 
         private void ShowHorseSwapMenu(Stable targetStable)
         {
-            var horses = HorseHelper.GetAllBarnHorses()
-                .Where(h => !HorseHelper.IsHidden(h))
-                .ToList();
+            // 1. Gather all horses from your barn network (removed IsHidden filter so active horse is included)
+            var horses = HorseHelper.GetAllBarnHorses().ToList();
 
-            if (Game1.player.isRidingHorse()) Game1.player.mount.dismount();
+            if (Game1.player.isRidingHorse())
+                Game1.player.mount.dismount();
 
             // Trace if the targeted stable structures hold a valid custom connection node
             FarmAnimal? activeHorseData = null;
@@ -193,11 +193,28 @@ namespace HorseTycoon
                 activeHorseData = HorseHelper.GetHiddenHorseById(farmId);
             }
 
+            if (horses.Count == 0 && activeHorseData == null) return;
+
+            // --- NEW SORTING LOGIC ---
+            // Pins the currently active stable horse to index 0, sorting others alphabetically underneath
+            if (activeHorseData != null)
+            {
+                horses = horses
+                    .OrderByDescending(h => h.myID.Value == activeHorseData.myID.Value)
+                    .ThenBy(h => h.Name)
+                    .ToList();
+            }
+            else
+            {
+                horses = horses.OrderBy(h => h.Name).ToList();
+            }
+            // -------------------------
+
             Game1.activeClickableMenu = new HorseSwapMenu(horses, targetStable, activeHorseData, Helper, (selectedHorse) =>
             {
 
-                // --- CASE: Player clicked "Return to Barn" ---
-                if (selectedHorse == null)
+                // --- CASE: Player clicked "Return to Barn" (Or selected the already active horse row) ---
+                if (selectedHorse == null || (activeHorseData != null && selectedHorse.myID.Value == activeHorseData.myID.Value))
                 {
                     this.Monitor.Log("Returning active mount to barn and leaving stable empty.", LogLevel.Info);
 
@@ -229,6 +246,7 @@ namespace HorseTycoon
 
                 Game1.exitActiveMenu();
             });
+
 
             this.Helper.Input.Suppress(SButton.MouseLeft);
         }

@@ -34,7 +34,7 @@ public partial class HorseSwapMenu : IClickableMenu
     private int InputLockoutTimer = 150;
 
     public HorseSwapMenu(List<FarmAnimal> animals, Stable stable, FarmAnimal? activeHorse, IModHelper Helper, Action<FarmAnimal> onSelected)
-        : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 766, 580, showUpperRightCloseButton: true)
+        : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 800, 580, showUpperRightCloseButton: true)
     {
         this.Animals = animals;
         this.OnSelected = onSelected;
@@ -55,7 +55,7 @@ public partial class HorseSwapMenu : IClickableMenu
             float targetScale = 4f;
 
             int buttonX = this.xPositionOnScreen + this.width - 120;
-            int buttonY = this.yPositionOnScreen + 24;
+            int buttonY = this.yPositionOnScreen;
 
             this.returnToBarnButton = new ClickableTextureComponent(
                 name: "ReturnToBarn",

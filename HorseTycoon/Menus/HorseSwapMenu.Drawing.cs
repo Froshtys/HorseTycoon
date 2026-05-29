@@ -2,6 +2,8 @@ using HorseTycoon;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
+using StardewValley.BellsAndWhistles;
+using StardewValley.Characters;
 using StardewValley.Menus;
 using System;
 
@@ -29,13 +31,22 @@ public partial class HorseSwapMenu : IClickableMenu
             }
         }
 
-        // --- FIXED: Hitbox width and height matched perfectly to the slot panel bounds ---
         for (int i = 0; i < Math.Min(MaxVisibleItems, Animals.Count); i++)
         {
-            Rectangle rowArea = new Rectangle(xPositionOnScreen + 32, yPositionOnScreen + TopPadding + (i * RowHeight), width - 96, RowHeight);
+            Rectangle rowArea = new Rectangle(xPositionOnScreen + 24, yPositionOnScreen + TopPadding + 12 + (i * RowHeight), width - 64, RowHeight);
             if (rowArea.Contains(x, y))
             {
                 this.HoveredIndex = i;
+                int actualIndex = i + startIndex;
+
+                if (actualIndex < Animals.Count)
+                {
+                    var animal = Animals[actualIndex];
+                    if (this.ActiveFarmHorse != null && animal.myID.Value == this.ActiveFarmHorse.myID.Value)
+                    {
+                        this.hoverText = "Return " + animal.Name + " to barn";
+                    }
+                }
                 break;
             }
         }
@@ -94,6 +105,17 @@ public partial class HorseSwapMenu : IClickableMenu
         b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
         Game1.drawDialogueBox(xPositionOnScreen, yPositionOnScreen, width, height, false, true);
 
+
+        // --- NEW: STARDEW NATIVE TITLE BANNER BLOCK ---
+        // Dynamically compute the center X alignment relative to the dialogue frame width
+        string titleText = "Choose stable horse";
+        int titleWidth = SpriteText.getWidthOfString(titleText);
+        int titleX = this.xPositionOnScreen + (this.width / 2) - (titleWidth / 2);
+        int titleY = this.yPositionOnScreen;
+        SpriteText.drawStringWithScrollBackground(b, titleText, titleX, titleY);
+
+
+
         IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(403, 383, 6, 6), this.scrollBarRunner.X, this.scrollBarRunner.Y, this.scrollBarRunner.Width, this.scrollBarRunner.Height, Color.White, 4f, false);
         this.scrollBar.draw(b);
         this.upArrow.draw(b);
@@ -117,23 +139,72 @@ public partial class HorseSwapMenu : IClickableMenu
 
             if (i == this.HoveredIndex)
             {
-                // Draws a brown tint at 35% opacity precisely matching the panel box boundaries
+                // Draws a brown tint at 30% opacity precisely matching the panel box boundaries
                 b.Draw(Game1.staminaRect, new Rectangle(panelX + 4, relativeY + 4, panelWidth - 8, panelHeight - 8), Color.SaddleBrown * 0.30f);
             }
 
             // Dark wood vertical partition lines
-            b.Draw(Game1.staminaRect, new Rectangle(relativeX + 110, relativeY + 12, 2, RowHeight - 20), Color.SaddleBrown * 0.4f);
             b.Draw(Game1.staminaRect, new Rectangle(relativeX + 350, relativeY + 12, 2, RowHeight - 20), Color.SaddleBrown * 0.4f);
 
             // Draw Animal Texture centered vertically
             float scale = (i == this.HoveredIndex) ? 3.2f : 3.0f;
-            b.Draw(animal.Sprite.Texture, new Vector2(relativeX + 2, relativeY + 2), animal.Sprite.SourceRect, Color.White, 0f, Vector2.Zero, scale, SpriteEffects.None, 0.88f);
+
+            bool isActiveHorseRow = this.ActiveFarmHorse != null && animal.myID.Value == this.ActiveFarmHorse.myID.Value;
+
+            // If this row represents the active stable horse, query the live world entity from the stable
+            Horse? worldHorseEntity = (isActiveHorseRow && this.TargetStable != null) ? this.TargetStable.getStableHorse() : null;
+            if (worldHorseEntity != null && worldHorseEntity.Sprite != null)
+            {
+                b.Draw(
+                    worldHorseEntity.Sprite.Texture,
+                    new Vector2(relativeX, relativeY),
+                    worldHorseEntity.Sprite.SourceRect,
+                    Color.White,
+                    0f,
+                    Vector2.Zero,
+                    scale,
+                    SpriteEffects.None,
+                    0.88f
+                );
+            }
+            else
+            {
+                b.Draw(
+                    animal.Sprite.Texture,
+                    new Vector2(relativeX + 2, relativeY + 2),
+                    animal.Sprite.SourceRect,
+                    Color.White,
+                    0f,
+                    Vector2.Zero,
+                    scale,
+                    SpriteEffects.None,
+                    0.88f
+                );
+            }
 
             // Draw Horse Name
             string name = animal.Name;
-            Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
-            Vector2 namePos = new Vector2(relativeX + 110 + (240 - nameSize.X) / 2, relativeY + 32);
-            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, namePos, Game1.textColor);
+
+            if (isActiveHorseRow)
+            {
+                // Draw the dynamic horse name centered slightly higher to fit the tag text safely
+                Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
+                Vector2 namePos = new Vector2(relativeX + 110 + (240 - nameSize.X) / 2, relativeY + 16);
+                Utility.drawTextWithShadow(b, name, Game1.dialogueFont, namePos, Game1.textColor);
+
+                // Draw "(current)" tag underneath the main name string using smallFont
+                string currentTag = "(current)";
+                Vector2 tagSize = Game1.smallFont.MeasureString(currentTag);
+                Vector2 tagPos = new Vector2(relativeX + 110 + (240 - tagSize.X) / 2, relativeY + 58);
+                Utility.drawTextWithShadow(b, currentTag, Game1.smallFont, tagPos, Color.DarkGreen);
+            }
+            else
+            {
+                // Standard naming center alignment block
+                Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
+                Vector2 namePos = new Vector2(relativeX + 110 + (240 - nameSize.X) / 2, relativeY + 32);
+                Utility.drawTextWithShadow(b, name, Game1.dialogueFont, namePos, Game1.textColor);
+            }
 
             // --- DRAW TRAINING STATS BARS ---
             var stats = animal.GetHorseStats();
