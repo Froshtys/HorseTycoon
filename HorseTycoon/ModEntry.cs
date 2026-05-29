@@ -180,25 +180,58 @@ namespace HorseTycoon
 
         private void ShowHorseSwapMenu(Stable targetStable)
         {
-            var horses = HorseHelper.GetAllBarnHorses().
-            Where(h => !HorseHelper.IsHidden(h))
-            .ToList();
+            var horses = HorseHelper.GetAllBarnHorses()
+                .Where(h => !HorseHelper.IsHidden(h))
+                .ToList();
 
-            Game1.activeClickableMenu = new HorseSwapMenu(horses, (selectedHorse) =>
+            if (Game1.player.isRidingHorse()) Game1.player.mount.dismount();
+
+            // Trace if the targeted stable structures hold a valid custom connection node
+            FarmAnimal? activeHorseData = null;
+            if (targetStable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string farmIdStr) && long.TryParse(farmIdStr, out long farmId))
             {
-                this.Monitor.Log($"Swapping to: {selectedHorse.Name}", LogLevel.Info);
+                activeHorseData = HorseHelper.GetHiddenHorseById(farmId);
+            }
 
-                HorseHelper.SwapStableHorse(
-                    selectedHorse,
-                    targetStable,
-                    this.Monitor,
-                    this.Helper);
+            Game1.activeClickableMenu = new HorseSwapMenu(horses, targetStable, activeHorseData, Helper, (selectedHorse) =>
+            {
+
+                // --- CASE: Player clicked "Return to Barn" ---
+                if (selectedHorse == null)
+                {
+                    this.Monitor.Log("Returning active mount to barn and leaving stable empty.", LogLevel.Info);
+
+                    // Unhide data and strip tracking parameters
+                    if (activeHorseData != null)
+                    {
+                        HorseHelper.RestoreHorse(activeHorseData);
+                    }
+
+                    // Purge physical character instances
+                    Horse physicalHorse = targetStable.getStableHorse();
+                    if (physicalHorse != null)
+                    {
+                        Game1.getFarm().characters.Remove(physicalHorse);
+                        physicalHorse.currentLocation?.characters.Remove(physicalHorse);
+                    }
+
+                    targetStable.modData.Remove(HorseHelper.CurrentFarmHorseIdKey);
+                    targetStable.modData[HorseHelper.StableEmptyKey] = "true";
+                    targetStable.HorseId = Guid.Empty;
+                }
+                // --- CASE: Player selected a new horse from list ---
+                else
+                {
+                    this.Monitor.Log($"Swapping to: {selectedHorse.Name}", LogLevel.Info);
+                    targetStable.modData.Remove(HorseHelper.StableEmptyKey);
+                    HorseHelper.SwapStableHorse(selectedHorse, targetStable, this.Monitor, this.Helper);
+                }
 
                 Game1.exitActiveMenu();
             });
+
             this.Helper.Input.Suppress(SButton.MouseLeft);
         }
-
         private void OnRenderedActiveMenu(object? sender, RenderedActiveMenuEventArgs e)
         {
             // 1. Only draw if the AnimalQueryMenu is open
