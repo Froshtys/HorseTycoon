@@ -11,6 +11,7 @@ using System.Collections.Generic;
 // Added partial keyword to cleanly separate file chunks
 public partial class HorseSwapMenu : IClickableMenu
 {
+    private readonly IModHelper Helper;
     private readonly List<FarmAnimal> Animals;
     private readonly Action<FarmAnimal> OnSelected;
     private readonly Stable TargetStable;
@@ -34,12 +35,13 @@ public partial class HorseSwapMenu : IClickableMenu
     private int InputLockoutTimer = 150;
 
     public HorseSwapMenu(List<FarmAnimal> animals, Stable stable, FarmAnimal? activeHorse, IModHelper Helper, Action<FarmAnimal> onSelected)
-        : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 800, 580, showUpperRightCloseButton: true)
+        : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 770, 580, showUpperRightCloseButton: true)
     {
         this.Animals = animals;
         this.OnSelected = onSelected;
         this.TargetStable = stable;
         this.ActiveFarmHorse = activeHorse;
+        this.Helper = Helper;
 
         int rightScrollEdgeX = this.xPositionOnScreen + this.width + 16;
         this.upArrow = new ClickableTextureComponent(new Rectangle(rightScrollEdgeX, this.yPositionOnScreen + TopPadding, 44, 48), Game1.mouseCursors, new Rectangle(421, 459, 11, 12), 4f);
@@ -54,7 +56,7 @@ public partial class HorseSwapMenu : IClickableMenu
             int baseSize = 16;
             float targetScale = 4f;
 
-            int buttonX = this.xPositionOnScreen + this.width - 120;
+            int buttonX = this.xPositionOnScreen + this.width - 110;
             int buttonY = this.yPositionOnScreen;
 
             this.returnToBarnButton = new ClickableTextureComponent(

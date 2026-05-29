@@ -124,5 +124,26 @@ namespace HorseTycoon
             Game1.playSound("Pickup_Coin15");
             return true;
         }
+
+        public static bool HasTrainedSpeedToday(FarmAnimal horse)
+        {
+            if (horse == null) return false;
+            string today = Game1.Date.TotalDays.ToString();
+            return horse.modData.TryGetValue(SpeedDateKey, out string date) && date == today;
+        }
+
+        public static bool HasTrainedStaminaToday(FarmAnimal horse)
+        {
+            if (horse == null) return false;
+            string today = Game1.Date.TotalDays.ToString();
+            return horse.modData.TryGetValue(StaminaDateKey, out string date) && date == today;
+        }
+
+        public static bool HasTrainedJumpToday(FarmAnimal horse)
+        {
+            if (horse == null) return false;
+            string today = Game1.Date.TotalDays.ToString();
+            return horse.modData.TryGetValue(JumpDateKey, out string date) && date == today;
+        }
     }
 }
