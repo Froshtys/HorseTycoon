@@ -42,7 +42,6 @@ namespace HorseTycoon
             this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);
             this.jumpManager.Initialize();
         }
-
         private void ConvertUnassignedStableHorses()
         {
 
@@ -132,7 +131,11 @@ namespace HorseTycoon
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
 
-            ConvertUnassignedStableHorses();
+            if (Context.IsMainPlayer)
+            {
+                RunGlobalStatsMigration(this.Monitor);
+                ConvertUnassignedStableHorses();
+            }
 
         }
 
@@ -343,8 +346,8 @@ namespace HorseTycoon
                 return;
             }
 
-            // 4. Calculate Duration (Total Stamina / 4) in milliseconds
-            int durationMs = Math.Clamp((stats.TotalStamina / 4) * 1000, 1000, 100000);
+            // 4. Calculate Duration (Total Sprint / 4) in milliseconds
+            int durationMs = Math.Clamp((stats.TotalSprint / 4) * 1000, 1000, 100000);
 
             // 5. Apply Sprint Buff
             Buff sprintBuff = new Buff(
@@ -460,7 +463,7 @@ namespace HorseTycoon
             }
             else
             {
-                this.Monitor.Log("Invalid stat name or type. Use: Jump/Speed/Stamina and IV/EV.", LogLevel.Error);
+                this.Monitor.Log("Invalid stat name or type. Use: Jump/Speed/Sprint and IV/EV.", LogLevel.Error);
             }
         }
     }

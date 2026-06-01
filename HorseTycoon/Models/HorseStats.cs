@@ -29,8 +29,8 @@ namespace HorseTycoon.Models
         public const string SpeedIVKey = Prefix + "Speed" + IV_Suffix;
         public const string SpeedEVKey = Prefix + "Speed" + EV_Suffix;
 
-        public const string StaminaIVKey = Prefix + "Stamina" + IV_Suffix;
-        public const string StaminaEVKey = Prefix + "Stamina" + EV_Suffix;
+        public const string SprintIVKey = Prefix + "Sprint" + IV_Suffix;
+        public const string SprintEVKey = Prefix + "Sprint" + EV_Suffix;
 
         public const string JumpIVKey = Prefix + "Jump" + IV_Suffix;
         public const string JumpEVKey = Prefix + "Jump" + EV_Suffix;
@@ -66,10 +66,10 @@ namespace HorseTycoon.Models
             }
         }
 
-        // --- Stamina (Total Max 100) ---
-        public int StaminaIV { get => GetStat(nameof(StaminaIV)); set => SetStat(nameof(StaminaIV), value); }
-        public int StaminaEV { get => GetStat(nameof(StaminaEV)); set => SetStat(nameof(StaminaEV), value); }
-        public int TotalStamina => Math.Min(STAT_MAX, StaminaIV + StaminaEV);
+        // --- Sprint (Total Max 100) ---
+        public int SprintIV { get => GetStat(nameof(SprintIV)); set => SetStat(nameof(SprintIV), value); }
+        public int SprintEV { get => GetStat(nameof(SprintEV)); set => SetStat(nameof(SprintEV), value); }
+        public int TotalSprint => Math.Min(STAT_MAX, SprintIV + SprintEV);
 
         // --- Jump Distance (Total Max 100) ---
         public int JumpIV { get => GetStat(nameof(JumpIV)); set => SetStat(nameof(JumpIV), value); }
@@ -138,12 +138,12 @@ namespace HorseTycoon.Models
 
             // Apply the random roll within the range
             this.SpeedIV = rand.Next(range.min, range.max + 1);
-            this.StaminaIV = rand.Next(range.min, range.max + 1);
+            this.SprintIV = rand.Next(range.min, range.max + 1);
             this.JumpIV = rand.Next(range.min, range.max + 1);
 
             // EVs always start at 0 for new horses
             this.SpeedEV = 0;
-            this.StaminaEV = 0;
+            this.SprintEV = 0;
             this.JumpEV = 0;
         }
 
@@ -165,9 +165,9 @@ namespace HorseTycoon.Models
                     else if (type == "ev") this.SpeedEV = value;
                     else return false;
                     break;
-                case "stamina":
-                    if (type == "iv") this.StaminaIV = value;
-                    else if (type == "ev") this.StaminaEV = value;
+                case "Sprint":
+                    if (type == "iv") this.SprintIV = value;
+                    else if (type == "ev") this.SprintEV = value;
                     else return false;
                     break;
                 default:

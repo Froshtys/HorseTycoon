@@ -12,10 +12,10 @@ namespace HorseTycoon
         // Stat-specific date keys to allow training all 3 in one day
         private const string JumpDateKey = "Froshty.HorseTycoon/JumpTrainedDate";
         private const string SpeedDateKey = "Froshty.HorseTycoon/SpeedTrainedDate";
-        private const string StaminaDateKey = "Froshty.HorseTycoon/StaminaTrainedDate";
+        private const string SprintDateKey = "Froshty.HorseTycoon/SprintTrainedDate";
 
-        private const int SprintsPerDayBase = 10;
-        private const int JumpsPerDayBase = 20;
+        private const int SprintsPerDayBase = 20;
+        private const int JumpsPerDayBase = 30;
         private const int DistanceTilesPerDayBase = 1000;
 
 
@@ -37,7 +37,7 @@ namespace HorseTycoon
 
             stats.DailyJumps++;
 
-            if (stats.DailyJumps >= Math.Max(5, JumpsPerDayBase * (stats.TotalJump * 0.1)))
+            if (stats.DailyJumps >= Math.Max(5, JumpsPerDayBase * (stats.TotalJump * 0.01)))
             {
                 if (ApplyTraining(horse, "Jump"))
                 {
@@ -55,16 +55,16 @@ namespace HorseTycoon
             var stats = horse.GetHorseStats();
             string today = Game1.Date.TotalDays.ToString();
 
-            if (horse.modData.TryGetValue(SpeedDateKey, out string date) && date == today)
+            if (horse.modData.TryGetValue(SprintDateKey, out string date) && date == today)
                 return;
 
             stats.DailySprints++;
 
-            if (stats.DailySprints >= Math.Max(2, SprintsPerDayBase * (stats.TotalSpeed * 0.1)))
+            if (stats.DailySprints >= Math.Max(2, SprintsPerDayBase * (stats.TotalSprint * 0.01)))
             {
-                if (ApplyTraining(horse, "Speed"))
+                if (ApplyTraining(horse, "Sprint"))
                 {
-                    horse.modData[SpeedDateKey] = today;
+                    horse.modData[SprintDateKey] = today;
                     stats.DailySprints = 0;
                 }
             }
@@ -78,17 +78,17 @@ namespace HorseTycoon
             var stats = horse.GetHorseStats();
             string today = Game1.Date.TotalDays.ToString();
 
-            if (horse.modData.TryGetValue(StaminaDateKey, out string date) && date == today)
+            if (horse.modData.TryGetValue(SpeedDateKey, out string date) && date == today)
                 return;
 
             stats.DailyDistance += distanceTraveled;
 
             // DistanceTilesPerDayNeeded tiles * 64 pixels per tile
-            if (stats.DailyDistance >= Math.Max(150, DistanceTilesPerDayBase * (stats.TotalStamina * 0.1)) * 64)
+            if (stats.DailyDistance >= Math.Max(150, DistanceTilesPerDayBase * (stats.TotalSpeed * 0.01)) * 64)
             {
-                if (ApplyTraining(horse, "Stamina"))
+                if (ApplyTraining(horse, "Speed"))
                 {
-                    horse.modData[StaminaDateKey] = today;
+                    horse.modData[SpeedDateKey] = today;
                     stats.DailyDistance = 0f;
                 }
             }
@@ -102,7 +102,7 @@ namespace HorseTycoon
             {
                 "Jump" => stats.JumpEV,
                 "Speed" => stats.SpeedEV,
-                "Stamina" => stats.StaminaEV,
+                "Sprint" => stats.SprintEV,
                 _ => 50
             };
 
@@ -116,7 +116,7 @@ namespace HorseTycoon
             {
                 case "Jump": stats.JumpEV++; break;
                 case "Speed": stats.SpeedEV++; break;
-                case "Stamina": stats.StaminaEV++; break;
+                case "Sprint": stats.SprintEV++; break;
                 default: return false;
             }
 
@@ -132,11 +132,11 @@ namespace HorseTycoon
             return horse.modData.TryGetValue(SpeedDateKey, out string date) && date == today;
         }
 
-        public static bool HasTrainedStaminaToday(FarmAnimal horse)
+        public static bool HasTrainedSprintToday(FarmAnimal horse)
         {
             if (horse == null) return false;
             string today = Game1.Date.TotalDays.ToString();
-            return horse.modData.TryGetValue(StaminaDateKey, out string date) && date == today;
+            return horse.modData.TryGetValue(SprintDateKey, out string date) && date == today;
         }
 
         public static bool HasTrainedJumpToday(FarmAnimal horse)

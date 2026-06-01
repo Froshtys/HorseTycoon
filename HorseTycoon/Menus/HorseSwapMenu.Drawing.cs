@@ -275,8 +275,8 @@ public partial class HorseSwapMenu : IClickableMenu
                 b.Draw(Game1.mouseCursors, new Vector2(checkboxColumnX, barStartY + 2), speedChecked ? checkedBoxSource : emptyBoxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);
 
 
-                // --- 2. Stamina Bar & Checkbox ---
-                float sprintPct = (float)stats.TotalStamina / 100f;
+                // --- 2. Sprint Bar & Checkbox ---
+                float sprintPct = (float)stats.TotalSprint / 100f;
                 int bar2Y = barStartY + verticalGap;
                 b.Draw(Game1.mouseCursors, new Rectangle(barStartX, bar2Y, 6, barHeight), capSource, Color.White, 0f, Vector2.Zero, SpriteEffects.FlipHorizontally, 1f);
                 b.Draw(Game1.mouseCursors, new Rectangle(barStartX + 6, bar2Y, barMaxWidth - 12, barHeight), trackSource, Color.White, 0f, Vector2.Zero, SpriteEffects.None, 1f);
@@ -284,8 +284,8 @@ public partial class HorseSwapMenu : IClickableMenu
                 this.DrawRoundedProgressBar(b, barStartX + 4, bar2Y + 5, barMaxWidth - 8, barHeight - 10, sprintPct, Color.LimeGreen); // Fixed duplicate green tint color
                 Utility.drawTextWithShadow(b, "Sprint", Game1.smallFont, new Vector2(barStartX + barMaxWidth + 12, bar2Y - 2), Game1.textColor, 1f);
 
-                bool staminaChecked = TrainingManager.HasTrainedStaminaToday(animal);
-                b.Draw(Game1.mouseCursors, new Vector2(checkboxColumnX, bar2Y + 2), staminaChecked ? checkedBoxSource : emptyBoxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);
+                bool SprintChecked = TrainingManager.HasTrainedSprintToday(animal);
+                b.Draw(Game1.mouseCursors, new Vector2(checkboxColumnX, bar2Y + 2), SprintChecked ? checkedBoxSource : emptyBoxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);
 
 
                 // --- 3. Jump Bar & Checkbox ---
