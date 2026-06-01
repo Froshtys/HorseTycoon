@@ -40,6 +40,12 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(AnimalQueryMenu), nameof(AnimalQueryMenu.receiveLeftClick)),
                 postfix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(AnimalQueryMenu_receiveLeftClick_Postfix))
             );
+
+            // --- Building Demolish Interceptor ---
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Building), nameof(Building.BeforeDemolish)),
+                prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Building_BeforeDemolish_Prefix))
+            );
         }
 
         // --- Patch Implementations ---
@@ -96,7 +102,7 @@ namespace HorseTycoon
                         if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string linkedId) && linkedId == soldId.ToString())
                         {
                             stable.modData.Remove(HorseHelper.CurrentFarmHorseIdKey);
-                            stable.modData["Froshty.HorseTycoon/IsIntentionallyEmpty"] = "true";
+                            stable.modData[HorseHelper.StableEmptyKey] = "true";
                             Horse stableHorse = stable.getStableHorse();
                             if (stableHorse != null)
                             {
@@ -106,6 +112,23 @@ namespace HorseTycoon
                             stable.HorseId = Guid.Empty;
                             break;
                         }
+                    }
+                }
+            }
+        }
+
+        public static void Building_BeforeDemolish_Prefix(Building __instance)
+        {
+            if (__instance is Stable stable)
+            {
+                if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string linkedIdString) &&
+                    long.TryParse(linkedIdString, out long targetAnimalId))
+                {
+                    FarmAnimal? hiddenHorse = HorseHelper.GetHiddenHorseById(targetAnimalId);
+
+                    if (hiddenHorse != null)
+                    {
+                        HorseHelper.RestoreHorse(hiddenHorse);
                     }
                 }
             }
