@@ -25,7 +25,7 @@ namespace HorseTycoon
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
-            helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
+
 
             helper.ConsoleCommands.Add("set_horse_stat",
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
@@ -43,33 +43,9 @@ namespace HorseTycoon
             this.jumpManager.Initialize();
         }
 
-        private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
+        private void ConvertUnassignedStableHorses()
         {
-            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
-            {
-                // 1. Check if this stable already has a FarmAnimal assigned
-                if (stable.modData.ContainsKey(HorseHelper.CurrentFarmHorseIdKey))
-                    continue;
 
-                Horse horse = stable.getStableHorse();
-                if (horse == null) continue;
-
-                // 2. Try to find a home (any barn)
-                Building? barn = HorseHelper.GetAvailableBarn();
-
-                if (barn != null)
-                {
-                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, Monitor, Helper);
-                }
-                else
-                {
-                    this.Monitor.Log($"Stable horse '{horse.Name}' found, but no barn exists. It will be converted once a barn is built.", LogLevel.Info);
-                }
-            }
-        }
-
-        private void OnDayStarted(object? sender, DayStartedEventArgs e)
-        {
             Utility.ForEachLocation(location =>
             {
                 foreach (FarmAnimal animal in location.animals.Values)
@@ -91,11 +67,15 @@ namespace HorseTycoon
                 }
                 return true; // Continue to next location
             });
-
             foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
             {
-                // Check if our custom modData confirms this stable should be empty and clear repaired clone
-                if (stable.modData.TryGetValue(HorseHelper.StableEmptyKey, out string isEmptyStr) && isEmptyStr == "true")
+
+                if (stable.isUnderConstruction() || stable.modData.ContainsKey(HorseHelper.CurrentFarmHorseIdKey))
+                    continue;
+
+                // Check if the stable is intentionally empty
+                bool isEmpty = stable.modData.TryGetValue(HorseHelper.StableEmptyKey, out string isEmptyStr) && isEmptyStr == "true";
+                if (isEmpty)
                 {
                     Horse overnightClone = stable.getStableHorse();
                     if (overnightClone != null)
@@ -107,8 +87,53 @@ namespace HorseTycoon
                         }
                     }
                     stable.HorseId = Guid.Empty;
+                    this.Monitor.Log($"Clear overnight clone horse", LogLevel.Debug);
+                    continue;
+                }
+
+                Building? barn = HorseHelper.GetAvailableBarn();
+                if (barn == null)
+                {
+                    this.Monitor.Log($"Stable horse found, but no barn exists. It will be converted once a barn is built.", LogLevel.Info);
+                    continue;
+                }
+
+                // Convert a horse from a new stable
+                if (stable.daysOfConstructionLeft.Value == 0)
+                {
+                    Game1.showGlobalMessage($"Your new Stable is ready.");
+                    stable.dayUpdate(Game1.dayOfMonth);
+                    Horse horse = stable.getStableHorse();
+                    Game1.activeClickableMenu = new NamingMenu(
+                        processedName =>
+                        {
+                            horse.Name = processedName;
+                            horse.displayName = processedName;
+                            HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
+                            this.Monitor.Log($"Successfully named new horse '{processedName}' and converted it into a barn animal", LogLevel.Info);
+                            Game1.exitActiveMenu();
+                        },
+                        defaultName: "Ginger",
+                        title: "Name your new horse:"
+                    );
+                }
+                else
+                {
+                    //Convert an existing stable horse
+                    Horse horse = stable.getStableHorse();
+                    if (horse == null) continue;
+                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
+                    this.Monitor.Log($"Successfully converted old horse '{horse.Name}' and converted it into a barn animal", LogLevel.Info);
+
                 }
             }
+        }
+
+        private void OnDayStarted(object? sender, DayStartedEventArgs e)
+        {
+
+            ConvertUnassignedStableHorses();
+
         }
 
 
@@ -180,11 +205,25 @@ namespace HorseTycoon
 
         private void ShowHorseSwapMenu(Stable targetStable)
         {
-            // 1. Gather all horses from your barn network (removed IsHidden filter so active horse is included)
             var horses = HorseHelper.GetAllBarnHorses().ToList();
 
             if (Game1.player.isRidingHorse())
                 Game1.player.mount.dismount();
+
+            Horse oldHorse = targetStable.getStableHorse();
+            // Check if the horse is outside the Farm map boundaries
+            if (oldHorse != null && (oldHorse.currentLocation == null || oldHorse.currentLocation.Name != "Farm"))
+            {
+                Game1.showRedMessage("Cannot change horse. The horse must be on the farm.");
+                return;
+            }
+
+            // Check if any multiplayer participant is currently riding it
+            if (oldHorse != null && oldHorse.rider != null)
+            {
+                Game1.showRedMessage("Cannot change horse. Someone is currently riding the horse.");
+                return;
+            }
 
             // Trace if the targeted stable structures hold a valid custom connection node
             FarmAnimal? activeHorseData = null;
@@ -195,10 +234,10 @@ namespace HorseTycoon
 
             if (horses.Count == 0 && activeHorseData == null) return;
 
-            // --- NEW SORTING LOGIC ---
             // Pins the currently active stable horse to index 0, sorting others alphabetically underneath
             if (activeHorseData != null)
             {
+                horses = horses.Where(h => !HorseHelper.IsHidden(h) || h.myID.Value == activeHorseData.myID.Value).ToList();
                 horses = horses
                     .OrderByDescending(h => h.myID.Value == activeHorseData.myID.Value)
                     .ThenBy(h => h.Name)
@@ -246,7 +285,6 @@ namespace HorseTycoon
 
                 Game1.exitActiveMenu();
             });
-
 
             this.Helper.Input.Suppress(SButton.MouseLeft);
         }

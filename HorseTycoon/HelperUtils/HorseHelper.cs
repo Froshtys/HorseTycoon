@@ -162,23 +162,25 @@ namespace HorseTycoon
                     // Remove the lock since a new horse is moving in
                     targetStable.modData.Remove(StableEmptyKey);
                 }
-                // Stardew 1.6 overrode Stable tracking to utilize unique Guids mapped to the farm layout
                 Guid newHorseGuid = Guid.NewGuid();
 
                 // Spawn coordinates matching the stable structure's placement position
                 int tileX = targetStable.tileX.Get() + 1;
                 int tileY = targetStable.tileY.Get() + 1;
 
-                // Instantiate the canonical 1.6 Horse character object
                 activeHorse = new Horse(newHorseGuid, tileX, tileY);
 
                 // Link the stable's architectural data profile to the newly spawned character Guid
                 targetStable.HorseId = newHorseGuid;
 
                 // Force register the character into the active farm simulation zone
+                activeHorse.Name = selectedBarnHorse.Name;
+                activeHorse.displayName = selectedBarnHorse.displayName;
+                // Force multiplayer update
+                activeHorse.name.Value = selectedBarnHorse.Name;
                 Game1.getFarm().characters.Add(activeHorse);
             }
-            // 2. Handle Existing Hidden Horse (Only runs if a horse was already assigned)
+            // Handle Existing Hidden Horse (Only runs if a horse was already assigned)
             else if (targetStable.modData.TryGetValue(CurrentFarmHorseIdKey, out string farmAnimalIdStr))
             {
                 if (long.TryParse(farmAnimalIdStr, out long farmAnimalId))
@@ -195,16 +197,14 @@ namespace HorseTycoon
                 }
             }
 
-            // 3. Hide and Assign the New Horse
+            // Hide and Assign the New Horse
             activeHorse.Name = selectedBarnHorse.Name;
             activeHorse.displayName = selectedBarnHorse.displayName;
 
             // Track internal placement variables using standard 1.6 properties
             selectedBarnHorse.modData["Froshty.HorseTycoon/CurrentStableId"] = targetStable.id.ToString();
             selectedBarnHorse.modData[HideKey] = "true";
-            targetStable.modData[CurrentFarmHorseIdKey] = selectedBarnHorse.myID.Value.ToString(); // Use .Value for 1.6 netfields
-
-            // Synchronize spatial ties
+            targetStable.modData[CurrentFarmHorseIdKey] = selectedBarnHorse.myID.Value.ToString();
             targetStable.grabHorse();
             monitor.Log($"Save hidden horse with ID {selectedBarnHorse.myID}.", LogLevel.Debug);
 
