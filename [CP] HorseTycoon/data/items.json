@@ -1,0 +1,399 @@
+{	
+	"Changes": [
+			{
+	"LogName": "Item Data Manure",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.Manure": {
+		"Category": -15,
+		"Description": "{{i18n:HorseManure_Description}}",
+		"Displayname": "{{i18n:HorseManure_Name}}",
+		"Name": "Horse Manure",
+		"Price": 50,
+		"Texture": "{{ModId}}/Manure",
+		"Type": "Basic",
+		"ContextTags": [
+		"color_brown"]
+		}
+	}},
+		{
+	"LogName": "Horse Tycoon - Register Fertilizer Granulator",
+	"Action": "EditData",
+	"Target": "Data/BigCraftables",
+	"Entries": {
+		"{{ModId}}_FertilizerGranulator": {
+		"Name": "Fertilizer Granulator",
+		"Description": "{{i18n:FertilizerGranulator_Description}}",
+		"Displayname": "{{i18n:_FertilizerGranulator_Name}}",
+		"Price": 3000,
+		"Texture": "{{ModId}}/Granulator",
+		"SpriteIndex": 0,
+		"CanBePlacedIndoor": true,
+		"CanBePlacedOutdoor": true,
+		"WiggleOnTrigger": true
+		}
+	}
+	},
+	{
+  "LogName": "Horse Tycoon - Fertilizer Granulator Crafting Recipe",
+  "Action": "EditData",
+  "Target": "Data/CraftingRecipes",
+  "Entries": {
+    "{{ModId}}_FertilizerGranulator": "335 1 709 10 390 25 68 2/Home/{{ModId}}_FertilizerGranulator/true/none",
+  }
+},
+{
+  "LogName": "Horse Tycoon - Sell Fertilizer Granulator directly in Marnie Shop",
+  "Action": "EditData",
+  "Target": "Data/Shops",
+  "TargetField": [ "AnimalShop", "Items" ],
+  "Entries": {
+    "{{ModId}}_FertilizerGranulator_DirectItem": {
+      "Id": "{{ModId}}_FertilizerGranulator_DirectItem",
+      "ItemId": "(BC){{ModId}}_FertilizerGranulator", 
+      "Price": 3000,
+      "IsRecipe": false,
+      "AvoidRepeat": false
+    }
+  }
+},
+	{
+  "LogName": "Horse Tycoon - Fertilizer Granulator Mechanics",
+  "Action": "EditData",
+  "Target": "Data/Machines",
+  "Entries": {
+    "(BC){{ModId}}_FertilizerGranulator": {
+      "HasOutput": true,
+      "InteractMethod": "StardewValley.Object:popAnimation",
+      "OutputRules": [
+        {
+          "Id": "Granulate_Basic",
+          "Triggers": [
+            {
+              "Id": "Trigger_BasicManure",
+              "Trigger": "ItemPlacedInMachine",
+              "RequiredItemId": "(O)HorseTycoon.Manure",
+              "RequiredCount": 1,
+              "Condition": "ITEM_QUALITY Input 0 1"
+            }
+          ],
+         "OutputItem": [
+            {
+              "Id": "Output_BasicFertilizer",
+              "ItemId": "(O)368", // Basic Fertilizer
+              "Chance": 0.5,      
+              "MinStack": 1,
+              "MaxStack": 1
+            },
+            {
+              "Id": "Output_SpeedGro",
+              "ItemId": "(O)465", // Speed-Gro
+              "Chance": 0.5,      
+              "MinStack": 1,
+              "MaxStack": 1
+            }
+          ],
+          "MinutesUntilReady": 30 
+        },
+        {
+          "Id": "Granulate_Quality",
+          "Triggers": [
+            {
+              "Id": "Trigger_QualityManure",
+              "Trigger": "ItemPlacedInMachine",
+              "RequiredItemId": "(O)HorseTycoon.Manure",
+              "RequiredCount": 1,
+              "Condition": "ITEM_QUALITY Input 2 2"
+            }
+          ],
+           "OutputItem": [
+            {
+              "Id": "Output_BasicFertilizer",
+              "ItemId": "(O)369", // Quality Fertilizer
+              "Chance": 0.5,      
+              "MinStack": 1,
+              "MaxStack": 1
+            },
+            {
+              "Id": "Output_SpeedGro",
+              "ItemId": "(O)466", // Super Speed-Gro
+              "Chance": 0.5,      
+              "MinStack": 1,
+              "MaxStack": 1
+            }
+          ],
+          "MinutesUntilReady": 30
+        },
+		 {
+          "Id": "Granulate_Iridium_Quality",
+          "Triggers": [
+            {
+              "Id": "Trigger_QualityManure",
+              "Trigger": "ItemPlacedInMachine",
+              "RequiredItemId": "(O)HorseTycoon.Manure",
+              "RequiredCount": 1,
+              "Condition": "ITEM_QUALITY Input 4 4"
+            }
+          ],
+           "OutputItem": [
+            {
+              "Id": "Output_BasicFertilizer",
+              "ItemId": "(O)919", // Deluxe Fertilizer
+              "Chance": 0.5,      
+              "MinStack": 1,
+              "MaxStack": 1
+            },
+            {
+              "Id": "Output_SpeedGro",
+              "ItemId": "(O)918", // Hyper Speed-Gro
+              "Chance": 0.5,      
+              "MinStack": 1,
+              "MaxStack": 1
+            }
+          ],
+          "MinutesUntilReady": 30
+        }
+      ]
+    }
+  }
+},
+	{
+	"LogName": "Item Data Copper",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"{{ModId}}_ShoeCopper": {
+		"Category": -18,
+		"Description": "{{i18n:HorseShoeCopper_Description}}",
+		"Displayname": "{{i18n:HorseShoeCopper_Name}}",
+		"Name": "Copper Horseshoe",
+		"Price": 400,
+		"Texture": "{{ModId}}/HorseShoeCopper",
+		"Type": "Basic",
+		"ContextTags": [
+		"color_white"]
+		}
+	}},
+    {
+	"LogName": "Item Data Iron",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"{{ModId}}_ShoeIron": {
+		"Category": -18,
+		"Description": "{{i18n:HorseShoeIron_Description}}",
+		"Displayname": "{{i18n:HorseShoeIron_Name}}",
+		"Name": "Iron Horseshoe",
+		"Price": 600,
+		"Texture": "{{ModId}}/HorseShoeIron",
+		"Type": "Basic",
+		"ContextTags": [
+		"color_white"]
+		}
+	}},
+    {
+	"LogName": "Item Data Gold",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"{{ModId}}_ShoeGold": {
+		"Category": -18,
+		"Description": "{{i18n:HorseShoeGold_Description}}",
+		"Displayname": "{{i18n:HorseShoeGold_Name}}",
+		"Name": "Gold Horseshoe",
+		"Price": 800,
+		"Texture": "{{ModId}}/HorseShoeGold",
+		"Type": "Basic",
+		"ContextTags": [
+		"color_white"]
+		}
+	}},
+    {
+	"LogName": "Machine Data Copper",
+	"Action": "EditData",
+	"Target": "Data/Machines",
+	"TargetField": [
+	"(BC)13",
+	"OutputRules"
+	],
+	"Entries": {
+		"HorseShoeCopper": {
+		"Id": "HorseShoeCopper",
+		"Triggers": [
+		{
+		"Trigger": "ItemPlacedInMachine",
+		"RequiredItemId": "(O){{ModId}}_ShoeCopper",
+		"RequiredCount": 1
+		}
+	],
+	"OutputItem": [
+	{
+		"Id": "(O)Copper Bar",
+		"ItemId": "(O)334",
+		"MinStack": 1,
+		"MaxStack": 1,
+		"Quality": 0
+		}
+		],
+		"MinutesUntilReady": 100
+		}
+	}
+	},
+    {
+	"LogName": "Large Machine Data Copper",
+	"Action": "EditData",
+	"Target": "Data/Machines",
+	"TargetField": [
+	"(BC)HeavyFurnace",
+	"OutputRules"
+	],
+	"Entries": {
+		"HorseShoeCopper": {
+		"Id": "HorseShoeCopper",
+		"Triggers": [
+		{
+		"Trigger": "ItemPlacedInMachine",
+		"RequiredItemId": "(O){{ModId}}_ShoeCopper",
+		"RequiredCount": 3
+		}
+	],
+	"OutputItem": [
+	{
+		"Id": "(O)Copper Bar",
+		"ItemId": "(O)334",
+		"MinStack": 3,
+		"MaxStack": 3,
+		"Quality": 0
+		}
+		],
+		"MinutesUntilReady": 50
+		}
+	}
+	},
+    {
+	"LogName": "Machine Data Iron",
+	"Action": "EditData",
+	"Target": "Data/Machines",
+	"TargetField": [
+	"(BC)13",
+	"OutputRules"
+	],
+	"Entries": {
+		"HorseShoeIron": {
+		"Id": "HorseShoeIron",
+		"Triggers": [
+		{
+		"Trigger": "ItemPlacedInMachine",
+		"RequiredItemId": "(O)_ShoeIron",
+		"RequiredCount": 1
+		}
+	],
+	"OutputItem": [
+	{
+		"Id": "(O)Iron Bar",
+		"ItemId": "(O)335",
+		"MinStack": 1,
+		"MaxStack": 1,
+		"Quality": 0
+		}
+		],
+		"MinutesUntilReady": 100
+		}
+	}
+	},
+    {
+	"LogName": "Large Machine Data Iron",
+	"Action": "EditData",
+	"Target": "Data/Machines",
+	"TargetField": [
+	"(BC)HeavyFurnace",
+	"OutputRules"
+	],
+	"Entries": {
+		"HorseShoeIron": {
+		"Id": "HorseShoeIron",
+		"Triggers": [
+		{
+		"Trigger": "ItemPlacedInMachine",
+		"RequiredItemId": "(O){{ModId}}_ShoeIron",
+		"RequiredCount": 3
+		}
+	],
+	"OutputItem": [
+	{
+		"Id": "(O)Iron Bar",
+		"ItemId": "(O)335",
+		"MinStack": 3,
+		"MaxStack": 3,
+		"Quality": 0
+		}
+		],
+		"MinutesUntilReady": 50
+		}
+	}
+	},
+    {
+	"LogName": "Machine Data Gold",
+	"Action": "EditData",
+	"Target": "Data/Machines",
+	"TargetField": [
+	"(BC)13",
+	"OutputRules"
+	],
+	"Entries": {
+		"HorseShoeGold": {
+		"Id": "HorseShoeGold",
+		"Triggers": [
+		{
+		"Trigger": "ItemPlacedInMachine",
+		"RequiredItemId": "(O){{ModId}}_ShoeGold",
+		"RequiredCount": 1
+		}
+	],
+	"OutputItem": [
+	{
+		"Id": "(O)Gold Bar",
+		"ItemId": "(O)336",
+		"MinStack": 1,
+		"MaxStack": 1,
+		"Quality": 0
+		}
+		],
+		"MinutesUntilReady": 100
+		}
+	}
+	},
+    {
+	"LogName": "Large Machine Data Gold",
+	"Action": "EditData",
+	"Target": "Data/Machines",
+	"TargetField": [
+	"(BC)HeavyFurnace",
+	"OutputRules"
+	],
+	"Entries": {
+		"HorseShoeGold": {
+		"Id": "HorseShoeGold",
+		"Triggers": [
+		{
+		"Trigger": "ItemPlacedInMachine",
+		"RequiredItemId": "(O){{ModId}}_ShoeGold",
+		"RequiredCount": 3
+		}
+	],
+	"OutputItem": [
+	{
+		"Id": "(O)Gold Bar",
+		"ItemId": "(O)336",
+		"MinStack": 3,
+		"MaxStack": 3,
+		"Quality": 0
+		}
+		],
+		"MinutesUntilReady": 50
+		}
+		}
+		}
+	]
+}

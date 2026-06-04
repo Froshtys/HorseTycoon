@@ -235,7 +235,7 @@ namespace HorseTycoon
         {
             // 1. Generate unique ID via Game1
             long newId = Game1.Multiplayer.getNewID();
-            FarmAnimal newHorse = new FarmAnimal("Ems.Horse", newId, Game1.player.UniqueMultiplayerID);
+            FarmAnimal newHorse = new FarmAnimal("Tycoon.Horse", newId, Game1.player.UniqueMultiplayerID);
 
             newHorse.Name = horse.Name;
             newHorse.modData[HideKey] = "true";

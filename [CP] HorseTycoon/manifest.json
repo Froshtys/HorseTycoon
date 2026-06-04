@@ -1,0 +1,12 @@
+{
+    "Name": "Horse Tycoon Content Pack",
+    "Author": "Froshty",
+    "Version": "1.0",
+    "Description": "Content pack for horse tycoon.",
+    "UniqueID": "CP.HorseTycoon",
+"UpdateKeys": [ "Nexus:88667" ],
+    "ContentPackFor": {
+        "UniqueID": "Pathoschild.ContentPatcher"
+
+    }
+}

@@ -1,0 +1,27 @@
+{
+	"Format": "2.9.0",
+	"ConfigSchema": {
+	"HorseSound": {
+		"AllowValues": "Neigh, Nicker, Snort",
+		"Default": "Snort"
+		}
+	},
+	"Changes": [
+	{
+		"Action": "Include",
+      		"FromFile": "data/horses.json"
+		},
+		{
+		"Action": "Include",
+      		"FromFile": "data/items.json"
+		},
+		{
+		"Action": "Include",
+      		"FromFile": "data/eac.json",
+      		"When": { "HasMod": "selph.ExtraAnimalConfig" }
+		},
+		{
+		"Action": "Include",
+      		"FromFile": "data/sound.json"}
+	]
+}

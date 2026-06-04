@@ -1,0 +1,40 @@
+{	
+	"Changes": [
+	{
+	"LogName": "Sound Data",
+	"Action": "EditData",
+	"Target": "Data/AudioChanges",
+	"Entries": {
+	"{{ModId}}_Neigh": {
+	"ID": "{{ModId}}_Neigh",
+	"Category": "Sound",
+	"FilePaths": [ "{{AbsoluteFilePath: assets/neigh.wav}}" ],
+	"StreamedVorbis": false
+		}
+	}
+	},
+	{
+	"LogName": "Sound Data",
+	"Action": "EditData",
+	"Target": "Data/AudioChanges",
+	"Entries": {
+	"{{ModId}}_Nicker": {
+	"ID": "{{ModId}}_Nicker",
+	"Category": "Sound",
+	"FilePaths": [ "{{AbsoluteFilePath: assets/nicker.wav}}" ],
+	"StreamedVorbis": false
+		}
+	}
+	},
+	{
+	"LogName": "Sound Data",
+	"Action": "EditData",
+	"Target": "Data/AudioChanges",
+	"Entries": {
+	"{{ModId}}_Snort": {
+	"ID": "{{ModId}}_Snort",
+	"Category": "Sound",
+	"FilePaths": [ "{{AbsoluteFilePath: assets/snort.wav}}" ],
+	"StreamedVorbis": false
+		}}}
+	]}

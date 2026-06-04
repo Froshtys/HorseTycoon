@@ -1,0 +1,29 @@
+{	
+	"Changes": [
+	{
+	"LogName": "Quality Data",
+		"Action": "EditData",
+		"Target": "selph.ExtraAnimalConfig/AnimalExtensionData",
+		"TargetField": [ "Tycoon.Horse", "AnimalProduceExtensionData" ],
+	"Entries": {
+	"(O)EmsHorse.ShoeCopper": {
+	"IgnoreAnimalQuality": true
+	},
+	"(O)EmsHorse.ShoeIron": {
+	"IgnoreAnimalQuality": true
+	},
+	"(O)EmsHorse.ShoeGold": {
+	"IgnoreAnimalQuality": true
+	}
+		}
+	},
+{
+	"Action": "EditData",
+	"Target": "selph.ExtraAnimalConfig/AnimalExtensionData",
+	"TargetField": [ "Tycoon.Horse" ],
+		"Entries": {
+		"IgnoreRain": false,
+		"IgnoreWinter": true
+			}
+		}
+	]}

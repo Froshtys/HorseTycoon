@@ -1,0 +1,111 @@
+{	
+	"Changes": [
+	{
+		"LogName": "Load assets",
+		"Action": "Load",
+		"Target": "{{ModId}}/Granulator, {{ModId}}/Manure, {{ModId}}/Roan, {{ModId}}/RoanFoal, {{ModId}}/BlueRoan, {{ModId}}/BlueRoanFoal, {{ModId}}/Dapple, {{ModId}}/DappleFoal, {{ModId}}/HorseShoeCopper, {{ModId}}/HorseShoeIron, {{ModId}}/HorseShoeGold, {{ModId}}/HorseIcon, {{ModId}}/Belgian, {{ModId}}/BelgianFoal, {{ModId}}/Shire, {{ModId}}/ShireFoal, {{ModId}}/Bay, {{ModId}}/BayFoal, {{ModId}}/Chestnut, {{ModId}}/ChestnutFoal",
+		"FromFile": "assets/{{TargetWithoutPath}}.png"
+		},
+		{
+	"LogName": "Animal Data",
+	"Action": "EditData",
+	"Target": "Data/FarmAnimals",
+	"Entries": {
+		"Tycoon.Horse": {
+			"DisplayName": "{{i18n:Horse_Name}}",
+			"House": "Barn",
+			"Gender": "MaleOrFemale",
+			"PurchasePrice": 4000,
+			"SellPrice": 2000,
+			"ShopTexture": "{{ModId}}/HorseIcon",
+			"ShopSourceRect": {
+				"Width": 32,
+				"Height": 16
+			},
+			"RequiredBuilding": "Barn",
+			"ShopDisplayName": "{{i18n:Horse_Name}}",
+			"ShopDescription": "{{i18n:Horse_Description}}",
+			"ShopMissingBuildingDescription": "???",
+			"BirthText": "{{i18n:Horse_Born}}",
+			"DaysToMature": 7,
+			"DaysToProduce": "2",
+			"ProduceOnMature": true,
+	"ProduceItemIDs": [
+	{
+	"Id": "Default",
+	"Condition": null,
+	"MinimumFriendship": 0,
+	"ItemId": "HorseTycoon.Manure"
+		},
+		{
+	"Id": "Default",
+	"Condition": "RANDOM 0.2",
+	"MinimumFriendship": 0,
+	"ItemId": "EmsHorse.ShoeCopper"
+		},
+		{
+	"Id": "Default",
+	"Condition": "RANDOM 0.2",
+	"MinimumFriendship": 500,
+	"ItemId": "EmsHorse.ShoeIron"
+		},
+		{
+	"Id": "Default",
+	"Condition": "RANDOM 0.2",
+	"MinimumFriendship": 800,
+	"ItemId": "EmsHorse.ShoeGold"
+                }
+            ],
+	"HarvestType": "DropOvernight",
+		"HappinessDrain": 1,
+		"GrassEatAmount": 2,
+		"CanGetPregnant": true,
+		"CanSwim": false,
+		"BabiesFollowAdults": true,
+		"Sound": "{{ModId}}_{{HorseSound}}",
+		"Texture": "{{ModId}}/Roan",
+		"BabyTexture": "{{ModId}}/RoanFoal",
+			"Skins": [
+			{
+		"Id": "BlueRoan",
+		"Texture": "{{ModId}}/BlueRoan",
+		"BabyTexture": "{{ModId}}/BlueRoanFoal",
+		"Weight": 0.5
+		},
+		{
+		"Id": "Dapple",
+		"Texture": "{{ModId}}/Dapple",
+		"BabyTexture": "{{ModId}}/DappleFoal",
+		"Weight": 0.5
+		},
+		{
+		"Id": "Chestnut",
+		"Texture": "{{ModId}}/Chestnut",
+		"BabyTexture": "{{ModId}}/ChestnutFoal",
+		"Weight": 0.5
+		},
+		{
+		"Id": "Bay",
+		"Texture": "{{ModId}}/Bay",
+		"BabyTexture": "{{ModId}}/BayFoal",
+		"Weight": 0.5
+		},
+		{
+		"Id": "Shire",
+		"Texture": "{{ModId}}/Shire",
+		"BabyTexture": "{{ModId}}/ShireFoal",
+		"Weight": 0.5
+		},
+		{
+		"Id": "Belgian",
+		"Texture": "{{ModId}}/Belgian",
+		"BabyTexture": "{{ModId}}/BelgianFoal",
+		"Weight": 0.5
+  		}
+	], 
+			"ShadowWhenBaby": { "Visible": false },
+			"ShadowWhenAdult": { "Visible": false },
+			"UseFlippedRightForLeft": true,
+			"SpriteWidth": 32,
+			"SpriteHeight": 32
+		}}}]}

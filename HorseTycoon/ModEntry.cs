@@ -133,7 +133,6 @@ namespace HorseTycoon
 
             if (Context.IsMainPlayer)
             {
-                RunGlobalStatsMigration(this.Monitor);
                 ConvertUnassignedStableHorses();
             }
 
@@ -248,6 +247,7 @@ namespace HorseTycoon
             }
             else
             {
+                horses = horses.Where(h => !HorseHelper.IsHidden(h)).ToList();
                 horses = horses.OrderBy(h => h.Name).ToList();
             }
             // -------------------------

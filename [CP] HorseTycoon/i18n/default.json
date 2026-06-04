@@ -1,0 +1,21 @@
+{
+    "Horse_Name": "Horse",
+    "Horse_Description": "Train them well and they will be great companions. Lives in the barn, ride from the stable.",
+    "Horse_Born": "A foal has been born!",
+
+    "HorseShoeCopper_Description": "A rusted horseshoe made from copper. It might be worth reusing.",
+    "HorseShoeCopper_Name": "Copper Horseshoe",
+
+    "HorseShoeIron_Description": "A strong horseshoe made from iron. It might be worth reusing.",
+    "HorseShoeIron_Name": "Iron Horseshoe",
+
+    "HorseShoeGold_Description": "A horseshoe made from gold. It might be worth reusing.",
+    "HorseShoeGold_Name": "Golden Horseshoe",
+
+    "HorseManure_Description": "Horse manure. Can be used as fuel or processed into fertilizer.",
+    "HorseManure_Name": "Manure",
+
+    "FertilizerGranulator_DisplayName": "Fertilizer Granulator",
+	"FertilizerGranulator_Description": "Converts livestock manure into fertilizer."
+
+}
