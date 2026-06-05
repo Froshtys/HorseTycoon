@@ -25,7 +25,7 @@ namespace HorseTycoon
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
-
+            helper.Events.Display.MenuChanged += this.OnMenuChanged;
 
             helper.ConsoleCommands.Add("set_horse_stat",
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
@@ -41,6 +41,18 @@ namespace HorseTycoon
             // Create and start the jump logic
             this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);
             this.jumpManager.Initialize();
+        }
+
+        private void OnMenuChanged(object sender, MenuChangedEventArgs e)
+        {
+            if (e.OldMenu is PurchaseAnimalsMenu)
+            {
+                ConvertUnassignedStableHorses();
+            }
+            else if (e.OldMenu is NamingMenu)
+            {
+                ConvertUnassignedStableHorses();
+            }
         }
         private void ConvertUnassignedStableHorses()
         {
@@ -84,9 +96,9 @@ namespace HorseTycoon
                         {
                             overnightClone.currentLocation.characters.Remove(overnightClone);
                         }
+                        this.Monitor.Log($"Clear overnight clone horse", LogLevel.Debug);
                     }
                     stable.HorseId = Guid.Empty;
-                    this.Monitor.Log($"Clear overnight clone horse", LogLevel.Debug);
                     continue;
                 }
 

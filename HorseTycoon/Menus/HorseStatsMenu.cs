@@ -45,7 +45,7 @@ namespace HorseTycoon.Menus
             // Draw the Stats
             var stats = this.Horse.GetHorseStats();
             int startX = this.xPositionOnScreen + 60;
-            int startY = this.yPositionOnScreen + 120 + YPadding;
+            int startY = this.yPositionOnScreen + 125 + YPadding;
 
             DrawStatBar(b, "Speed", startX, startY, stats.SpeedIV, stats.SpeedEV, 2);
             DrawStatBar(b, "Sprint", startX, startY + 50, stats.SprintIV, stats.SprintEV, 2);
@@ -94,7 +94,7 @@ namespace HorseTycoon.Menus
             int targetThreshold = 50;
             if (iv < targetThreshold)
             {
-                int pointDeficit = targetThreshold - iv; // Amount less than 50
+                int pointDeficit = targetThreshold - iv;
                 float deficitPct = (float)pointDeficit / maxStatValue;
 
                 // Calculate exact horizontal pixel width for the deficit
@@ -102,14 +102,13 @@ namespace HorseTycoon.Menus
 
                 if (deficitWidth > 0)
                 {
-                    // Shift X position so the rectangle anchors on the right edge wall and flows left
                     int rightAnchorX = (fillX + fillWidth) - deficitWidth;
 
-                    // Draw a semi-transparent black rectangle over the track
+                    // Draw the unatainable potential area
                     b.Draw(
                         Game1.staminaRect,
                         new Rectangle(rightAnchorX, fillY, deficitWidth, fillHeight),
-                        Color.SaddleBrown * 0.40f // Adjust multiplier opacity here (0.45f = 45% dark tint)
+                        Color.SaddleBrown * 0.45f
                     );
                 }
             }

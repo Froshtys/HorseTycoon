@@ -1,4 +1,5 @@
 using HarmonyLib;
+using HorseTycoon.Models;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;

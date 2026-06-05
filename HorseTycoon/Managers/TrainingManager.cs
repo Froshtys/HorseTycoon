@@ -15,8 +15,8 @@ namespace HorseTycoon
         private const string SprintDateKey = "Froshty.HorseTycoon/SprintTrainedDate";
 
         private const int SprintsPerDayBase = 20;
-        private const int JumpsPerDayBase = 30;
-        private const int DistanceTilesPerDayBase = 1000;
+        private const int JumpsPerDayBase = 40;
+        private const int DistanceTilesPerDayBase = 2000;
 
 
         public static void Initialize(JumpManager manager)
@@ -84,7 +84,7 @@ namespace HorseTycoon
             stats.DailyDistance += distanceTraveled;
 
             // DistanceTilesPerDayNeeded tiles * 64 pixels per tile
-            if (stats.DailyDistance >= Math.Max(150, DistanceTilesPerDayBase * (stats.TotalSpeed * 0.01)) * 64)
+            if (stats.DailyDistance >= Math.Max(200, DistanceTilesPerDayBase * (stats.TotalSpeed * 0.01)) * 64)
             {
                 if (ApplyTraining(horse, "Speed"))
                 {

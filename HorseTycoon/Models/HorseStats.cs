@@ -1,20 +1,13 @@
+using System;
 using System.Runtime.CompilerServices;
 using StardewValley;
 
 namespace HorseTycoon.Models
 {
-
     public class HorseStats
     {
         private readonly FarmAnimal Animal;
-
-
-        public enum HorseSourceQuality
-        {
-            Starter,
-            Special,
-            Legendary
-        }
+        public enum HorseSourceQuality { Starter, Special, Legendary }
 
         // ModData Keys
         private const string Prefix = "Froshty.HorseTycoon/";
@@ -28,10 +21,8 @@ namespace HorseTycoon.Models
         // Individual Stat Keys
         public const string SpeedIVKey = Prefix + "Speed" + IV_Suffix;
         public const string SpeedEVKey = Prefix + "Speed" + EV_Suffix;
-
         public const string SprintIVKey = Prefix + "Sprint" + IV_Suffix;
         public const string SprintEVKey = Prefix + "Sprint" + EV_Suffix;
-
         public const string JumpIVKey = Prefix + "Jump" + IV_Suffix;
         public const string JumpEVKey = Prefix + "Jump" + EV_Suffix;
 
@@ -58,13 +49,7 @@ namespace HorseTycoon.Models
             }
         }
 
-        public float SpeedBoost
-        {
-            get
-            {
-                return this.TotalSpeed / 25f;
-            }
-        }
+        public float SpeedBoost { get { return this.TotalSpeed / 25f; } }
 
         // --- Sprint (Total Max 100) ---
         public int SprintIV { get => GetStat(nameof(SprintIV)); set => SetStat(nameof(SprintIV), value); }
@@ -82,37 +67,35 @@ namespace HorseTycoon.Models
         public const string DailyDistanceKey = Prefix + "DailyDistance";
 
         // --- Training Progress Properties ---
-
-        public int DailyJumps
-        {
-            get => Animal.modData.TryGetValue(DailyJumpsKey, out string val) && int.TryParse(val, out int result) ? result : 0;
-            set => Animal.modData[DailyJumpsKey] = value.ToString();
-        }
-
-        public int DailySprints
-        {
-            get => Animal.modData.TryGetValue(DailySprintsKey, out string val) && int.TryParse(val, out int result) ? result : 0;
-            set => Animal.modData[DailySprintsKey] = value.ToString();
-        }
-
-        public float DailyDistance
-        {
-            get => Animal.modData.TryGetValue(DailyDistanceKey, out string val) && float.TryParse(val, out float result) ? result : 0f;
-            set => Animal.modData[DailyDistanceKey] = value.ToString();
-        }
-
+        public int DailyJumps { get => Animal.modData.TryGetValue(DailyJumpsKey, out string val) && int.TryParse(val, out int result) ? result : 0; set => Animal.modData[DailyJumpsKey] = value.ToString(); }
+        public int DailySprints { get => Animal.modData.TryGetValue(DailySprintsKey, out string val) && int.TryParse(val, out int result) ? result : 0; set => Animal.modData[DailySprintsKey] = value.ToString(); }
+        public float DailyDistance { get => Animal.modData.TryGetValue(DailyDistanceKey, out string val) && float.TryParse(val, out float result) ? result : 0f; set => Animal.modData[DailyDistanceKey] = value.ToString(); }
 
         private int GetStat(string propertyName)
         {
             string key = MapPropertyToKey(propertyName);
-            return Animal.modData.TryGetValue(key, out string val) && int.TryParse(val, out int result)
-                ? Math.Clamp(result, 0, EV_MAX)
-                : 0;
+            if (Animal.modData.TryGetValue(key, out string val) && int.TryParse(val, out int result))
+            {
+                // IVs are only in 10 increments
+                if (propertyName.EndsWith("IV"))
+                {
+                    result = (int)Math.Round(result / 10.0) * 10;
+                }
+                return Math.Clamp(result, 0, 50);
+            }
+            return 0;
         }
 
         private void SetStat(string propertyName, int value)
         {
             string key = MapPropertyToKey(propertyName);
+
+            // IVs are only in 10 increments
+            if (propertyName.EndsWith("IV"))
+            {
+                value = (int)Math.Round(value / 10.0) * 10;
+            }
+
             Animal.modData[key] = Math.Clamp(value, 0, 50).ToString();
         }
 
@@ -127,19 +110,41 @@ namespace HorseTycoon.Models
         {
             Random rand = new Random();
 
-            // Define ranges based on quality
-            (int min, int max) range = quality switch
+            // Maps out specific tiered multiplier step boundaries (MinMultiplier, MaxMultiplier)
+            var range = quality switch
             {
-                HorseSourceQuality.Starter => (0, 25),
-                HorseSourceQuality.Special => (15, 35),
-                HorseSourceQuality.Legendary => (25, 50),
-                _ => (0, IV_MAX)
+                // Rolls options: 0, 10, 20
+                HorseSourceQuality.Starter => (min: 0, max: 2),
+                // Rolls options: 20, 30, 40
+                HorseSourceQuality.Special => (min: 2, max: 4),
+                // Rolls options: 40, 50
+                HorseSourceQuality.Legendary => (min: 4, max: 5),
+                _ => (min: 0, max: 5)
             };
 
-            // Apply the random roll within the range
-            this.SpeedIV = rand.Next(range.min, range.max + 1);
-            this.SprintIV = rand.Next(range.min, range.max + 1);
-            this.JumpIV = rand.Next(range.min, range.max + 1);
+            // Generate initial temporary multiplier chunks
+            int speedMult = rand.Next(range.min, range.max + 1);
+            int sprintMult = rand.Next(range.min, range.max + 1);
+            int jumpMult = rand.Next(range.min, range.max + 1);
+
+            // Prevent starter horse from having 0 in all stats
+            if (quality == HorseSourceQuality.Starter)
+            {
+                int statToUpdate = rand.Next(0, 3);
+                if (speedMult == 0 && sprintMult == 0 && jumpMult == 0)
+                {
+                    switch (statToUpdate)
+                    {
+                        case 0: speedMult = 1; break;
+                        case 1: sprintMult = 1; break;
+                        case 2: jumpMult = 1; break;
+                    }
+                }
+            }
+
+            this.SpeedIV = speedMult * 10;
+            this.SprintIV = sprintMult * 10;
+            this.JumpIV = jumpMult * 10;
 
             // EVs always start at 0 for new horses
             this.SpeedEV = 0;
@@ -165,7 +170,7 @@ namespace HorseTycoon.Models
                     else if (type == "ev") this.SpeedEV = value;
                     else return false;
                     break;
-                case "Sprint":
+                case "sprint":
                     if (type == "iv") this.SprintIV = value;
                     else if (type == "ev") this.SprintEV = value;
                     else return false;
