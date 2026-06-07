@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
@@ -10,6 +11,7 @@ namespace HorseTycoon.Menus
     {
         private readonly FarmAnimal Horse;
         private readonly ClickableTextureComponent BackButton;
+        private bool usePixelSegments = true;
 
         public HorseStatsMenu(FarmAnimal horse) : base(0, 0, 0, 0, true)
         {
@@ -43,14 +45,30 @@ namespace HorseTycoon.Menus
             Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(this.xPositionOnScreen + 64, this.yPositionOnScreen + 72 + YPadding), Game1.textColor);
 
             // Draw the Stats
+            int textWidth = 90;
             var stats = this.Horse.GetHorseStats();
             int startX = this.xPositionOnScreen + 60;
             int startY = this.yPositionOnScreen + 125 + YPadding;
 
-            DrawStatBar(b, "Speed", startX, startY, stats.SpeedIV, stats.SpeedEV, 2);
-            DrawStatBar(b, "Sprint", startX, startY + 50, stats.SprintIV, stats.SprintEV, 2);
-            DrawStatBar(b, "Jump", startX, startY + 100, stats.JumpIV, stats.JumpEV, 2);
+            if (this.usePixelSegments)
+            {
+                // Segment render mode (values mapped 1 to 10 out of max 10 to resemble skill rectangles)
+                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY, stats.SpeedIV, stats.SpeedEV, 3f);
+                Utility.drawTextWithShadow(b, "Speed", Game1.smallFont, new Vector2(startX, startY - 2), Game1.textColor, 1f);
+                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY + 50, stats.SprintIV, stats.SprintEV, 3f);
+                Utility.drawTextWithShadow(b, "Sprint", Game1.smallFont, new Vector2(startX, startY + 50 - 2), Game1.textColor, 1f);
+                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY + 100, stats.JumpIV, stats.JumpEV, 3f);
+                Utility.drawTextWithShadow(b, "Jump", Game1.smallFont, new Vector2(startX, startY + 100 - 2), Game1.textColor, 1f);
+            }
+            else
+            {
+                // Fall back to your original custom progress bars
+                this.DrawStatBar(b, "Speed", startX, startY, stats.SpeedIV, stats.SpeedEV, 2);
+                this.DrawStatBar(b, "Sprint", startX, startY + 50, stats.SprintIV, stats.SprintEV, 2);
+                this.DrawStatBar(b, "Jump", startX, startY + 100, stats.JumpIV, stats.JumpEV, 2);
+            }
 
+            // Draw the UI interaction components
             this.BackButton.draw(b);
             this.drawMouse(b);
         }
@@ -58,7 +76,6 @@ namespace HorseTycoon.Menus
         private void DrawStatBar(SpriteBatch b, string label, int xStart, int y, int iv, int ev, float scale)
         {
             int maxStatValue = 100;
-
             int barMaxWidth = (int)(125 * scale);
             int barHeight = (int)(24 * scale);
             int capWidth = (int)(6 * scale);
@@ -78,17 +95,12 @@ namespace HorseTycoon.Menus
             float totalPct = (float)totalPoints / maxStatValue;
             float ivPct = (float)Math.Min(iv, maxStatValue) / maxStatValue;
 
-            // Use your exact inner padding values from the swap menu snippet:
-            // x + 4 for horizontal padding, y + 5 for vertical centering, height - 10 to clear borders
             int fillX = x + capWidth - (int)(2 * scale);
             int fillY = y + capWidth - (int)(1 * scale);
             int fillWidth = barMaxWidth - capWidth - 2;
             int fillHeight = barHeight - (int)((capWidth - 2) * scale);
 
-            // Step A: Draw total progress bar width first using the EV Color (Lime Green)
             this.DrawRoundedProgressBar(b, fillX, fillY, fillWidth, fillHeight, totalPct, Color.LimeGreen);
-
-            // Step B: Overlay the IV portion cleanly right on top using the IV Color (Green)
             this.DrawRoundedProgressBar(b, fillX, fillY, fillWidth, fillHeight, ivPct, Color.Green);
 
             int targetThreshold = 50;
@@ -96,20 +108,12 @@ namespace HorseTycoon.Menus
             {
                 int pointDeficit = targetThreshold - iv;
                 float deficitPct = (float)pointDeficit / maxStatValue;
-
-                // Calculate exact horizontal pixel width for the deficit
                 int deficitWidth = (int)(fillWidth * deficitPct);
 
                 if (deficitWidth > 0)
                 {
                     int rightAnchorX = (fillX + fillWidth) - deficitWidth;
-
-                    // Draw the unatainable potential area
-                    b.Draw(
-                        Game1.staminaRect,
-                        new Rectangle(rightAnchorX, fillY, deficitWidth, fillHeight),
-                        Color.SaddleBrown * 0.45f
-                    );
+                    b.Draw(Game1.staminaRect, new Rectangle(rightAnchorX, fillY, deficitWidth, fillHeight), Color.SaddleBrown * 0.45f);
                 }
             }
 
@@ -120,15 +124,18 @@ namespace HorseTycoon.Menus
                 b.Draw(Game1.staminaRect, new Rectangle(notchX, fillY, 2, fillHeight), Color.Black * 0.20f);
             }
         }
+
         public override void receiveLeftClick(int x, int y, bool playSound = true)
         {
             if (this.BackButton.containsPoint(x, y))
             {
                 Game1.playSound("bigDeSelect");
                 Game1.activeClickableMenu = new AnimalQueryMenu(this.Horse);
+                return;
             }
             base.receiveLeftClick(x, y, playSound);
         }
+
         private void DrawRoundedProgressBar(SpriteBatch b, int x, int y, int width, int height, float percentage, Color baseColor)
         {
             if (percentage <= 0) return;
