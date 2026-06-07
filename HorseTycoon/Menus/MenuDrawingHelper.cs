@@ -19,7 +19,6 @@ namespace HorseTycoon.Menus
             int totalFilledBlocks = (int)Math.Round((float)totalPoints / 10f);
             int ivFilledBlocks = (int)Math.Round((float)Math.Min(iv, 100) / 10f);
 
-            // EXACT game dimension scaling parameters from your template
             float blockScale = scale;
             int blockWidth = (int)(8 * blockScale);
             int gap = 0;

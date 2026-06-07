@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 using StardewValley.Menus;
 using HorseTycoon.Models;
+using System.Dynamic;
 
 namespace HorseTycoon.Menus
 {
@@ -52,6 +53,22 @@ namespace HorseTycoon.Menus
 
             if (this.usePixelSegments)
             {
+                int TextWidth = 110;
+                int gemWidth = 24;
+                int xForKey = this.xPositionOnScreen + 130 + TextWidth;
+                int yForKey = this.yPositionOnScreen + 88 + YPadding;
+                string IVLabel = "Genetic";
+                string EVLabel = "Trained";
+                Vector2 renderPos1 = new Vector2(xForKey, yForKey);
+                Utility.drawTextWithShadow(b, IVLabel, Game1.smallFont, new Vector2(xForKey + gemWidth, yForKey), Game1.textColor);
+                b.Draw(Game1.mouseCursors, renderPos1, new Rectangle(137, 338, 7, 9), Color.IndianRed, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0.8f);
+
+                xForKey = xForKey + TextWidth + gemWidth;
+                Vector2 renderPos2 = new Vector2(xForKey, yForKey);
+                Utility.drawTextWithShadow(b, EVLabel, Game1.smallFont, new Vector2(xForKey + gemWidth, yForKey), Game1.textColor);
+                b.Draw(Game1.mouseCursors, renderPos2, new Rectangle(137, 338, 7, 9), Color.White, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0.8f);
+
+
                 // Segment render mode (values mapped 1 to 10 out of max 10 to resemble skill rectangles)
                 MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY, stats.SpeedIV, stats.SpeedEV, 3f);
                 Utility.drawTextWithShadow(b, "Speed", Game1.smallFont, new Vector2(startX, startY - 2), Game1.textColor, 1f);

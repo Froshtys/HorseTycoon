@@ -227,7 +227,7 @@ public partial class HorseSwapMenu : IClickableMenu
                 // Render the active stat display layout choice
                 if (usePixelSegments)
                 {
-                    int extraPadding = 30;
+                    int extraPadding = 32;
                     barMaxWidth = barMaxWidth + extraPadding;
                     checkboxColumnX = checkboxColumnX + extraPadding;
                     // Dark wood partition line
