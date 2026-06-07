@@ -220,7 +220,7 @@ namespace HorseTycoon
                 "Bay" => "3",
                 "Belgian" => "4",
                 "BlueRoan" => "5",
-                "Chesnut" => "6",
+                "Chestnut" => "6",
                 _ => "0"
             };
 

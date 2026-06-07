@@ -72,12 +72,18 @@ namespace HorseTycoon
 
         private static List<bool> GetCollisions(GameLocation location, int ox, int oy, int maxJumpDistance)
         {
+            if (Game1.player.mount is null || !Game1.player.isRidingHorse())
+            {
+                return new List<bool> { true };
+            }
             List<bool> collisions = new();
             for (int i = 0; i < maxJumpDistance; i++)
             {
-                Rectangle box = GetBoundingBox(ox, oy, i);
+                Rectangle box = GetBoundingBox(ox, oy, i, Game1.player.mount.GetBoundingBox());
+                Rectangle box2 = GetBoundingBox(ox, oy, i, Game1.player.GetBoundingBox());
 
                 bool isColliding = location.isCollidingPosition(box, Game1.viewport, true, 0, false, Game1.player)
+                                 || location.isCollidingPosition(box2, Game1.viewport, true, 0, false, Game1.player)
                                  || IsOutOfMap(location, box)
                                  || (IsOnWater(location, box) && !Manager.Helper.ModRegistry.IsLoaded("aedenthorn.Swim"));
 
@@ -86,12 +92,8 @@ namespace HorseTycoon
             return collisions;
         }
 
-        private static Rectangle GetBoundingBox(int ox, int oy, int distance)
+        private static Rectangle GetBoundingBox(int ox, int oy, int distance, Rectangle box)
         {
-            Rectangle box = (Game1.player.isRidingHorse() && Game1.player.mount is not null)
-                ? Game1.player.mount.GetBoundingBox()
-                : Game1.player.GetBoundingBox();
-
             box.X += ox * Game1.tileSize * distance;
             box.Y += oy * Game1.tileSize * distance;
             return box;

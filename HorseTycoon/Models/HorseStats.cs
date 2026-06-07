@@ -40,11 +40,11 @@ namespace HorseTycoon.Models
                 int skill = this.TotalJump;
                 return skill switch
                 {
-                    < 30 => 3,
-                    >= 30 and < 60 => 4,
-                    >= 60 and < 80 => 5,
-                    >= 80 and < 95 => 6,
-                    >= 95 => 7
+                    < 20 => 2, // No Tiles
+                    >= 20 and < 50 => 3, // 1 tile
+                    >= 50 and < 80 => 4, // 2 Tiles
+                    >= 80 and < 95 => 5, // 3 Tiles
+                    >= 95 => 6 // 4 Tiles
                 };
             }
         }
