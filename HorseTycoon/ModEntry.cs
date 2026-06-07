@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using HorseOverhaul.HorseTycoon;
 using HorseTycoon.Models;
 using HorseTycoon.Patches;
 using Microsoft.Xna.Framework;
@@ -37,6 +38,9 @@ namespace HorseTycoon
             MenuPatches.Initialize(helper, this.Monitor);
             // 3. Apply the patches
             MenuPatches.Apply(harmony);
+
+            ThinHorseDrawPatches.ApplyPatches(harmony);
+            ThinHorsePatches.ApplyPatches(harmony);
 
             // Create and start the jump logic
             this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);

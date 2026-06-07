@@ -1,0 +1,167 @@
+﻿using HarmonyLib;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using StardewValley.Characters;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection.Emit;
+
+namespace HorseTycoon
+{
+    // Thin horse code from Horse Overhaul 
+    // https://github.com/Goldenrevolver/Stardew-Valley-Mods/blob/master/Stardew-Valley-Mods/HorseOverhaul/Patches/ThinHorseDrawPatches.cs
+    internal class ThinHorseDrawPatches
+    {
+        private static bool ThinHorse = true;
+
+        internal static void ApplyPatches(Harmony harmony)
+        {
+
+            harmony.Patch(
+               original: AccessTools.Method(typeof(Horse), nameof(Horse.draw), new Type[] { typeof(SpriteBatch) }),
+               transpiler: new HarmonyMethod(typeof(ThinHorseDrawPatches), nameof(FixHeadAndHatPosition)));
+        }
+
+        // transpiler checked for 1.6.4
+        public static IEnumerable<CodeInstruction> FixHeadAndHatPosition(IEnumerable<CodeInstruction> instructions)
+        {
+            try
+            {
+                var instructionsList = instructions.ToList();
+
+                bool foundHead = false;
+                bool foundHat = false;
+
+                bool foundFirstMunch = false;
+                bool foundSecondMunch = false;
+
+                for (int i = 0; i < instructionsList.Count; i++)
+                {
+                    if (!foundHead)
+                    {
+                        if (instructionsList[i].opcode == OpCodes.Ldc_R4
+                            && 48f.IsAboutEqualTo((float)instructionsList[i].operand))
+                        {
+                            var info = typeof(ThinHorseDrawPatches).GetMethod(nameof(GetHorseHeadXPosition));
+                            var oldLables = instructionsList[i].labels;
+                            instructionsList[i] = new CodeInstruction(OpCodes.Call, info)
+                            {
+                                labels = oldLables
+                            };
+
+                            foundHead = true;
+                        }
+                    }
+
+                    // TODO clean this all up later
+                    if (!foundFirstMunch || !foundSecondMunch)
+                    {
+                        if (instructionsList[i].opcode == OpCodes.Ldfld
+                            && instructionsList[i].operand != null
+                            && instructionsList[i].operand.ToString().ToLower().Contains("munchingcarrottimer"))
+                        {
+                            if (!foundFirstMunch)
+                            {
+                                foundFirstMunch = true;
+                            }
+                            else if (!foundSecondMunch)
+                            {
+                                foundSecondMunch = true;
+                            }
+
+                            for (int j = i; j < instructionsList.Count; j++)
+                            {
+                                if (instructionsList[j].opcode == OpCodes.Ldc_R4
+                                    && 24f.IsAboutEqualTo((float)instructionsList[j].operand))
+                                {
+                                    var info = typeof(ThinHorseDrawPatches).GetMethod(nameof(GetHorseHeadXPositionMunchOne));
+                                    var oldLables = instructionsList[j].labels;
+                                    instructionsList[j] = new CodeInstruction(OpCodes.Call, info)
+                                    {
+                                        labels = oldLables
+                                    };
+                                }
+
+                                if (instructionsList[j].opcode == OpCodes.Ldc_R4
+                                    && 80f.IsAboutEqualTo((float)instructionsList[j].operand))
+                                {
+                                    var info = typeof(ThinHorseDrawPatches).GetMethod(nameof(GetHorseHeadXPositionMunchTwo));
+                                    var oldLables = instructionsList[j].labels;
+                                    instructionsList[j] = new CodeInstruction(OpCodes.Call, info)
+                                    {
+                                        labels = oldLables
+                                    };
+                                }
+
+                                if (instructionsList[j].opcode == OpCodes.Ldc_R4
+                                    && (-16f).IsAboutEqualTo((float)instructionsList[j].operand))
+                                {
+                                    var info = typeof(ThinHorseDrawPatches).GetMethod(nameof(GetHorseHeadXPositionMunchThree));
+                                    var oldLables = instructionsList[j].labels;
+                                    instructionsList[j] = new CodeInstruction(OpCodes.Call, info)
+                                    {
+                                        labels = oldLables
+                                    };
+                                }
+                            }
+                        }
+                    }
+
+                    if (!foundHat)
+                    {
+                        if (i + 2 < instructionsList.Count
+                            && instructionsList[i].opcode == OpCodes.Call
+                            && instructionsList[i].operand != null
+                            && instructionsList[i].operand.ToString().ToLower().Contains("get_zero")
+                            && instructionsList[i + 1].opcode == OpCodes.Stloc_1
+                            && instructionsList[i + 2].opcode == OpCodes.Ldarg_0)
+                        {
+                            var info = typeof(ThinHorseDrawPatches).GetMethod(nameof(GetHatVector));
+                            var oldLables = instructionsList[i].labels;
+                            instructionsList[i] = new CodeInstruction(OpCodes.Call, info)
+                            {
+                                labels = oldLables
+                            };
+
+                            foundHat = true;
+                        }
+                    }
+                }
+
+                return instructionsList.AsEnumerable();
+            }
+            catch (Exception e)
+            {
+                return instructions;
+            }
+        }
+
+        public static float GetHorseHeadXPositionMunchOne()
+        {
+            return ThinHorse ? -8f : 24f;
+        }
+
+        public static float GetHorseHeadXPositionMunchTwo()
+        {
+            return ThinHorse ? 52f : 80f;
+        }
+
+        public static float GetHorseHeadXPositionMunchThree()
+        {
+            return ThinHorse ? -48f : -16f;
+        }
+
+        public static float GetHorseHeadXPosition()
+        {
+            return ThinHorse ? 16f : 48f;
+        }
+
+        private static readonly Vector2 thinHorseHatVector = new(-8f, 0f);
+
+        public static Vector2 GetHatVector()
+        {
+            return ThinHorse ? thinHorseHatVector : Vector2.Zero;
+        }
+    }
+}

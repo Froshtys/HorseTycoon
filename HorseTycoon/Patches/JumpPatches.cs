@@ -31,7 +31,7 @@ namespace HorseTycoon
                 new Rectangle?(__instance.Sprite.SourceRect),
                 Color.White,
                 __instance.rotation,
-                new Vector2(__instance.Sprite.SpriteWidth / 2, __instance.Sprite.SpriteHeight * 3f / 4f),
+                new Vector2((__instance.Sprite.SpriteWidth / 2) + 8, __instance.Sprite.SpriteHeight * 3f / 4f),
                 Math.Max(0.2f, __instance.Scale) * 4f,
                 (__instance.flip || (__instance.Sprite.CurrentAnimation != null && __instance.Sprite.CurrentAnimation[__instance.Sprite.currentAnimationIndex].flip)) ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
                 0
