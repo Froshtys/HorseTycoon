@@ -163,7 +163,7 @@
 	"Action": "EditData",
 	"Target": "Data/Objects",
 	"Entries": {
-		"{{ModId}}_ShoeCopper": {
+		"HorseTycoon.ShoeCopper": {
 		"Category": -18,
 		"Description": "{{i18n:HorseShoeCopper_Description}}",
 		"Displayname": "{{i18n:HorseShoeCopper_Name}}",
@@ -180,7 +180,7 @@
 	"Action": "EditData",
 	"Target": "Data/Objects",
 	"Entries": {
-		"{{ModId}}_ShoeIron": {
+		"HorseTycoon.ShoeIron": {
 		"Category": -18,
 		"Description": "{{i18n:HorseShoeIron_Description}}",
 		"Displayname": "{{i18n:HorseShoeIron_Name}}",
@@ -197,7 +197,7 @@
 	"Action": "EditData",
 	"Target": "Data/Objects",
 	"Entries": {
-		"{{ModId}}_ShoeGold": {
+		"HorseTycoon.ShoeGold": {
 		"Category": -18,
 		"Description": "{{i18n:HorseShoeGold_Description}}",
 		"Displayname": "{{i18n:HorseShoeGold_Name}}",
@@ -223,7 +223,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O){{ModId}}_ShoeCopper",
+		"RequiredItemId": "(O)EmsHorse.ShoeCopper",
 		"RequiredCount": 1
 		}
 	],
@@ -254,7 +254,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O){{ModId}}_ShoeCopper",
+		"RequiredItemId": "(O)EmsHorse.ShoeCopper",
 		"RequiredCount": 3
 		}
 	],
@@ -285,7 +285,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)_ShoeIron",
+		"RequiredItemId": "(O)EmsHorse.ShoeIron",
 		"RequiredCount": 1
 		}
 	],
@@ -316,7 +316,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O){{ModId}}_ShoeIron",
+		"RequiredItemId": "(O)EmsHorse.ShoeIron",
 		"RequiredCount": 3
 		}
 	],
@@ -347,7 +347,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O){{ModId}}_ShoeGold",
+		"RequiredItemId": "(O)EmsHorse.ShoeGold",
 		"RequiredCount": 1
 		}
 	],
@@ -378,7 +378,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O){{ModId}}_ShoeGold",
+		"RequiredItemId": "(O)EmsHorse.ShoeGold",
 		"RequiredCount": 3
 		}
 	],

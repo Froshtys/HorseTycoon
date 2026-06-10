@@ -68,7 +68,6 @@ namespace HorseTycoon
             this.Helper.Events.GameLoop.DayStarted += (s, e) =>
             {
                 this.DailyJumpCount = 0;
-                // You could also add DailySpeedDistance = 0, etc. here later
             };
 
             this.Helper.Events.GameLoop.DayStarted += (s, e) =>

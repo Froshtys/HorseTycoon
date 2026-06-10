@@ -9,7 +9,7 @@ using System.Reflection.Emit;
 
 namespace HorseTycoon
 {
-    // Thin horse code from Horse Overhaul 
+    // Thin horse code from Horse Overhaul by Goldenrevolver
     // https://github.com/Goldenrevolver/Stardew-Valley-Mods/blob/master/Stardew-Valley-Mods/HorseOverhaul/Patches/ThinHorseDrawPatches.cs
     internal class ThinHorseDrawPatches
     {

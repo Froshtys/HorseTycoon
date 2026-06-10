@@ -41,7 +41,12 @@ namespace HorseTycoon
 
             if (__instance.rider is not null)
             {
-                if (!Manager.PlayerJumpingWithHorse)
+                bool isLocalRider = __instance.rider.UniqueMultiplayerID == Game1.player.UniqueMultiplayerID;
+                bool horseIsJumping = isLocalRider
+                    ? Manager.PlayerJumpingWithHorse
+                    : __instance.rider.yJumpOffset != 0;
+
+                if (!horseIsJumping)
                 {
                     __instance.yOffset = 0;
                     __instance.drawOnTop = false;
@@ -59,7 +64,7 @@ namespace HorseTycoon
             if (Manager == null || Manager.GettingLocalPositionForShadow)
                 return;
 
-            if (__instance is Horse horse && Manager.PlayerJumpingWithHorse)
+            if (__instance is Horse horse && horse.yOffset != 0)
             {
                 __result.Y += horse.yOffset;
             }
@@ -70,7 +75,7 @@ namespace HorseTycoon
             if (Manager == null)
                 return true;
 
-            if (__instance.UniqueMultiplayerID == StardewValley.Game1.player.UniqueMultiplayerID && Manager.PlayerJumpingWithHorse)
+            if (__instance.isRidingHorse() && __instance.mount?.yOffset != 0)
             {
                 __result = 0.992f;
                 return false;
