@@ -47,6 +47,12 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(Building), nameof(Building.BeforeDemolish)),
                 prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Building_BeforeDemolish_Prefix))
             );
+
+            // --- Suppress vanilla horse naming for mod-managed stables ---
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Horse), nameof(Horse.checkAction)),
+                prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Horse_checkAction_Prefix))
+            );
         }
 
         // --- Patch Implementations ---
@@ -116,6 +122,23 @@ namespace HorseTycoon
                     }
                 }
             }
+        }
+
+        public static bool Horse_checkAction_Prefix(Horse __instance)
+        {
+            Stable? stable = Game1.getFarm().buildings
+                .OfType<Stable>()
+                .FirstOrDefault(s => s.HorseId == __instance.HorseId);
+
+            if (stable == null || !stable.modData.ContainsKey(HorseHelper.CurrentFarmHorseIdKey))
+                return true;
+
+            // Prevent the vanilla per-player naming dialog by ensuring horseName is never empty
+            // for a stable already managed by this mod.
+            if (string.IsNullOrEmpty(Game1.player.horseName.Value))
+                Game1.player.horseName.Value = __instance.Name;
+
+            return true;
         }
 
         public static void Building_BeforeDemolish_Prefix(Building __instance)

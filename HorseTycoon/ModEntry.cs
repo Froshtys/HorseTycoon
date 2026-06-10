@@ -60,7 +60,6 @@ namespace HorseTycoon
         }
         private void ConvertUnassignedStableHorses()
         {
-
             Utility.ForEachLocation(location =>
             {
                 foreach (FarmAnimal animal in location.animals.Values)
@@ -82,6 +81,9 @@ namespace HorseTycoon
                 }
                 return true; // Continue to next location
             });
+
+            if (!Context.IsMainPlayer) return;
+
             foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
             {
 
@@ -116,19 +118,35 @@ namespace HorseTycoon
                 // Convert a horse from a new stable
                 if (stable.daysOfConstructionLeft.Value == 0)
                 {
-                    Game1.showGlobalMessage($"Your new Stable is ready.");
-                    stable.dayUpdate(Game1.dayOfMonth);
                     Horse horse = stable.getStableHorse();
+                    if (horse == null) continue;
+
+                    // Initialize immediately with a default name so farmhands can ride the horse
+                    // before the main player finishes naming it
+                    string[] defaultNames = { "Ginger", "Thunder", "Lightning", "Blizzard", "Maple", "Amber", "Chocolate", "Applesauce", "Dancer", "Snowy" };
+                    string defaultName = defaultNames[Game1.random.Next(defaultNames.Length)];
+                    horse.Name = defaultName;
+                    horse.displayName = defaultName;
+                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
+
+                    Game1.showGlobalMessage($"Your new Stable is ready.");
                     Game1.activeClickableMenu = new NamingMenu(
                         processedName =>
                         {
                             horse.Name = processedName;
                             horse.displayName = processedName;
-                            HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
-                            this.Monitor.Log($"Successfully named new horse '{processedName}' and converted it into a barn animal", LogLevel.Info);
+
+                            FarmAnimal? farmAnimal = HorseHelper.GetFarmAnimalForHorse(horse);
+                            if (farmAnimal != null)
+                            {
+                                farmAnimal.Name = processedName;
+                                farmAnimal.displayName = processedName;
+                            }
+
+                            this.Monitor.Log($"Named new horse '{processedName}'", LogLevel.Info);
                             Game1.exitActiveMenu();
                         },
-                        defaultName: "Ginger",
+                        defaultName: defaultName,
                         title: "Name your new horse:"
                     );
                 }
