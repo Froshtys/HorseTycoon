@@ -12,6 +12,7 @@ namespace HorseTycoon
         public const string CurrentFarmHorseIdKey = "Froshty.HorseTycoon/CurrentFarmHorseId";
         public const string HideKey = "Froshty.HorseTycoon/IsHidden";
         public const string StableEmptyKey = "Froshty.HorseTycoon/IsIntentionallyEmpty";
+        public const string HorseSkinKey = "Froshty.HorseTycoon/HorseSkin";
 
         public static List<FarmAnimal> GetAllBarnHorses()
         {
@@ -209,25 +210,9 @@ namespace HorseTycoon
             monitor.Log($"Save hidden horse with ID {selectedBarnHorse.myID}.", LogLevel.Debug);
 
             // 4. Visual Swapping
-            string skinTag = selectedBarnHorse.skinID.Value ?? "0"; // Handle null-safety on NetStrings
-            monitor.Log($"Horse Type Selected: {skinTag}", LogLevel.Info);
-
-            string variation = skinTag switch
-            {
-                "RedRoan" => "0",
-                "Shire" => "1",
-                "Dapple" => "2",
-                "Bay" => "3",
-                "Belgian" => "4",
-                "BlueRoan" => "5",
-                "Chestnut" => "6",
-                _ => "0"
-            };
-
-            SetHorseSkin(activeHorse, variation, monitor);
-
-            // 5. Cache Sync for 1.6 Asset Pipeline
-            helper.GameContent.InvalidateCache("Animals/Horse");
+            string skinId = selectedBarnHorse.skinID.Value ?? "";
+            monitor.Log($"Horse skin selected: {skinId}", LogLevel.Info);
+            SetHorseSkin(activeHorse, skinId, monitor);
             monitor.Log($"Successfully swapped active mount to {activeHorse.Name}!", LogLevel.Info);
         }
 
@@ -263,23 +248,9 @@ namespace HorseTycoon
             // Force into Barn list (bypassing capacity)
             barn.GetIndoors().animals.Add(newHorse.myID.Value, newHorse);
 
-            string skinTag = newHorse.skinID.ToString();
-            monitor.Log($"Horse Type Selected: {skinTag}", LogLevel.Info);
-
-            string variation = skinTag switch
-            {
-                "RedRoan" => "0",
-                "Shire" => "1",
-                "Dapple" => "2",
-                "Bay" => "3",
-                "Belgian" => "4",
-                "BlueRoan" => "5",
-                "Chesnut" => "6",
-                _ => "0"
-            };
-
-            SetHorseSkin(horse, variation, monitor);
-            helper.GameContent.InvalidateCache("Animals/Horse");
+            string skinId = newHorse.skinID.Value ?? "";
+            monitor.Log($"Horse skin selected: {skinId}", LogLevel.Info);
+            SetHorseSkin(horse, skinId, monitor);
 
             monitor.Log($"Successfully converted stable horse '{horse.Name}' and moved to {barn.buildingType.Value}.", LogLevel.Info);
         }
@@ -308,22 +279,49 @@ namespace HorseTycoon
             return barns.First();
         }
 
-        private static void SetHorseSkin(Horse horse, string variation, IMonitor monitor)
+        private static void SetHorseSkin(Horse horse, string skinId, IMonitor monitor)
         {
-            const string AlternativeTextureOwner = "Froshty.HorseTycoonAT";
-            const string AlternativeTextureName = "Froshty.HorseTycoonAT.Character_Horse";
+            horse.modData[HorseSkinKey] = SkinIdToName(skinId);
+            monitor.Log($"Set horse skin to '{horse.modData[HorseSkinKey]}' (from skinId '{skinId}')", LogLevel.Debug);
+        }
 
-            horse.modData["AlternativeTextureOwner"] = AlternativeTextureOwner;
-            horse.modData["AlternativeTextureName"] = AlternativeTextureName;
-            horse.modData["AlternativeTextureVariation"] = variation;
+        private static string SkinIdToName(string skinId) => skinId switch
+        {
+            "BlueRoan" => "BlueRoan",
+            "Dapple" => "Dapple",
+            "Bay" => "Bay",
+            "Belgian" => "Belgian",
+            "Shire" => "Shire",
+            "Chestnut" => "Chestnut",
+            _ => "Roan"
+        };
 
-            foreach (var key in horse.modData.Keys)
+        /// <summary>Migrates horses that have AT texture keys but not our own skin key, e.g. from old saves.</summary>
+        public static void MigrateAtSkinKeys(IMonitor monitor)
+        {
+            Utility.ForEachCharacter(character =>
             {
+                if (character is Horse horse && !horse.modData.ContainsKey(HorseSkinKey))
                 {
-                    monitor.Log($"Horse ModData Key: {key} | Value: {horse.modData[key]}", LogLevel.Info);
+                    if (horse.modData.TryGetValue("AlternativeTextureVariation", out string? variation))
+                    {
+                        string skinName = variation switch
+                        {
+                            "0" => "Roan",
+                            "1" => "Shire",
+                            "2" => "Dapple",
+                            "3" => "Bay",
+                            "4" => "Belgian",
+                            "5" => "BlueRoan",
+                            "6" => "Chestnut",
+                            _ => "Roan"
+                        };
+                        horse.modData[HorseSkinKey] = skinName;
+                        monitor.Log($"Migrated horse '{horse.Name}' AT skin variation '{variation}' → '{skinName}'", LogLevel.Debug);
+                    }
                 }
-            }
-
+                return true;
+            });
         }
     }
 }

@@ -24,6 +24,7 @@ namespace HorseTycoon
         {
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
+            helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
             helper.Events.Display.MenuChanged += this.OnMenuChanged;
@@ -36,11 +37,13 @@ namespace HorseTycoon
             FarmAnimalPatches.Apply(harmony);
 
             MenuPatches.Initialize(helper, this.Monitor);
-            // 3. Apply the patches
             MenuPatches.Apply(harmony);
 
             ThinHorseDrawPatches.ApplyPatches(harmony);
             ThinHorsePatches.ApplyPatches(harmony);
+
+            HorseTexturePatches.Initialize(helper, this.Monitor);
+            HorseTexturePatches.Apply(harmony);
 
             // Create and start the jump logic
             this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);
@@ -164,12 +167,16 @@ namespace HorseTycoon
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
-
             if (Context.IsMainPlayer)
             {
                 ConvertUnassignedStableHorses();
             }
+        }
 
+        private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
+        {
+            HorseTexturePatches.PreloadTextures();
+            HorseHelper.MigrateAtSkinKeys(this.Monitor);
         }
 
 

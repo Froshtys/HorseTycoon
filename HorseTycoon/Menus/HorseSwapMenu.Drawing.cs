@@ -1,5 +1,6 @@
 using HorseTycoon;
 using HorseTycoon.Menus;
+using HorseTycoon.Patches;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
@@ -167,7 +168,9 @@ public partial class HorseSwapMenu : IClickableMenu
 
             if (worldHorseEntity != null && worldHorseEntity.Sprite != null)
             {
-                b.Draw(worldHorseEntity.Sprite.Texture, new Vector2(relativeX, relativeY), worldHorseEntity.Sprite.SourceRect, Color.White, 0f, Vector2.Zero, scale, SpriteEffects.None, 0.88f);
+                // Active stable horse: use our skin texture with the world entity's current frame
+                Texture2D drawTexture = HorseTexturePatches.GetTextureForAnimal(animal) ?? worldHorseEntity.Sprite.Texture;
+                b.Draw(drawTexture, new Vector2(relativeX, relativeY), worldHorseEntity.Sprite.SourceRect, Color.White, 0f, Vector2.Zero, scale, SpriteEffects.None, 0.88f);
             }
             else
             {
