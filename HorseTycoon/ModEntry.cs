@@ -239,6 +239,21 @@ namespace HorseTycoon
             }
         }
 
+        private static string? GetHorseReturnBlockReason(Stable stable)
+        {
+            Guid horseId = stable.HorseId;
+            if (horseId == Guid.Empty) return null;
+
+            if (Game1.getOnlineFarmers().Any(f => f.mount != null && f.mount.HorseId == horseId))
+                return "Horse is being ridden and can't be put away.";
+
+            bool isOnFarm = Game1.getFarm().characters.OfType<Horse>().Any(h => h.HorseId == horseId);
+            if (!isOnFarm)
+                return "Horse must be on the farm to be put away.";
+
+            return null;
+        }
+
         private void ShowHorseSwapMenu(Stable targetStable)
         {
             var horses = HorseHelper.GetAllBarnHorses().ToList();
@@ -246,18 +261,10 @@ namespace HorseTycoon
             if (Game1.player.isRidingHorse())
                 Game1.player.mount.dismount();
 
-            Horse oldHorse = targetStable.getStableHorse();
-            // Check if the horse is outside the Farm map boundaries
-            if (oldHorse != null && (oldHorse.currentLocation == null || oldHorse.currentLocation.Name != "Farm"))
+            string? openBlockReason = GetHorseReturnBlockReason(targetStable);
+            if (openBlockReason != null)
             {
-                Game1.showRedMessage("Cannot change horse. The horse must be on the farm.");
-                return;
-            }
-
-            // Check if any multiplayer participant is currently riding it
-            if (oldHorse != null && oldHorse.rider != null)
-            {
-                Game1.showRedMessage("Cannot change horse. Someone is currently riding the horse.");
+                Game1.showRedMessage(openBlockReason);
                 return;
             }
 
@@ -288,10 +295,18 @@ namespace HorseTycoon
 
             Game1.activeClickableMenu = new HorseSwapMenu(horses, targetStable, activeHorseData, Helper, (selectedHorse) =>
             {
+                string? returnBlockReason = GetHorseReturnBlockReason(targetStable);
+                if (returnBlockReason != null)
+                {
+                    Game1.showRedMessage(returnBlockReason);
+                    return;
+                }
 
                 // --- CASE: Player clicked "Return to Barn" (Or selected the already active horse row) ---
                 if (selectedHorse == null || (activeHorseData != null && selectedHorse.myID.Value == activeHorseData.myID.Value))
                 {
+                    Horse physicalHorse = targetStable.getStableHorse();
+
                     this.Monitor.Log("Returning active mount to barn and leaving stable empty.", LogLevel.Info);
 
                     // Unhide data and strip tracking parameters
@@ -299,9 +314,6 @@ namespace HorseTycoon
                     {
                         HorseHelper.RestoreHorse(activeHorseData);
                     }
-
-                    // Purge physical character instances
-                    Horse physicalHorse = targetStable.getStableHorse();
                     if (physicalHorse != null)
                     {
                         Game1.getFarm().characters.Remove(physicalHorse);

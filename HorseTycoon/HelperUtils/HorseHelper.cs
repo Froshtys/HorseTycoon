@@ -256,6 +256,10 @@ namespace HorseTycoon
             newHorse.homeInterior = barn.GetIndoors() as AnimalHouse;
             newHorse.home = barn;
 
+            // Force sprite to reflect adult age — the constructor loads the baby sprite at age 0,
+            // so reload() must be called after age and home are set.
+            newHorse.reload(barn);
+
             // Force into Barn list (bypassing capacity)
             barn.GetIndoors().animals.Add(newHorse.myID.Value, newHorse);
 
