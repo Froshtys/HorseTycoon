@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
+using StardewValley.Characters;
 using StardewValley.Menus;
 using HorseTycoon.Menus;
 using static StardewValley.GameStateQuery;
@@ -34,6 +36,19 @@ namespace HorseTycoon.Patches
                 original: AccessTools.Constructor(typeof(AnimalQueryMenu), new[] { typeof(FarmAnimal) }),
                 postfix: new HarmonyMethod(typeof(MenuPatches), nameof(Constructor_Postfix))
             );
+
+            // Hide mod-managed stable horses from the Animals tab; they are already
+            // listed there via their backing FarmAnimal record.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(AnimalPage), nameof(AnimalPage.FindAnimals)),
+                postfix: new HarmonyMethod(typeof(MenuPatches), nameof(FindAnimals_Postfix))
+            );
+        }
+
+        private static void FindAnimals_Postfix(ref List<AnimalPage.AnimalEntry> __result)
+        {
+            __result?.RemoveAll(entry =>
+                entry.Animal is Horse horse && HorseHelper.IsManagedStableHorse(horse));
         }
 
         private static void Constructor_Postfix(AnimalQueryMenu __instance, FarmAnimal animal)

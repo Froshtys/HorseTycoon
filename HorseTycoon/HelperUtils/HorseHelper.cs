@@ -131,6 +131,20 @@ namespace HorseTycoon
             monitor.Log("---------------------------------------------------------", LogLevel.Info);
         }
 
+        /// <summary>True if this mountable Horse is a stable horse managed by this mod (i.e. it has a
+        /// backing FarmAnimal record). Tractors and other unmanaged horses return false.</summary>
+        public static bool IsManagedStableHorse(Horse horse)
+        {
+            if (horse == null || horse.IsTractor()) return false;
+
+            Stable? stable = Game1.getFarm().buildings.OfType<Stable>()
+                .FirstOrDefault(s => s.HorseId == horse.HorseId);
+
+            return stable != null
+                && !stable.IsTractorGarage()
+                && stable.modData.ContainsKey(CurrentFarmHorseIdKey);
+        }
+
         public static bool IsHidden(FarmAnimal animal)
         {
             return animal != null &&
