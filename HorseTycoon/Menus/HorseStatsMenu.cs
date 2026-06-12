@@ -2,7 +2,9 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
+using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
+using HorseTycoon;
 using HorseTycoon.Models;
 using System.Dynamic;
 
@@ -37,55 +39,62 @@ namespace HorseTycoon.Menus
         {
             b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.7f);
 
-            // Draw standard menu background
             Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
-            int YPadding = 40;
 
-            // Draw Horse Name
-            string name = this.Horse.displayName;
-            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(this.xPositionOnScreen + 64, this.yPositionOnScreen + 72 + YPadding), Game1.textColor);
+            // Title scroll banner with horse name
+            string title = this.Horse.displayName;
+            int titleWidth = SpriteText.getWidthOfString(title);
+            int titleX = this.xPositionOnScreen + (this.width / 2) - (titleWidth / 2);
+            SpriteText.drawStringWithScrollBackground(b, title, titleX, this.yPositionOnScreen);
 
-            // Draw the Stats
-            int textWidth = 90;
-            var stats = this.Horse.GetHorseStats();
+            // Layout anchors
             int startX = this.xPositionOnScreen + 60;
-            int startY = this.yPositionOnScreen + 125 + YPadding;
+            int textWidth = 90;
+            int checkboxX = startX + textWidth + 280;
+            int keyY = this.yPositionOnScreen + 114;
+            int startY = keyY + 50;
+            var stats = this.Horse.GetHorseStats();
 
             if (this.usePixelSegments)
             {
-                int TextWidth = 110;
-                int gemWidth = 24;
-                int xForKey = this.xPositionOnScreen + 130 + TextWidth;
-                int yForKey = this.yPositionOnScreen + 88 + YPadding;
-                string IVLabel = "Genetic";
-                string EVLabel = "Trained";
-                Vector2 renderPos1 = new Vector2(xForKey, yForKey);
-                Utility.drawTextWithShadow(b, IVLabel, Game1.smallFont, new Vector2(xForKey + gemWidth, yForKey), Game1.textColor);
-                b.Draw(Game1.mouseCursors, renderPos1, new Rectangle(137, 338, 7, 9), Color.IndianRed, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0.8f);
+                int gemWidth = 26;
+                b.Draw(Game1.mouseCursors, new Vector2(startX, keyY), new Rectangle(137, 338, 7, 9), Color.IndianRed, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0.8f);
+                Utility.drawTextWithShadow(b, "Genetic", Game1.smallFont, new Vector2(startX + gemWidth, keyY), Game1.textColor);
+                b.Draw(Game1.mouseCursors, new Vector2(startX + gemWidth + textWidth + 10, keyY), new Rectangle(137, 338, 7, 9), Color.White, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0.8f);
+                Utility.drawTextWithShadow(b, "Trained", Game1.smallFont, new Vector2(startX + gemWidth + textWidth + gemWidth + 10, keyY), Game1.textColor);
 
-                xForKey = xForKey + TextWidth + gemWidth;
-                Vector2 renderPos2 = new Vector2(xForKey, yForKey);
-                Utility.drawTextWithShadow(b, EVLabel, Game1.smallFont, new Vector2(xForKey + gemWidth, yForKey), Game1.textColor);
-                b.Draw(Game1.mouseCursors, renderPos2, new Rectangle(137, 338, 7, 9), Color.White, 0f, Vector2.Zero, 3f, SpriteEffects.None, 0.8f);
+                // Header above checkboxes
+                Utility.drawTextWithShadow(b, "Daily", Game1.smallFont, new Vector2(checkboxX - 12, keyY), Game1.textColor);
 
-
-                // Segment render mode (values mapped 1 to 10 out of max 10 to resemble skill rectangles)
-                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY, stats.SpeedIV, stats.SpeedEV, 3f);
+                // Stat bars with labels
+                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY - 3, stats.SpeedIV, stats.SpeedEV, 3f);
                 Utility.drawTextWithShadow(b, "Speed", Game1.smallFont, new Vector2(startX, startY - 2), Game1.textColor, 1f);
-                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY + 50, stats.SprintIV, stats.SprintEV, 3f);
+                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY - 3 + 50, stats.SprintIV, stats.SprintEV, 3f);
                 Utility.drawTextWithShadow(b, "Sprint", Game1.smallFont, new Vector2(startX, startY + 50 - 2), Game1.textColor, 1f);
-                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY + 100, stats.JumpIV, stats.JumpEV, 3f);
+                MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY - 3 + 100, stats.JumpIV, stats.JumpEV, 3f);
                 Utility.drawTextWithShadow(b, "Jump", Game1.smallFont, new Vector2(startX, startY + 100 - 2), Game1.textColor, 1f);
+
+                // Training checkboxes — 10 segments × 24px = 240px wide, 20px gap
+                Rectangle emptyBoxSource = new Rectangle(227, 425, 9, 9);
+                Rectangle checkedBoxSource = new Rectangle(236, 425, 9, 9);
+                float checkboxScale = 3f;
+
+                bool speedTrained = TrainingManager.HasTrainedSpeedToday(this.Horse);
+                b.Draw(Game1.mouseCursors, new Vector2(checkboxX, startY + 2), speedTrained ? checkedBoxSource : emptyBoxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);
+
+                bool sprintTrained = TrainingManager.HasTrainedSprintToday(this.Horse);
+                b.Draw(Game1.mouseCursors, new Vector2(checkboxX, startY + 50 + 2), sprintTrained ? checkedBoxSource : emptyBoxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);
+
+                bool jumpTrained = TrainingManager.HasTrainedJumpToday(this.Horse);
+                b.Draw(Game1.mouseCursors, new Vector2(checkboxX, startY + 100 + 2), jumpTrained ? checkedBoxSource : emptyBoxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);
             }
             else
             {
-                // Fall back to your original custom progress bars
                 this.DrawStatBar(b, "Speed", startX, startY, stats.SpeedIV, stats.SpeedEV, 2);
                 this.DrawStatBar(b, "Sprint", startX, startY + 50, stats.SprintIV, stats.SprintEV, 2);
                 this.DrawStatBar(b, "Jump", startX, startY + 100, stats.JumpIV, stats.JumpEV, 2);
             }
 
-            // Draw the UI interaction components
             this.BackButton.draw(b);
             this.drawMouse(b);
         }
