@@ -13,6 +13,33 @@ namespace HorseTycoon
         public const string HideKey = "Froshty.HorseTycoon/IsHidden";
         public const string StableEmptyKey = "Froshty.HorseTycoon/IsIntentionallyEmpty";
         public const string HorseSkinKey = "Froshty.HorseTycoon/HorseSkin";
+        // Comma-separated overlay names. Absent or empty = no overlays.
+        public const string OverlaysKey = "Froshty.HorseTycoon/Overlays";
+        public static string? GetOverlaysRaw(FarmAnimal animal) =>
+            animal.modData.TryGetValue(OverlaysKey, out string? v) ? v : null;
+
+        public static void SetOverlays(FarmAnimal animal, IEnumerable<string> overlayNames)
+        {
+            animal.modData[OverlaysKey] = string.Join(",", overlayNames);
+
+            // If this animal is currently active in a stable, sync to the Horse character too.
+            Utility.ForEachCharacter(c =>
+            {
+                if (c is Horse horse)
+                {
+                    Stable? stable = Game1.getFarm().buildings.OfType<Stable>()
+                        .FirstOrDefault(s => s.HorseId == horse.HorseId);
+                    if (stable != null &&
+                        stable.modData.TryGetValue(CurrentFarmHorseIdKey, out string? idStr) &&
+                        idStr == animal.myID.Value.ToString())
+                    {
+                        horse.modData[OverlaysKey] = animal.modData[OverlaysKey];
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
 
         public static List<FarmAnimal> GetAllBarnHorses()
         {
@@ -212,7 +239,7 @@ namespace HorseTycoon
             // 4. Visual Swapping
             string skinId = selectedBarnHorse.skinID.Value ?? "";
             monitor.Log($"Horse skin selected: {skinId}", LogLevel.Info);
-            SetHorseSkin(activeHorse, skinId, monitor);
+            SetHorseSkin(activeHorse, skinId, selectedBarnHorse, monitor);
             monitor.Log($"Successfully swapped active mount to {activeHorse.Name}!", LogLevel.Info);
         }
 
@@ -250,7 +277,7 @@ namespace HorseTycoon
 
             string skinId = newHorse.skinID.Value ?? "";
             monitor.Log($"Horse skin selected: {skinId}", LogLevel.Info);
-            SetHorseSkin(horse, skinId, monitor);
+            SetHorseSkin(horse, skinId, newHorse, monitor);
 
             monitor.Log($"Successfully converted stable horse '{horse.Name}' and moved to {barn.buildingType.Value}.", LogLevel.Info);
         }
@@ -279,9 +306,17 @@ namespace HorseTycoon
             return barns.First();
         }
 
-        private static void SetHorseSkin(Horse horse, string skinId, IMonitor monitor)
+        private static void SetHorseSkin(Horse horse, string skinId, FarmAnimal? sourceAnimal, IMonitor monitor)
         {
             horse.modData[HorseSkinKey] = SkinIdToName(skinId);
+
+            // Sync overlay list: if the animal has an explicit list, copy it; otherwise remove
+            // the key so the draw patch falls back to "use all available overlays".
+            if (sourceAnimal != null && sourceAnimal.modData.ContainsKey(OverlaysKey))
+                horse.modData[OverlaysKey] = sourceAnimal.modData[OverlaysKey];
+            else
+                horse.modData.Remove(OverlaysKey);
+
             monitor.Log($"Set horse skin to '{horse.modData[HorseSkinKey]}' (from skinId '{skinId}')", LogLevel.Debug);
         }
 

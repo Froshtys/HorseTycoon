@@ -252,11 +252,11 @@ namespace HorseTycoon
             if (horseId == Guid.Empty) return null;
 
             if (Game1.getOnlineFarmers().Any(f => f.mount != null && f.mount.HorseId == horseId))
-                return "Horse is being ridden and can't be put away.";
+                return "Horse is being ridden.";
 
             bool isOnFarm = Game1.getFarm().characters.OfType<Horse>().Any(h => h.HorseId == horseId);
             if (!isOnFarm)
-                return "Horse must be on the farm to be put away.";
+                return "Horse is not on the farm.";
 
             return null;
         }
