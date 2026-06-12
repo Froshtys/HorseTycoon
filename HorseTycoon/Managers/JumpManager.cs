@@ -14,9 +14,9 @@ namespace HorseTycoon
         public readonly IModHelper Helper;
         public readonly IMonitor Monitor;
         public readonly IManifest Manifest;
-        public ModConfig Config;
+        public ModConfig Config = null!;
 
-        public Texture2D HorseShadow { get; set; }
+        public Texture2D? HorseShadow { get; set; }
 
         // State Tracking
         private readonly PerScreen<float> velX = new();

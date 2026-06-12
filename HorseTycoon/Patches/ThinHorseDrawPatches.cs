@@ -41,7 +41,7 @@ namespace HorseTycoon
                     if (!foundHead)
                     {
                         if (instructionsList[i].opcode == OpCodes.Ldc_R4
-                            && 48f.IsAboutEqualTo((float)instructionsList[i].operand))
+                            && 48f.IsAboutEqualTo((float)instructionsList[i].operand!))
                         {
                             var info = typeof(ThinHorseDrawPatches).GetMethod(nameof(GetHorseHeadXPosition));
                             var oldLables = instructionsList[i].labels;
@@ -59,7 +59,7 @@ namespace HorseTycoon
                     {
                         if (instructionsList[i].opcode == OpCodes.Ldfld
                             && instructionsList[i].operand != null
-                            && instructionsList[i].operand.ToString().ToLower().Contains("munchingcarrottimer"))
+                            && instructionsList[i].operand!.ToString()!.ToLower().Contains("munchingcarrottimer"))
                         {
                             if (!foundFirstMunch)
                             {
@@ -113,7 +113,7 @@ namespace HorseTycoon
                         if (i + 2 < instructionsList.Count
                             && instructionsList[i].opcode == OpCodes.Call
                             && instructionsList[i].operand != null
-                            && instructionsList[i].operand.ToString().ToLower().Contains("get_zero")
+                            && instructionsList[i].operand!.ToString()!.ToLower().Contains("get_zero")
                             && instructionsList[i + 1].opcode == OpCodes.Stloc_1
                             && instructionsList[i + 2].opcode == OpCodes.Ldarg_0)
                         {
@@ -131,7 +131,7 @@ namespace HorseTycoon
 
                 return instructionsList.AsEnumerable();
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return instructions;
             }

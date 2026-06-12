@@ -79,7 +79,7 @@
 
                     return instructionsList.AsEnumerable();
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     return instructions;
                 }
@@ -110,7 +110,7 @@
 
                     return instructionsList.AsEnumerable();
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     return instructions;
                 }

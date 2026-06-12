@@ -205,7 +205,7 @@ namespace HorseTycoon
                 activeHorse.Name = selectedBarnHorse.Name;
                 activeHorse.displayName = selectedBarnHorse.displayName;
                 // Force multiplayer update
-                activeHorse.name.Value = selectedBarnHorse.Name;
+                activeHorse.Name = selectedBarnHorse.Name;
                 Game1.getFarm().characters.Add(activeHorse);
             }
             // Handle Existing Hidden Horse (Only runs if a horse was already assigned)

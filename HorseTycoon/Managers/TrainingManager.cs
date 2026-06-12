@@ -7,7 +7,7 @@ namespace HorseTycoon
 {
     public static class TrainingManager
     {
-        private static JumpManager Manager;
+        private static JumpManager Manager = null!;
 
         // Stat-specific date keys to allow training all 3 in one day
         private const string JumpDateKey = "Froshty.HorseTycoon/JumpTrainedDate";

@@ -50,7 +50,7 @@ namespace HorseTycoon
             this.jumpManager.Initialize();
         }
 
-        private void OnMenuChanged(object sender, MenuChangedEventArgs e)
+        private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
         {
             if (e.OldMenu is PurchaseAnimalsMenu)
             {
@@ -242,7 +242,7 @@ namespace HorseTycoon
             }
             else
             {
-                this.Monitor.Log($"Could not find FarmAnimal data for horse: {horse.name}", LogLevel.Warn);
+                this.Monitor.Log($"Could not find FarmAnimal data for horse: {horse.Name}", LogLevel.Warn);
             }
         }
 

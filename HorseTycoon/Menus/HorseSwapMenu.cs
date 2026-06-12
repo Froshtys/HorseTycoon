@@ -25,7 +25,7 @@ public partial class HorseSwapMenu : IClickableMenu
 
     private ClickableTextureComponent upArrow;
     private ClickableTextureComponent downArrow;
-    private ClickableTextureComponent returnToBarnButton;
+    private ClickableTextureComponent? returnToBarnButton;
 
     private ClickableTextureComponent scrollBar;
     private Rectangle scrollBarRunner;

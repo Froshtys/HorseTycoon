@@ -6,7 +6,7 @@ namespace HorseTycoon
 {
     public static class JumpLogic
     {
-        private static JumpManager Manager;
+        private static JumpManager Manager = null!;
 
         public static void Initialize(JumpManager manager)
         {
