@@ -20,6 +20,7 @@ namespace HorseTycoon
     internal sealed class ModEntry : Mod
     {
         private JumpManager? jumpManager;
+        private FestivalRaceManager? festivalRaceManager;
         public override void Entry(IModHelper helper)
         {
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
@@ -48,6 +49,10 @@ namespace HorseTycoon
             // Create and start the jump logic
             this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);
             this.jumpManager.Initialize();
+
+            // Spring 21 Horse Festival race logic
+            this.festivalRaceManager = new FestivalRaceManager(helper, this.Monitor);
+            this.festivalRaceManager.Initialize();
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
