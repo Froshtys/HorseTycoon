@@ -8,7 +8,7 @@
 		"HorseTycoon.Manure": {
 		"Category": -15,
 		"Description": "{{i18n:HorseManure_Description}}",
-		"Displayname": "{{i18n:HorseManure_Name}}",
+		"DisplayName": "{{i18n:HorseManure_Name}}",
 		"Name": "Horse Manure",
 		"Price": 50,
 		"Texture": "{{ModId}}/Manure",
@@ -25,7 +25,7 @@
 		"{{ModId}}_FertilizerGranulator": {
 		"Name": "Fertilizer Granulator",
 		"Description": "{{i18n:FertilizerGranulator_Description}}",
-		"Displayname": "{{i18n:_FertilizerGranulator_Name}}",
+		"DisplayName": "{{i18n:FertilizerGranulator_DisplayName}}",
 		"Price": 3000,
 		"Texture": "{{ModId}}/Granulator",
 		"SpriteIndex": 0,
@@ -166,7 +166,7 @@
 		"HorseTycoon.ShoeCopper": {
 		"Category": -18,
 		"Description": "{{i18n:HorseShoeCopper_Description}}",
-		"Displayname": "{{i18n:HorseShoeCopper_Name}}",
+		"DisplayName": "{{i18n:HorseShoeCopper_Name}}",
 		"Name": "Copper Horseshoe",
 		"Price": 400,
 		"Texture": "{{ModId}}/HorseShoeCopper",
@@ -183,7 +183,7 @@
 		"HorseTycoon.ShoeIron": {
 		"Category": -18,
 		"Description": "{{i18n:HorseShoeIron_Description}}",
-		"Displayname": "{{i18n:HorseShoeIron_Name}}",
+		"DisplayName": "{{i18n:HorseShoeIron_Name}}",
 		"Name": "Iron Horseshoe",
 		"Price": 600,
 		"Texture": "{{ModId}}/HorseShoeIron",
@@ -200,7 +200,7 @@
 		"HorseTycoon.ShoeGold": {
 		"Category": -18,
 		"Description": "{{i18n:HorseShoeGold_Description}}",
-		"Displayname": "{{i18n:HorseShoeGold_Name}}",
+		"DisplayName": "{{i18n:HorseShoeGold_Name}}",
 		"Name": "Gold Horseshoe",
 		"Price": 800,
 		"Texture": "{{ModId}}/HorseShoeGold",

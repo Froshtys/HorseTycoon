@@ -1,0 +1,5 @@
+{
+	"name": "Horse Festival",
+	"conditions": "Forest/1200 1800",
+	"set-up": "event1/76 17/farmer 76 17 2/changeToTemporaryMap CP.HorseTycoon_ForestFestival/viewport -1000 -1000/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear"
+}

@@ -1,0 +1,32 @@
+{
+	"Changes": [
+		{
+			"LogName": "Horse Festival - Register on calendar (spring 21)",
+			"Action": "EditData",
+			"Target": "Data/Festivals/FestivalDates",
+			"Entries": {
+				"spring21": "{{i18n:HorseFestival_Name}}"
+			}
+		},
+		{
+			"LogName": "Horse Festival - Festival data (spring 21)",
+			"Action": "Load",
+			"Target": "Data/Festivals/spring21",
+			"FromFile": "data/spring21.json"
+		},
+		{
+			"LogName": "Horse Festival - Localize festival name (Load can't expand tokens, so override via EditData)",
+			"Action": "EditData",
+			"Target": "Data/Festivals/spring21",
+			"Entries": {
+				"name": "{{i18n:HorseFestival_Name}}"
+			}
+		},
+		{
+			"LogName": "Horse Festival - Festival map (copy of Cindersap Forest)",
+			"Action": "Load",
+			"Target": "Maps/{{ModId}}_ForestFestival",
+			"FromFile": "assets/maps/ForestFestival.tmx"
+		}
+	]
+}

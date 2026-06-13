@@ -16,6 +16,7 @@
     "HorseManure_Name": "Manure",
 
     "FertilizerGranulator_DisplayName": "Fertilizer Granulator",
-	"FertilizerGranulator_Description": "Converts livestock manure into fertilizer."
+	"FertilizerGranulator_Description": "Converts livestock manure into fertilizer.",
 
+    "HorseFestival_Name": "Horse Festival"
 }

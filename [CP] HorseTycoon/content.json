@@ -22,6 +22,9 @@
 		},
 		{
 		"Action": "Include",
-      		"FromFile": "data/sound.json"}
+      		"FromFile": "data/sound.json"},
+		{
+		"Action": "Include",
+      		"FromFile": "data/festival.json"}
 	]
 }
