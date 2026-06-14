@@ -35,7 +35,12 @@ namespace HorseTycoon
         // Marnie's pasture: where the brought horse is placed and wanders.
         private static readonly Point PastureMin = new(80, 18);
         private static readonly Point PastureMax = new(90, 23);
-        private static readonly Point PastureSpawn = new(85, 20);
+        private static readonly Point PastureSpawn = new(98, 20);
+        // Clockwise slot offsets (tiles) from PastureSpawn, one per player. Slot 0 = base, then left, up, right, down.
+        private static readonly Point[] PastureSlotOffsets =
+        {
+            new(0, 0), new(-4, 0), new(0, -4), new(4, 0), new(0, 4),
+        };
         // Lewis is placed via Set-Up_additionalCharacters in spring21.json; the race trigger reads his
         // live actor tile, so no constant is needed here.
         // Race start "right below the lake" (first lane); extra players are offset along X.
@@ -91,11 +96,16 @@ namespace HorseTycoon
             Instance = this;
         }
 
+        private const string MsgPastureHorse = "PastureHorse";
+        private record PastureHorseMessage(string HorseId, int Slot);
+        private const string MsgRaceStart = "RaceStart";
+
         public void Initialize()
         {
             this.Helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             this.Helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             this.Helper.Events.Display.RenderedHud += this.OnRenderedHud;
+            this.Helper.Events.Multiplayer.ModMessageReceived += this.OnMessageReceived;
 
             // Vanilla isRidingHorse() returns false during ANY event (it's gated on !Game1.eventUp), which
             // suppresses the mount drawing, riding pose and horse speed. Re-enable it while mounted inside
@@ -111,6 +121,13 @@ namespace HorseTycoon
             harmony.Patch(
                 original: AccessTools.Method(typeof(Farmer), nameof(Farmer.getMovementSpeed)),
                 transpiler: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Transpiler)));
+
+            // Block dismounting during the race so the rider can't accidentally hop off mid-run.
+            // Patch checkAction (the action-button entry point that *initiates* the dismount slide),
+            // not dismount() (the final cleanup) — blocking only the latter leaves the rider mid-slide.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Horse), nameof(Horse.checkAction)),
+                prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(CheckAction_Prefix)));
 
             this.Helper.ConsoleCommands.Add(
                 "ht_race_tile",
@@ -129,6 +146,19 @@ namespace HorseTycoon
         {
             if (!__result && __instance?.mount != null && RaceFestival != null)
                 __result = true;
+        }
+
+        /// <summary>Prevent dismounting while the local player is actively racing. checkAction is the
+        /// action-button handler; when already mounted it initiates the dismount slide, so swallowing it
+        /// here (return true = handled, skip original) stops the dismount before it ever starts.</summary>
+        private static bool CheckAction_Prefix(Horse __instance, Farmer who, ref bool __result)
+        {
+            if (RaceRidingActive && __instance.rider == Game1.player && who == Game1.player)
+            {
+                __result = true; // report "handled" so nothing else acts on the press
+                return false;     // skip original checkAction (no dismount initiated)
+            }
+            return true;
         }
 
         /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" during our race so the
@@ -191,14 +221,12 @@ namespace HorseTycoon
                     break;
                 case Phase.Pasture:
                     this.UpdatePasture();
+                    AdvanceHorseAnimations();
                     break;
                 case Phase.Racing:
-                    // The horse's leg animation (set by Horse.update) is advanced by NPC.update's
-                    // Sprite.animateOnce, which is gated on !Game1.eventUp — so it freezes during the
-                    // festival and the OnMountFootstep frame callbacks (running sound) never fire.
-                    // Advance it ourselves to restore both the gallop animation and its sound.
-                    if (competitor.Value?.Sprite?.CurrentAnimation != null)
-                        competitor.Value.Sprite.animateOnce(Game1.currentGameTime);
+                    // animateOnce is gated on !Game1.eventUp, so advance all horses (local + remote)
+                    // ourselves to restore gallop animations and their footstep sounds for every racer.
+                    AdvanceHorseAnimations();
                     this.CheckFinish();
                     break;
             }
@@ -266,59 +294,130 @@ namespace HorseTycoon
             suppressedBuffs.Value.Clear();
         }
 
-        /// <summary>Bring the ridden horse into the pasture (if the player arrived mounted) and start wandering.</summary>
+        /// <summary>Returns the stable player-slot index for <paramref name="farmer"/> among all online farmers,
+        /// sorted by UniqueMultiplayerID so every client agrees on the ordering.</summary>
+        private static int PastureSlotFor(Farmer farmer) =>
+            System.Math.Max(0, Game1.getOnlineFarmers()
+                .OrderBy(f => f.UniqueMultiplayerID)
+                .ToList()
+                .IndexOf(farmer));
+
+        /// <summary>Returns the pasture spawn tile for the given slot index.</summary>
+        private static Point PastureSpawnForSlot(int slot)
+        {
+            Point offset = slot < PastureSlotOffsets.Length ? PastureSlotOffsets[slot] : new(slot * 4, 0);
+            return new Point(PastureSpawn.X + offset.X, PastureSpawn.Y + offset.Y);
+        }
+
+        /// <summary>Bring the ridden horse into the pasture (if the player arrived mounted) and broadcast it to peers.</summary>
         private void EnterPasture(Event festival)
         {
             phase.Value = Phase.Pasture;
             competitor.Value = null;
+
+            // Every client must set this so the event renderer draws world characters (horses placed by any client).
+            festival.showWorldCharacters = true;
 
             Horse? horse = lastRiddenMount.Value;
             bool arrivedMounted = horse != null && (Game1.ticks - lastMountedTick.Value) <= EntryMountWindowTicks;
             if (!arrivedMounted || horse == null)
                 return;
 
-            // Place the real mountable Horse in the pasture, standing in place doing the grazing animation.
-            // showWorldCharacters lets the festival draw world characters, and updateCharacters always
-            // updates Horses, so it persists. We drive the grazing/leg animation ourselves (animateOnce is
-            // eventUp-gated) — see AdvanceHorseAnimations.
-            festival.showWorldCharacters = true;
+            int slot = PastureSlotFor(Game1.player);
             competitor.Value = horse;
 
+            // Place locally and broadcast so every other client also places this horse.
+            // The festival location's characters list does not net-sync, so we use explicit messaging.
+            PlaceHorseInPasture(horse, slot);
+            this.Helper.Multiplayer.SendMessage(
+                new PastureHorseMessage(horse.HorseId.ToString(), slot),
+                MsgPastureHorse,
+                modIDs: new[] { this.Helper.ModRegistry.ModID });
+
+            this.Monitor.Log($"Brought '{horse.Name}' into the festival pasture (slot {slot}).", LogLevel.Debug);
+        }
+
+        /// <summary>Handle a peer's pasture-horse broadcast: find the horse by id and place it locally.</summary>
+        private void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
+        {
+            if (e.Type == MsgRaceStart && RaceFestival != null && phase.Value == Phase.Pasture)
+            {
+                this.StartRace();
+                return;
+            }
+
+
+            if (e.Type != MsgPastureHorse || RaceFestival == null)
+                return;
+
+            var msg = e.ReadAs<PastureHorseMessage>();
+            if (!System.Guid.TryParse(msg.HorseId, out System.Guid id))
+                return;
+
+            Horse? horse = Utility.getAllCharacters().OfType<Horse>()
+                .FirstOrDefault(h => h.HorseId == id);
+            if (horse == null)
+            {
+                this.Monitor.Log($"Received PastureHorse message but couldn't find horse {msg.HorseId}.", LogLevel.Warn);
+                return;
+            }
+
+            RaceFestival.showWorldCharacters = true;
+            PlaceHorseInPasture(horse, msg.Slot);
+            this.Monitor.Log($"Placed remote horse '{horse.Name}' in pasture slot {msg.Slot}.", LogLevel.Debug);
+        }
+
+        /// <summary>Move a horse into the festival location at the given pasture slot and start its grazing animation.</summary>
+        private static void PlaceHorseInPasture(Horse horse, int slot)
+        {
+            GameLocation loc = Game1.currentLocation;
             horse.currentLocation?.characters.Remove(horse);
             horse.rider = null;
             horse.dismounting.Value = false;
             horse.mounting.Value = false;
             horse.EventActor = false;
             horse.controller = null;
-            horse.currentLocation = Game1.currentLocation;
-            horse.Position = TileToPixels(PastureSpawn);
+            horse.currentLocation = loc;
+            horse.Position = TileToPixels(PastureSpawnForSlot(slot));
             horse.Halt();
             horse.faceDirection(Game1.right);
-            if (!Game1.currentLocation.characters.Contains(horse))
-                Game1.currentLocation.characters.Add(horse);
+            if (!loc.characters.Contains(horse))
+                loc.characters.Add(horse);
             SetGrazingAnimation(horse);
-
-            this.Monitor.Log($"Brought '{horse.Name}' into the festival pasture.", LogLevel.Debug);
         }
 
         /// <summary>Keep the standing pasture horse's grazing animation looping.</summary>
         private void UpdatePasture()
         {
             Horse? horse = competitor.Value;
-            if (horse != null && horse.Sprite?.CurrentAnimation == null)
+            if (horse == null)
+                return;
+            if (horse.Sprite?.CurrentAnimation == null)
                 SetGrazingAnimation(horse);
         }
 
-        /// <summary>Set the in-place grazing (head-down munching) animation, looping.</summary>
+        /// <summary>Set the in-place grazing animation matching the vanilla Horse stable behaviour:
+        /// transition down (21→22), graze cycles (23↔24 × 4), transition back up (22→21).</summary>
         private static void SetGrazingAnimation(Horse horse)
         {
             if (horse.Sprite == null)
                 return;
+            bool flip = horse.FacingDirection == Game1.left;
             horse.Sprite.loop = true;
             horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
             {
-                new FarmerSprite.AnimationFrame(23, 400),
-                new FarmerSprite.AnimationFrame(24, 400),
+                new FarmerSprite.AnimationFrame(7, Game1.random.Next(1000, 3200), secondaryArm: false, flip: flip), // idle standing
+                new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
+                new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
             });
         }
 
@@ -436,6 +535,8 @@ namespace HorseTycoon
                     Game1.exitActiveMenu();
                     readyCheckOpen.Value = false;
                     this.StartRace();
+                    this.Helper.Multiplayer.SendMessage(true, MsgRaceStart,
+                        modIDs: new[] { this.Helper.ModRegistry.ModID });
                 },
                 onCancel: (_) =>
                 {
@@ -458,9 +559,8 @@ namespace HorseTycoon
             // so only horse stats + the Sprint buff affect it.
             this.SuppressOtherBuffs();
 
-            // Offset each online player's start lane so racers don't stack.
-            int lane = Game1.getOnlineFarmers().ToList().IndexOf(Game1.player);
-            if (lane < 0) lane = 0;
+            // Offset each online player's start lane — sorted by UniqueMultiplayerID so every client agrees.
+            int lane = PastureSlotFor(Game1.player);
             Point start = new(RaceStart.X + lane * 2, RaceStart.Y);
 
             // Remove the decorative pasture FarmAnimal.
@@ -488,9 +588,16 @@ namespace HorseTycoon
             Game1.player.faceDirection(Game1.down);
             Game1.player.canMove = true;
 
-            // Vanilla mount: Horse.update finalizes rider.mount and the riding pose (it runs because
-            // updateCharacters always updates Horses, even during the frozen-time festival).
-            horse.checkAction(Game1.player, loc);
+            // Mount directly without the NetMutex in checkAction — the async server round-trip can
+            // silently fail during festival events. Setting rider + mounting.Value = true is enough:
+            // Horse.update (which runs every tick via updateCharacters even during the festival) will
+            // finalize Game1.player.mount = horse and the riding pose on the next tick.
+            horse.rider = Game1.player;
+            horse.mounting.Value = true;
+            Game1.player.synchronizedJump(6f);
+            Game1.player.freezePause = 5000;
+            Game1.player.Halt();
+            Game1.player.UsingTool = false;
 
             // Let the mount hop finish before the countdown box freezes the player.
             DelayedAction.functionAfterDelay(
