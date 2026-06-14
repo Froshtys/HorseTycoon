@@ -388,6 +388,10 @@ namespace HorseTycoon
         {
             if (!Context.IsWorldReady || Game1.player.mount == null) return;
 
+            // During the Horse Festival race, FestivalRaceManager runs a custom sprint instead (the vanilla
+            // buff timer is frozen while the festival pauses time).
+            if (FestivalRaceManager.RaceRidingActive) return;
+
             // 1. Check for Sprint Key 'R'
             if (e.Button != SButton.R) return;
 

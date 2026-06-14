@@ -105,6 +105,11 @@ namespace HorseTycoon
             Manager.VelX = ox * power;
             Manager.VelY = oy * power;
             Manager.LastYJumpVelocity = 0;
+            // Travel exactly `distance` tiles horizontally from the jump start, ignoring input drift.
+            Manager.JumpDistanceRemaining = distance * Game1.tileSize;
+            Manager.JumpStartPos = Game1.player.Position;
+            Manager.JumpOffset = Vector2.Zero;
+            Manager.IsForwardJump = true;
             Game1.player.CanMove = false;
             PerformJump(power);
 
@@ -117,6 +122,8 @@ namespace HorseTycoon
         private static void PerformBlockedJump(int jumpHeight)
         {
             Manager.BlockedJump = true;
+            Manager.JumpDistanceRemaining = 0f; // in-place hop, no horizontal travel
+            Manager.IsForwardJump = false;
             PerformJump(2 + jumpHeight);
 
             if (Game1.player.mount != null)

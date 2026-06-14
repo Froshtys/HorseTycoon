@@ -1,5 +1,10 @@
+using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+using HarmonyLib;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
@@ -22,6 +27,10 @@ namespace HorseTycoon
         private const string FestivalEventId = "festival_spring21";
         private const string ReadyCheckName = "Froshty.HorseTycoon.horseRaceStart";
 
+        // Custom sprint (the vanilla Buff timer is frozen during the festival, so the race runs its own).
+        private const float SprintCooldownMs = 10000f; // exhaustion duration after a sprint
+        private enum SprintPhase { Ready, Sprinting, Exhausted }
+
         // --- Tunable map coordinates (tiles) for CP.HorseTycoon_ForestFestival. Tune in-game with `ht_race_tile`. ---
         // Marnie's pasture: where the brought horse is placed and wanders.
         private static readonly Point PastureMin = new(80, 18);
@@ -36,9 +45,9 @@ namespace HorseTycoon
         private static readonly Point FinishMin = new(38, 11);
         private static readonly Point FinishMax = new(40, 17);
 
-        private const float WanderSpeed = 1.5f;            // px per tick
-        private const int WanderRepickMinTicks = 90;        // ~1.5s
-        private const int WanderRepickMaxTicks = 210;       // ~3.5s
+        // Cooldown between wander destinations (the horse walks there via vanilla pathfinding).
+        private const int WanderRepickMinTicks = 60;        // ~1s
+        private const int WanderRepickMaxTicks = 180;       // ~3s
 
         // The game dismounts the player as they warp into the festival, so we capture the mount each tick
         // beforehand and treat them as "arrived mounted" if they were riding within this many ticks of the
@@ -51,25 +60,57 @@ namespace HorseTycoon
         private readonly IMonitor Monitor;
 
         private readonly PerScreen<Phase> phase = new(() => Phase.None);
+        // The real mountable Horse, used for the race itself.
         private readonly PerScreen<Horse?> competitor = new(() => null);
+        // A throwaway FarmAnimal copy shown wandering the pasture (vanilla farm-animal sprite + movement).
+        private readonly PerScreen<FarmAnimal?> pastureAnimal = new(() => null);
         // The most recent horse the player rode, captured before the festival dismounts them on entry.
         private readonly PerScreen<Horse?> lastRiddenMount = new(() => null);
         private readonly PerScreen<int> lastMountedTick = new(() => int.MinValue);
         private readonly PerScreen<Vector2> wanderTarget = new(() => Vector2.Zero);
+        private readonly PerScreen<bool> wanderMoving = new(() => false);
+        private readonly PerScreen<int> wanderDir = new(() => -1);
         private readonly PerScreen<int> wanderTicks = new(() => 0);
-        private readonly PerScreen<int> wanderFacing = new(() => -1);
         private readonly PerScreen<bool> readyCheckOpen = new(() => false);
+        // The player's buffs, removed for the race and restored when the festival ends.
+        private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
+        // Custom sprint state (independent of the vanilla buff system).
+        private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
+        private readonly PerScreen<float> sprintTimer = new(() => 0f);
+
+        private static FestivalRaceManager? Instance;
+
+        /// <summary>True while the local racer's custom sprint is active (read by the speed patch).</summary>
+        public static bool IsSprinting =>
+            Instance != null && RaceRidingActive && Instance.sprintPhase.Value == SprintPhase.Sprinting;
 
         public FestivalRaceManager(IModHelper helper, IMonitor monitor)
         {
             this.Helper = helper;
             this.Monitor = monitor;
+            Instance = this;
         }
 
         public void Initialize()
         {
             this.Helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             this.Helper.Events.Input.ButtonPressed += this.OnButtonPressed;
+            this.Helper.Events.Display.RenderedHud += this.OnRenderedHud;
+
+            // Vanilla isRidingHorse() returns false during ANY event (it's gated on !Game1.eventUp), which
+            // suppresses the mount drawing, riding pose and horse speed. Re-enable it while mounted inside
+            // our race festival so vanilla riding works during the event.
+            var harmony = new Harmony("Froshty.HorseTycoon.FestivalRace");
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Farmer), nameof(Farmer.isRidingHorse)),
+                postfix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(IsRidingHorse_Postfix)));
+
+            // getMovementSpeed zeroes the horse bonus / addedSpeed (which includes buff & sprint speed)
+            // during events. Make it compute as non-event during our race so riding speed, the stat
+            // SpeedBoost (added by JumpPatches) and the sprint buff all apply the same as outside.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Farmer), nameof(Farmer.getMovementSpeed)),
+                transpiler: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Transpiler)));
 
             this.Helper.ConsoleCommands.Add(
                 "ht_race_tile",
@@ -77,6 +118,34 @@ namespace HorseTycoon
                 (_, _) => this.Monitor.Log(
                     $"Player tile: {Game1.player.Tile} | mounted: {Game1.player.isRidingHorse()} | location: {Game1.currentLocation?.Name}",
                     LogLevel.Info));
+        }
+
+        /// <summary>True while the local player is mounted inside our race festival.</summary>
+        public static bool RaceRidingActive => RaceFestival != null && Game1.player?.mount != null;
+
+        /// <summary>Treat a mounted farmer as "riding" while inside our festival, so vanilla mount rendering,
+        /// riding pose and speed apply (the base method forces false during events).</summary>
+        private static void IsRidingHorse_Postfix(Farmer __instance, ref bool __result)
+        {
+            if (!__result && __instance?.mount != null && RaceFestival != null)
+                __result = true;
+        }
+
+        /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" during our race so the
+        /// vanilla riding-speed formula (horse bonus + addedSpeed, which includes buff/sprint speed) runs.</summary>
+        public static bool EventUpForSpeed() => Game1.eventUp && !RaceRidingActive;
+
+        private static IEnumerable<CodeInstruction> GetMovementSpeed_Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            FieldInfo eventUpField = AccessTools.Field(typeof(Game1), nameof(Game1.eventUp));
+            MethodInfo helper = AccessTools.Method(typeof(FestivalRaceManager), nameof(EventUpForSpeed));
+            foreach (CodeInstruction instr in instructions)
+            {
+                if (instr.LoadsField(eventUpField))
+                    yield return new CodeInstruction(OpCodes.Call, helper);
+                else
+                    yield return instr;
+            }
         }
 
         /// <summary>The active Horse Festival event, or null if we're not in it.</summary>
@@ -121,15 +190,80 @@ namespace HorseTycoon
                     this.EnterPasture(festival);
                     break;
                 case Phase.Pasture:
-                    this.UpdateWander();
+                    this.UpdatePasture();
                     break;
                 case Phase.Racing:
-                    // Keep the mount (an event actor) drawn under the rider during the festival.
-                    if (competitor.Value != null && Game1.player.mount == competitor.Value)
-                        competitor.Value.Position = Game1.player.Position;
+                    // The horse's leg animation (set by Horse.update) is advanced by NPC.update's
+                    // Sprite.animateOnce, which is gated on !Game1.eventUp — so it freezes during the
+                    // festival and the OnMountFootstep frame callbacks (running sound) never fire.
+                    // Advance it ourselves to restore both the gallop animation and its sound.
+                    if (competitor.Value?.Sprite?.CurrentAnimation != null)
+                        competitor.Value.Sprite.animateOnce(Game1.currentGameTime);
                     this.CheckFinish();
                     break;
             }
+
+            // While mounted in the race, advance the custom sprint timer.
+            if (RaceRidingActive)
+                this.UpdateSprint();
+        }
+
+        /// <summary>Advance the custom sprint state (own real-time timer; the vanilla buff timer is frozen
+        /// while the festival pauses game time).</summary>
+        private void UpdateSprint()
+        {
+            if (sprintPhase.Value == SprintPhase.Ready)
+                return;
+
+            sprintTimer.Value -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+            if (sprintTimer.Value > 0f)
+                return;
+
+            if (sprintPhase.Value == SprintPhase.Sprinting)
+            {
+                sprintPhase.Value = SprintPhase.Exhausted;
+                sprintTimer.Value = SprintCooldownMs;
+            }
+            else
+            {
+                sprintPhase.Value = SprintPhase.Ready;
+                sprintTimer.Value = 0f;
+            }
+        }
+
+        /// <summary>Begin a sprint (if ready), using the horse's Sprint stat for the duration.</summary>
+        private void TryStartSprint()
+        {
+            if (sprintPhase.Value != SprintPhase.Ready || Game1.player.mount == null)
+                return;
+
+            FarmAnimal? horse = HorseHelper.GetFarmAnimalForHorse(Game1.player.mount);
+            int totalSprint = horse?.GetHorseStats().TotalSprint ?? 0;
+            float durationMs = System.Math.Clamp((totalSprint / 4f) * 1000f, 1000f, 100000f);
+
+            sprintPhase.Value = SprintPhase.Sprinting;
+            sprintTimer.Value = durationMs;
+            Game1.playSound("fireball");
+            TrainingManager.ProcessSprint(Game1.player.mount);
+        }
+
+        /// <summary>Save and remove all the player's buffs so only horse stats affect the race.</summary>
+        private void SuppressOtherBuffs()
+        {
+            suppressedBuffs.Value.Clear();
+            foreach (string id in Game1.player.buffs.AppliedBuffs.Keys.ToList())
+            {
+                suppressedBuffs.Value.Add(Game1.player.buffs.AppliedBuffs[id]);
+                Game1.player.buffs.Remove(id);
+            }
+        }
+
+        /// <summary>Restore the buffs that were suppressed for the race.</summary>
+        private void RestoreSuppressedBuffs()
+        {
+            foreach (Buff buff in suppressedBuffs.Value)
+                Game1.player.applyBuff(buff);
+            suppressedBuffs.Value.Clear();
         }
 
         /// <summary>Bring the ridden horse into the pasture (if the player arrived mounted) and start wandering.</summary>
@@ -143,66 +277,108 @@ namespace HorseTycoon
             if (!arrivedMounted || horse == null)
                 return;
 
-            // The festival dismounted the horse into the location the player came from. During a festival the
-            // location's normal characters aren't drawn (Event.draw only renders event actors), so we move the
-            // horse into the festival as an event actor instead.
+            // Place the real mountable Horse in the pasture, standing in place doing the grazing animation.
+            // showWorldCharacters lets the festival draw world characters, and updateCharacters always
+            // updates Horses, so it persists. We drive the grazing/leg animation ourselves (animateOnce is
+            // eventUp-gated) — see AdvanceHorseAnimations.
+            festival.showWorldCharacters = true;
+            competitor.Value = horse;
+
             horse.currentLocation?.characters.Remove(horse);
             horse.rider = null;
             horse.dismounting.Value = false;
             horse.mounting.Value = false;
+            horse.EventActor = false;
+            horse.controller = null;
             horse.currentLocation = Game1.currentLocation;
-            horse.EventActor = true;
             horse.Position = TileToPixels(PastureSpawn);
-            if (!festival.actors.Contains(horse))
-                festival.actors.Add(horse);
+            horse.Halt();
+            horse.faceDirection(Game1.right);
+            if (!Game1.currentLocation.characters.Contains(horse))
+                Game1.currentLocation.characters.Add(horse);
+            SetGrazingAnimation(horse);
 
-            competitor.Value = horse;
-            wanderTicks.Value = 0; // pick a wander target immediately
             this.Monitor.Log($"Brought '{horse.Name}' into the festival pasture.", LogLevel.Debug);
         }
 
-        /// <summary>Simple bounded wander so the brought horse walks around the pasture (visual only).</summary>
-        private void UpdateWander()
+        /// <summary>Keep the standing pasture horse's grazing animation looping.</summary>
+        private void UpdatePasture()
         {
             Horse? horse = competitor.Value;
-            if (horse == null)
+            if (horse != null && horse.Sprite?.CurrentAnimation == null)
+                SetGrazingAnimation(horse);
+        }
+
+        /// <summary>Set the in-place grazing (head-down munching) animation, looping.</summary>
+        private static void SetGrazingAnimation(Horse horse)
+        {
+            if (horse.Sprite == null)
+                return;
+            horse.Sprite.loop = true;
+            horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
+            {
+                new FarmerSprite.AnimationFrame(23, 400),
+                new FarmerSprite.AnimationFrame(24, 400),
+            });
+        }
+
+        /// <summary>Advance every festival horse's animation (grazing in the pasture, gallop while ridden) for
+        /// local AND remote racers. animateOnce is eventUp-gated so it's frozen for everyone otherwise; the
+        /// animations themselves are set by Horse.update (which runs for all mounts via updateCommon).</summary>
+        private static void AdvanceHorseAnimations()
+        {
+            GameTime time = Game1.currentGameTime;
+            foreach (NPC npc in Game1.currentLocation.characters)
+                if (npc is Horse h && h.Sprite?.CurrentAnimation != null)
+                    h.Sprite.animateOnce(time);
+            foreach (Farmer farmer in Game1.getOnlineFarmers())
+                if (farmer.mount?.Sprite?.CurrentAnimation != null)
+                    farmer.mount.Sprite.animateOnce(time);
+        }
+
+        /// <summary>The buff HUD is suppressed during events (drawHUD is skipped), so redraw it ourselves so
+        /// the Sprint/Exhausted buff icons are visible during the festival race.</summary>
+        /// <summary>Draw a vanilla buff-style icon (top-right) for the custom sprint/exhausted state during
+        /// the race, with the time remaining shown under it and on hover.</summary>
+        private void OnRenderedHud(object? sender, RenderedHudEventArgs e)
+        {
+            if (!RaceRidingActive || sprintPhase.Value == SprintPhase.Ready)
                 return;
 
-            wanderTicks.Value--;
-            Vector2 pos = horse.Position;
+            bool sprinting = sprintPhase.Value == SprintPhase.Sprinting;
+            // Same icons the vanilla buffs used: Speed=9 (sprint), 25 (exhausted), in Game1.buffsIcons.
+            int sheetIndex = sprinting ? 9 : 25;
+            string label = sprinting ? "Horse Sprint" : "Horse Exhausted";
+            int secondsLeft = (int)System.Math.Ceiling(sprintTimer.Value / 1000f);
+            string timeText = (secondsLeft / 60) + ":" + (secondsLeft % 60).ToString("00");
 
-            if (wanderTicks.Value <= 0 || Vector2.Distance(pos, wanderTarget.Value) < 6f)
-            {
-                int tx = Game1.random.Next(PastureMin.X, PastureMax.X + 1);
-                int ty = Game1.random.Next(PastureMin.Y, PastureMax.Y + 1);
-                wanderTarget.Value = TileToPixels(new Point(tx, ty));
-                wanderTicks.Value = Game1.random.Next(WanderRepickMinTicks, WanderRepickMaxTicks);
-                return;
-            }
+            SpriteBatch b = e.SpriteBatch;
+            Rectangle src = Game1.getSourceRectForStandardTileSheet(Game1.buffsIcons, sheetIndex, 16, 16);
+            const int iconSize = 64;
+            int x = Game1.uiViewport.Width - iconSize - 24;
+            int y = 24;
 
-            Vector2 dir = wanderTarget.Value - pos;
-            if (dir.LengthSquared() > 0.001f)
-            {
-                dir.Normalize();
-                horse.Position = pos + dir * WanderSpeed;
+            b.Draw(Game1.buffsIcons, new Vector2(x, y), src, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
+            Utility.drawTextWithShadow(b, timeText, Game1.smallFont,
+                new Vector2(x + (iconSize - Game1.smallFont.MeasureString(timeText).X) / 2f, y + iconSize - 8f), Color.White);
 
-                // Only call faceDirection when the direction CHANGES — it resets the sprite to the standing
-                // frame, so calling it every tick fights animateInFacingDirection and causes flicker.
-                int facing = System.Math.Abs(dir.X) > System.Math.Abs(dir.Y)
-                    ? (dir.X > 0 ? Game1.right : Game1.left)
-                    : (dir.Y > 0 ? Game1.down : Game1.up);
-                if (facing != wanderFacing.Value)
-                {
-                    horse.faceDirection(facing);
-                    wanderFacing.Value = facing;
-                }
-                horse.animateInFacingDirection(Game1.currentGameTime);
-            }
+            if (new Rectangle(x, y, iconSize, iconSize).Contains(Game1.getOldMouseX(), Game1.getOldMouseY()))
+                IClickableMenu.drawHoverText(b, label + "\n" + timeText + " left", Game1.smallFont);
         }
 
         private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
         {
-            if (!Context.IsWorldReady || phase.Value != Phase.Pasture || readyCheckOpen.Value)
+            if (!Context.IsWorldReady)
+                return;
+
+            // Custom sprint while racing (ModEntry's vanilla sprint is skipped during the race).
+            if (RaceRidingActive && e.Button == SButton.R)
+            {
+                this.TryStartSprint();
+                return;
+            }
+
+            if (phase.Value != Phase.Pasture || readyCheckOpen.Value)
                 return;
             if (Game1.activeClickableMenu != null) // a dialogue/menu is already up
                 return;
@@ -278,29 +454,47 @@ namespace HorseTycoon
 
             phase.Value = Phase.Racing;
 
+            // Remove the player's existing buffs for the duration of the race (restored when they leave),
+            // so only horse stats + the Sprint buff affect it.
+            this.SuppressOtherBuffs();
+
             // Offset each online player's start lane so racers don't stack.
             int lane = Game1.getOnlineFarmers().ToList().IndexOf(Game1.player);
             if (lane < 0) lane = 0;
             Point start = new(RaceStart.X + lane * 2, RaceStart.Y);
 
+            // Remove the decorative pasture FarmAnimal.
+            if (pastureAnimal.Value != null)
+            {
+                loc.animals.Remove(pastureAnimal.Value.myID.Value);
+                pastureAnimal.Value = null;
+            }
+
+            // Bring the real mountable Horse into the festival for the race (drawn via showWorldCharacters).
+            horse.rider = null;
+            horse.dismounting.Value = false;
+            horse.mounting.Value = false;
+            horse.controller = null;
+            horse.currentLocation?.characters.Remove(horse);
+            horse.currentLocation = loc;
+            horse.Halt();
+            horse.Position = TileToPixels(start);
+            if (!loc.characters.Contains(horse))
+                loc.characters.Add(horse);
+
             Game1.player.Halt();
             Game1.player.completelyStopAnimatingOrDoingAction();
+            Game1.player.Position = TileToPixels(new Point(start.X, start.Y - 1));
             Game1.player.faceDirection(Game1.down);
-
-            // Finalize the mounted state directly. The animated mount (Horse.checkAction) relies on
-            // Horse.update setting rider.mount, which doesn't run for an event-actor horse — so the mount
-            // never completes and the rider shows the running animation. Set it explicitly instead.
-            horse.mounting.Value = false;
-            horse.dismounting.Value = false;
-            horse.rider = Game1.player;
-            Game1.player.mount = horse;
-            Game1.player.isAnimatingMount = false;
-            Game1.player.freezePause = 0;
             Game1.player.canMove = true;
-            horse.Position = TileToPixels(start);
-            Game1.player.Position = TileToPixels(start);
 
-            Game1.drawObjectDialogue("3 . . . 2 . . . 1 . . . Race!");
+            // Vanilla mount: Horse.update finalizes rider.mount and the riding pose (it runs because
+            // updateCharacters always updates Horses, even during the frozen-time festival).
+            horse.checkAction(Game1.player, loc);
+
+            // Let the mount hop finish before the countdown box freezes the player.
+            DelayedAction.functionAfterDelay(
+                () => Game1.drawObjectDialogue("3 . . . 2 . . . 1 . . . Race!"), 700);
         }
 
         private void CheckFinish()
@@ -317,10 +511,19 @@ namespace HorseTycoon
 
         private void Reset()
         {
+            this.RestoreSuppressedBuffs();
+            sprintPhase.Value = SprintPhase.Ready;
+            sprintTimer.Value = 0f;
+            if (pastureAnimal.Value != null)
+            {
+                pastureAnimal.Value.currentLocation?.animals.Remove(pastureAnimal.Value.myID.Value);
+                pastureAnimal.Value = null;
+            }
             phase.Value = Phase.None;
             competitor.Value = null;
+            wanderMoving.Value = false;
+            wanderDir.Value = -1;
             wanderTicks.Value = 0;
-            wanderTarget.Value = Vector2.Zero;
             readyCheckOpen.Value = false;
         }
 

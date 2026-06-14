@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -24,6 +25,16 @@ namespace HorseTycoon
         private readonly PerScreen<float> lastYJumpVelocity = new();
         private readonly PerScreen<bool> playerJumpingWithHorse = new();
         private readonly PerScreen<bool> blockedJump = new();
+        // Forward-jump trajectory state. We drive the player along an absolute path from the jump start so
+        // held-direction input movement can't add to the distance, and cap it at the target tile.
+        private readonly PerScreen<float> jumpDistanceRemaining = new(() => 0f);
+        private readonly PerScreen<Vector2> jumpStartPos = new(() => Vector2.Zero);
+        private readonly PerScreen<Vector2> jumpOffset = new(() => Vector2.Zero);
+        private readonly PerScreen<bool> isForwardJump = new(() => false);
+        internal float JumpDistanceRemaining { get => jumpDistanceRemaining.Value; set => jumpDistanceRemaining.Value = value; }
+        internal Vector2 JumpStartPos { get => jumpStartPos.Value; set => jumpStartPos.Value = value; }
+        internal Vector2 JumpOffset { get => jumpOffset.Value; set => jumpOffset.Value = value; }
+        internal bool IsForwardJump { get => isForwardJump.Value; set => isForwardJump.Value = value; }
 
         // Properties
         internal float VelX { get => velX.Value; set => velX.Value = value; }
@@ -123,7 +134,9 @@ namespace HorseTycoon
 
         private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
         {
-            if (!Context.IsPlayerFree || Game1.player.IsSitting() || Game1.player.swimming.Value || Game1.currentMinigame is not null || Game1.player.yJumpVelocity != 0 || !Game1.player.isRidingHorse())
+            // Allow jumping during the Horse Festival race even though the player isn't "free" (event is up).
+            bool canControl = Context.IsPlayerFree || FestivalRaceManager.RaceRidingActive;
+            if (!canControl || Game1.player.IsSitting() || Game1.player.swimming.Value || Game1.currentMinigame is not null || Game1.player.yJumpVelocity != 0 || !Game1.player.isRidingHorse())
                 return;
 
             if (e.Button == Config?.JumpButton)
@@ -138,12 +151,42 @@ namespace HorseTycoon
             {
                 PlayerJumpingWithHorse = false;
                 BlockedJump = false;
+                IsForwardJump = false;
                 Game1.player.canMove = true;
                 this.Helper.Events.GameLoop.UpdateTicked -= OnUpdateTicked;
                 return;
             }
-            Game1.player.position.X += VelX;
-            Game1.player.position.Y += VelY;
+
+            if (IsForwardJump)
+            {
+                // Drive the player along an ABSOLUTE path from the jump start. Using += let held-direction
+                // input movement stack onto the jump (overshoot when clearing objects); setting the position
+                // outright ignores that drift. Cap the travel at the target tile regardless of airtime.
+                float vx = VelX;
+                float vy = VelY;
+                float step = (float)Math.Sqrt(vx * vx + vy * vy);
+                if (JumpDistanceRemaining > 0f && step > 0f)
+                {
+                    if (step >= JumpDistanceRemaining)
+                    {
+                        float scale = JumpDistanceRemaining / step;
+                        vx *= scale;
+                        vy *= scale;
+                        JumpDistanceRemaining = 0f;
+                    }
+                    else
+                    {
+                        JumpDistanceRemaining -= step;
+                    }
+                    JumpOffset = new Vector2(JumpOffset.X + vx, JumpOffset.Y + vy);
+                }
+                Game1.player.Position = JumpStartPos + JumpOffset;
+            }
+            else
+            {
+                Game1.player.position.X += VelX;
+                Game1.player.position.Y += VelY;
+            }
             LastYJumpVelocity = Game1.player.yJumpVelocity;
         }
 

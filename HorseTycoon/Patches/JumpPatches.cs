@@ -96,6 +96,11 @@ namespace HorseTycoon
                     var stats = horse.GetHorseStats();
                     __result += stats.SpeedBoost;
                 }
+
+                // The race uses a custom sprint (the vanilla sprint buff's timer is frozen during the
+                // festival), so add its speed bonus here. Matches a +1 Speed buff in the riding formula.
+                if (FestivalRaceManager.IsSprinting)
+                    __result += 0.066f * Game1.currentGameTime.ElapsedGameTime.Milliseconds;
             }
         }
     }
