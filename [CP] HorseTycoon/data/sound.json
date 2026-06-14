@@ -36,5 +36,17 @@
 	"Category": "Sound",
 	"FilePaths": [ "{{AbsoluteFilePath: assets/snort.wav}}" ],
 	"StreamedVorbis": false
+		}}
+	},
+	{
+	"LogName": "Sound Data",
+	"Action": "EditData",
+	"Target": "Data/AudioChanges",
+	"Entries": {
+	"{{ModId}}_RaceStart": {
+	"ID": "{{ModId}}_RaceStart",
+	"Category": "Sound",
+	"FilePaths": [ "{{AbsoluteFilePath: assets/race_start.wav}}" ],
+	"StreamedVorbis": false
 		}}}
 	]}

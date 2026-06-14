@@ -134,6 +134,9 @@ namespace HorseTycoon
 
         private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
         {
+            if (FestivalRaceManager.IsStartCountdownActive)
+                return;
+
             // Allow jumping during the Horse Festival race even though the player isn't "free" (event is up).
             bool canControl = Context.IsPlayerFree || FestivalRaceManager.RaceRidingActive;
             if (!canControl || Game1.player.IsSitting() || Game1.player.swimming.Value || Game1.currentMinigame is not null || Game1.player.yJumpVelocity != 0 || !Game1.player.isRidingHorse())
