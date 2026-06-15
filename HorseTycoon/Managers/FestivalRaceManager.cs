@@ -53,7 +53,20 @@ namespace HorseTycoon
         // beforehand and treat them as "arrived mounted" if they were riding within this window.
         private const int EntryMountWindowTicks = 600;
 
-        private enum Phase { None, Pasture, Racing, Finished }
+        // Winner's circle tiles (1st, 2nd, 3rd place left-to-right), and Lewis's announcer position.
+        // Tune in-game with `ht_race_tile`.
+        private static readonly Point[] WinnersCircleTiles =
+        {
+            new(36, 13), // 1st place
+            new(34, 13), // 2nd place
+            new(32, 13), // 3rd place
+        };
+        private static readonly Point LewisAnnouncerTile = new(34, 10);
+
+        // Delay between the last player crossing the finish line and the ceremony starting.
+        private const float CeremonyDelayMs = 2000f;
+
+        private enum Phase { None, Pasture, Racing, Finished, Ceremony }
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
@@ -76,7 +89,14 @@ namespace HorseTycoon
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
 
+        private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
+        private readonly PerScreen<int> ceremonyStep = new(() => 0);
+
         private static FestivalRaceManager? Instance;
+
+        // Host-only: tracks finish order (UniqueMultiplayerIDs) and the 2-second ceremony delay.
+        private static readonly List<long> FinishOrder = new();
+        private static float HostCeremonyCountdown = -1f;
 
         /// <summary>True while the local racer's custom sprint is active (read by the speed patch).</summary>
         public static bool IsSprinting =>
@@ -92,10 +112,13 @@ namespace HorseTycoon
         private const string MsgPastureHorse = "PastureHorse";
         private record PastureHorseMessage(string HorseId, int Slot);
         private const string MsgOpenReadyCheck = "OpenReadyCheck";
+        private const string MsgPlayerFinished = "PlayerFinished";
+        private const string MsgStartCeremony = "StartCeremony";
+        private record StartCeremonyMessage(List<long> RankedPlayerIds);
 
         // Custom start sound registered as a Data/AudioChanges cue in [CP] HorseTycoon/data/sound.json.
         private const string RaceStartSoundCue = "CP.HorseTycoon_RaceStart";
-        private const int RaceStartSoundMs = 7000;
+        private const int RaceStartSoundMs = 8000;
 
         public void Initialize()
         {
@@ -225,6 +248,21 @@ namespace HorseTycoon
                 case Phase.Finished:
                     AdvanceHorseAnimations();
                     break;
+                case Phase.Ceremony:
+                    AdvanceHorseAnimations();
+                    this.UpdateCeremony();
+                    break;
+            }
+
+            // Host ticks the 2-second ceremony delay after all players have finished.
+            if (IsHost && HostCeremonyCountdown >= 0f)
+            {
+                HostCeremonyCountdown -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+                if (HostCeremonyCountdown <= 0f)
+                {
+                    HostCeremonyCountdown = -1f;
+                    this.BroadcastCeremony();
+                }
             }
 
             if (RaceRidingActive)
@@ -330,6 +368,18 @@ namespace HorseTycoon
             if (e.Type == MsgOpenReadyCheck && RaceFestival != null && phase.Value == Phase.Pasture)
             {
                 this.OpenRaceReadyCheck();
+                return;
+            }
+
+            if (e.Type == MsgPlayerFinished && IsHost && RaceFestival != null)
+            {
+                this.RecordFinish(e.ReadAs<long>());
+                return;
+            }
+
+            if (e.Type == MsgStartCeremony && RaceFestival != null)
+            {
+                this.StartCeremony(e.ReadAs<StartCeremonyMessage>().RankedPlayerIds);
                 return;
             }
 
@@ -708,6 +758,186 @@ namespace HorseTycoon
 
             phase.Value = Phase.Finished;
             Game1.drawObjectDialogue("You crossed the finish line!");
+
+            if (IsHost)
+                this.RecordFinish(Game1.player.UniqueMultiplayerID);
+            else
+                this.Helper.Multiplayer.SendMessage(
+                    Game1.player.UniqueMultiplayerID,
+                    MsgPlayerFinished,
+                    modIDs: new[] { this.Helper.ModRegistry.ModID });
+        }
+
+        private void RecordFinish(long farmerId)
+        {
+            if (FinishOrder.Contains(farmerId))
+                return;
+            FinishOrder.Add(farmerId);
+            this.Monitor.Log($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}", LogLevel.Debug);
+
+            int totalPlayers = Game1.getOnlineFarmers().Count();
+            if (FinishOrder.Count >= totalPlayers && HostCeremonyCountdown < 0f)
+                HostCeremonyCountdown = CeremonyDelayMs;
+        }
+
+        private void BroadcastCeremony()
+        {
+            var orderedIds = new List<long>(FinishOrder);
+            this.Helper.Multiplayer.SendMessage(
+                new StartCeremonyMessage(orderedIds),
+                MsgStartCeremony,
+                modIDs: new[] { this.Helper.ModRegistry.ModID });
+            // Host handles it locally — SendMessage does not deliver to the sender.
+            this.StartCeremony(orderedIds);
+        }
+
+        private void StartCeremony(List<long> rankedPlayerIds)
+        {
+            phase.Value = Phase.Ceremony;
+            ceremonyOrder.Value = new List<long>(rankedPlayerIds);
+            ceremonyStep.Value = 0;
+
+            long localId = Game1.player.UniqueMultiplayerID;
+            int placement = rankedPlayerIds.IndexOf(localId); // 0-based; -1 if not in top 3+
+
+            // Move the local rider + horse to their podium tile.
+            if (placement >= 0 && placement < WinnersCircleTiles.Length)
+            {
+                Point podium = WinnersCircleTiles[placement];
+                Game1.player.Position = TileToPixels(podium);
+                Game1.player.faceDirection(Game1.up);
+
+                Horse? horse = competitor.Value;
+                if (horse != null)
+                {
+                    horse.Position = TileToPixels(podium);
+                    horse.faceDirection(Game1.up);
+                }
+            }
+
+            Game1.player.CanMove = false;
+            Game1.player.Halt();
+
+            // Freeze camera on the center of the winner's circle.
+            Point center = WinnersCircleTiles[System.Math.Min(1, WinnersCircleTiles.Length - 1)];
+            Game1.viewportFreeze = true;
+            Game1.viewport.X = System.Math.Max(0, center.X * 64 - Game1.viewport.Width / 2);
+            Game1.viewport.Y = System.Math.Max(0, center.Y * 64 - Game1.viewport.Height / 2);
+
+            // Move Lewis to the announcer tile.
+            NPC? lewis = RaceFestival?.getActorByName("Lewis");
+            if (lewis != null)
+            {
+                lewis.Position = TileToPixels(LewisAnnouncerTile);
+                lewis.faceDirection(Game1.down);
+            }
+
+            this.Monitor.Log($"Ceremony started. Local placement (0-based): {placement}", LogLevel.Debug);
+        }
+
+        private void UpdateCeremony()
+        {
+            // Wait for any open dialogue/menu to be dismissed before advancing.
+            if (Game1.activeClickableMenu != null)
+                return;
+            this.AdvanceCeremonyStep();
+        }
+
+        private void AdvanceCeremonyStep()
+        {
+            ceremonyStep.Value++;
+
+            List<long> order = ceremonyOrder.Value;
+            long localId = Game1.player.UniqueMultiplayerID;
+
+            switch (ceremonyStep.Value)
+            {
+                case 1: // Opening line
+                    Game1.drawObjectDialogue(
+                        "Lewis: What a spectacular race! Let's see how our riders placed!");
+                    break;
+
+                case 2: // Announce 3rd place
+                    if (order.Count >= 3)
+                        Game1.drawObjectDialogue(
+                            $"Lewis: In 3rd place... {GetFarmerName(order[2])}! Congratulations!");
+                    else
+                        this.AdvanceCeremonyStep();
+                    break;
+
+                case 3: // Prize for 3rd
+                    if (order.Count >= 3 && order[2] == localId)
+                        AwardPrizes("(O)PrizeTicket");
+                    else
+                        this.AdvanceCeremonyStep();
+                    break;
+
+                case 4: // Announce 2nd place
+                    if (order.Count >= 2)
+                        Game1.drawObjectDialogue(
+                            $"Lewis: In 2nd place... {GetFarmerName(order[1])}! Well done!");
+                    else
+                        this.AdvanceCeremonyStep();
+                    break;
+
+                case 5: // Prize for 2nd
+                    if (order.Count >= 2 && order[1] == localId)
+                        AwardPrizes("(O)PrizeTicket");
+                    else
+                        this.AdvanceCeremonyStep();
+                    break;
+
+                case 6: // Announce 1st place
+                    if (order.Count >= 1)
+                    {
+                        Game1.drawObjectDialogue(
+                            $"Lewis: And the winner is... {GetFarmerName(order[0])}! " +
+                            "What a ride! You've earned a diamond and a prize ticket!");
+                        Game1.playSound("achievement");
+                    }
+                    else
+                        this.AdvanceCeremonyStep();
+                    break;
+
+                case 7: // Prize for 1st
+                    if (order.Count >= 1 && order[0] == localId)
+                        AwardPrizes("(O)PrizeTicket", "(O)72");
+                    else
+                        this.AdvanceCeremonyStep();
+                    break;
+
+                case 8: // Closing line
+                    Game1.drawObjectDialogue(
+                        "Lewis: Thank you all for participating in the Spring Horse Festival! " +
+                        "See you next year!");
+                    break;
+
+                case 9: // End festival
+                    this.EndFestival();
+                    break;
+            }
+        }
+
+        private static string GetFarmerName(long uniqueId) =>
+            Game1.getOnlineFarmers()
+                .FirstOrDefault(f => f.UniqueMultiplayerID == uniqueId)
+                ?.displayName ?? "Unknown";
+
+        private static void AwardPrizes(params string[] itemIds)
+        {
+            var items = itemIds.Select(id => ItemRegistry.Create(id)).ToList<Item>();
+            Game1.activeClickableMenu = new ItemGrabMenu(
+                items, false, true, InventoryMenu.highlightAllItems, null, null);
+        }
+
+        private void EndFestival()
+        {
+            Game1.viewportFreeze = false;
+            Game1.player.CanMove = true;
+
+            Event? festival = RaceFestival;
+            if (festival != null)
+                festival.endBehaviors(new[] { "end" }, Game1.currentLocation);
         }
 
         private void Reset()
@@ -728,6 +958,12 @@ namespace HorseTycoon
             wanderDir.Value = -1;
             wanderTicks.Value = 0;
             readyCheckOpen.Value = false;
+            ceremonyOrder.Value.Clear();
+            ceremonyStep.Value = 0;
+            // Static host-side state — safe to clear on any screen since only the host writes to these.
+            FinishOrder.Clear();
+            HostCeremonyCountdown = -1f;
+            Game1.viewportFreeze = false;
         }
 
         private static Vector2 TileToPixels(Point tile) => new(tile.X * 64f, tile.Y * 64f);
