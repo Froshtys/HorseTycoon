@@ -26,7 +26,7 @@
 			"LogName": "Horse Festival - Festival map (copy of Cindersap Forest)",
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_ForestFestival",
-			"FromFile": "assets/maps/ForestFestival.tmx"
+			"FromFile": "assets/maps/Forest-HorseFestival.tmx"
 		}
 	]
 }

@@ -41,7 +41,7 @@ namespace HorseTycoon
             new(0, 0), new(-4, 0), new(0, -4), new(4, 0), new(0, 4),
         };
         // Stall i's horse tile is (StartStall.X, StartStall.Y + i); horses break east into the course.
-        private static readonly Point StartStall = new(49, 47);
+        private static readonly Point StartStall = new(39, 47);
         // Finish band (inclusive tile rectangle).
         private static readonly Point FinishMin = new(38, 11);
         private static readonly Point FinishMax = new(40, 17);
