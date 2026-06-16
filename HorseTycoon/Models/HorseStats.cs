@@ -49,7 +49,7 @@ namespace HorseTycoon.Models
             }
         }
 
-        public float SpeedBoost { get { return this.TotalSpeed / 25f; } }
+        public float SpeedBoost { get { return this.TotalSpeed / 50f; } }
 
         // --- Sprint (Total Max 100) ---
         public int SprintIV { get => GetStat(nameof(SprintIV)); set => SetStat(nameof(SprintIV), value); }

@@ -27,6 +27,41 @@
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_ForestFestival",
 			"FromFile": "assets/maps/Forest-HorseFestival.tmx"
+		},
+		{
+			"LogName": "Horse Festival - Pierre's shop (carrots)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"Entries": {
+				"Festival_HorseFestival_Pierre": {
+					"Currency": 0,
+					"Owners": [
+						{
+							"Id": "Pierre",
+							"Name": "Pierre",
+							"Dialogues": [],
+							"RandomizeDialogueOnOpen": false,
+							"ClosedMessage": null
+						}
+					],
+					"Items": [
+						{
+							"Id": "Carrot",
+							"ItemId": "(O)Carrot",
+							"Price": 35,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "CarrotSeeds",
+							"ItemId": "(O)CarrotSeeds",
+							"Price": 20,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						}
+					]
+				}
+			}
 		}
 	]
 }

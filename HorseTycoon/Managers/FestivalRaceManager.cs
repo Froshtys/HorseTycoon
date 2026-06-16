@@ -45,6 +45,9 @@ namespace HorseTycoon
         // Finish band (inclusive tile rectangle).
         private static readonly Point FinishMin = new(38, 11);
         private static readonly Point FinishMax = new(40, 17);
+        // Decorative pony-ride horse in the pen to the left of Leah's house.
+        private static readonly Point PenHorseTile = new(94, 31);
+        private static readonly string[] AllSkins = { "Roan", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
 
         private const int WanderRepickMinTicks = 60;
         private const int WanderRepickMaxTicks = 180;
@@ -83,6 +86,8 @@ namespace HorseTycoon
         private readonly PerScreen<bool> readyCheckOpen = new(() => false);
         private readonly PerScreen<List<Vector2>> stallFenceTiles = new(() => new List<Vector2>());
         private readonly PerScreen<bool> stallsSpawned = new(() => false);
+        private readonly PerScreen<Horse?> penHorse = new(() => null);
+        private readonly PerScreen<NPC?> jasOnHorse = new(() => null);
         // -1 means inactive. Kept in real time so it ticks while the festival pauses the game clock.
         private readonly PerScreen<float> startCountdown = new(() => -1f);
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
@@ -345,6 +350,7 @@ namespace HorseTycoon
 
             // Every client builds its own stalls — the festival temp map's objects aren't net-synced.
             this.SpawnStartingStalls();
+            this.SpawnPenHorse();
 
             Horse? horse = lastRiddenMount.Value;
             bool arrivedMounted = horse != null && (Game1.ticks - lastMountedTick.Value) <= EntryMountWindowTicks;
@@ -451,6 +457,37 @@ namespace HorseTycoon
                 new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
                 new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
             });
+        }
+
+        private void SpawnPenHorse()
+        {
+            GameLocation loc = Game1.currentLocation;
+            var horse = new Horse(System.Guid.NewGuid(), PenHorseTile.X, PenHorseTile.Y);
+            horse.Name = "PenHorse";
+            horse.modData[HorseHelper.HorseSkinKey] = AllSkins[Game1.random.Next(AllSkins.Length)];
+            horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
+            horse.currentLocation = loc;
+            horse.Position = TileToPixels(PenHorseTile);
+            horse.Halt();
+            horse.faceDirection(Game1.left);
+            horse.EventActor = true;
+            if (!loc.characters.Contains(horse))
+                loc.characters.Add(horse);
+            SetGrazingAnimation(horse);
+            penHorse.Value = horse;
+            this.LockJasOnHorse(loc);
+        }
+
+        private void LockJasOnHorse(GameLocation loc)
+        {
+            NPC? jas = loc.characters.OfType<NPC>().FirstOrDefault(c => c.Name == "Jas");
+            if (jas == null)
+                return;
+            jas.EventActor = true;
+            jas.faceDirection(Game1.left);
+            jas.Sprite.currentFrame = 23;
+            jas.Sprite.StopAnimation();
+            jasOnHorse.Value = jas;
         }
 
         private static void AdvanceHorseAnimations()
@@ -947,6 +984,16 @@ namespace HorseTycoon
             this.startCountdown.Value = -1f;
             sprintPhase.Value = SprintPhase.Ready;
             sprintTimer.Value = 0f;
+            if (penHorse.Value != null)
+            {
+                penHorse.Value.currentLocation?.characters.Remove(penHorse.Value);
+                penHorse.Value = null;
+            }
+            if (jasOnHorse.Value != null)
+            {
+                jasOnHorse.Value.EventActor = false;
+                jasOnHorse.Value = null;
+            }
             if (pastureAnimal.Value != null)
             {
                 pastureAnimal.Value.currentLocation?.animals.Remove(pastureAnimal.Value.myID.Value);
