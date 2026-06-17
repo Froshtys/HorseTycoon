@@ -43,7 +43,7 @@ namespace HorseTycoon
         // Stall i's horse tile is (StartStall.X, StartStall.Y + i); horses break east into the course.
         private static readonly Point StartStall = new(39, 47);
         // Finish band (inclusive tile rectangle).
-        private static readonly Point FinishMin = new(38, 11);
+        private static readonly Point FinishMin = new(40, 11);
         private static readonly Point FinishMax = new(40, 17);
         // Decorative pony-ride horse in the pen to the left of Leah's house.
         private static readonly Point PenHorseTile = new(94, 31);
@@ -55,22 +55,104 @@ namespace HorseTycoon
         // NPC racers: Marnie, Leah, Abigail ride in the race as AI opponents.
         private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail" };
 
-        // Course waypoints: east → south over bridge → west over bridges → north to finish.
-        private static readonly Point[] NpcRaceWaypoints =
+
+        // Per-NPC race routes. Each NPC is assigned a different route by index.
+        // Add more routes here and each new NPC slot will pick the next one (cycling if needed).
+        private static readonly Point[][] NpcRaceRoutes =
         {
-            new(85, 50),  // east corridor
-            new(89, 69),  // south, approaching bridge
-            new(57, 70),  // west, after first bridge
-            new(39, 84),  // continuing west/south
-            new(39, 97),  // south bridge area
-            new(16, 80),  // west, after bridges
-            new(20, 30),  // north heading
-            new(39, 14),  // into the finish band
+            // Route 0 (Marnie) — main route east → south → west → north
+            new Point[]
+            {
+                new(85, 50),
+                new(89, 69),
+                new(57, 70),
+                new(39, 84),
+                new(39, 97),
+                new(16, 80),
+                new(20, 30),
+                new(44, 11), // past the finish
+            },
+            // Route 1 (Leah)
+            new Point[]
+            {
+                new(58, 47),
+                new(72, 49),
+                new(86, 51),
+                new(88, 59),
+                new(91, 69),
+                new(88, 73),
+                new(89, 76),
+                new(84, 77),
+                new(76, 79),
+                new(71, 76),
+                new(71, 72),
+                new(66, 70),
+                new(59, 72),
+                new(55, 76),
+                new(48, 79),
+                new(41, 78),
+                new(39, 84),
+                new(37, 89),
+                new(40, 94),
+                new(31, 97),
+                new(26, 94),
+                new(19, 93),
+                new(13, 86),
+                new(15, 82),
+                new(16, 75),
+                new(16, 68),
+                new(24, 62),
+                new(24, 53),
+                new(22, 48),
+                new(25, 40),
+                new(18, 30),
+                new(19, 24),
+                new(22, 18),
+                new(28, 14),
+                new(44, 13), // past the finish
+            },
+            // Route 2 (Abigail)
+
+            new Point[]
+            {
+                new(60, 48),
+                new(72, 49),
+                new(84, 50),
+                new(87, 57),
+                new(85, 64),
+                new(86, 71),
+                new(85, 76),
+                new(82, 78),
+                new(78, 78),
+                new(76, 79),
+                new(73, 76),
+                new(72, 73),
+                new(69, 70),
+                new(60, 71),
+                new(56, 75),
+                new(53, 79),
+                new(47, 79),
+                new(39, 84),
+                new(37, 89),
+                new(39, 92),
+                new(34, 97),
+                new(24, 93),
+                new(20, 90),
+                new(15, 85),
+                new(12, 77),
+                new(15, 70),
+                new(15, 58),
+                new(15, 44),
+                new(19, 38),
+                new(18, 25),
+                new(24, 17),
+                new(44, 15), // past the finish
+            },
         };
 
         // Pixel offset applied to each rider NPC so they appear seated on the horse.
         // Negative Y moves the sprite visually upward on screen; tune if the rider looks off.
-        private static readonly Vector2 RiderOffset = new(0f, -24f);
+        private static readonly Vector2 RiderOffset = new(-12f, -40f);
 
         // The game dismounts the player as they warp into the festival, so we capture the mount each tick
         // beforehand and treat them as "arrived mounted" if they were riding within this window.
@@ -80,11 +162,20 @@ namespace HorseTycoon
         // Tune in-game with `ht_race_tile`.
         private static readonly Point[] WinnersCircleTiles =
         {
-            new(36, 13), // 1st place
-            new(34, 13), // 2nd place
-            new(32, 13), // 3rd place
+            new(58, 12), // 1st place
+            new(56, 12), // 2nd place
+            new(54, 12), // 3rd place
         };
-        private static readonly Point LewisAnnouncerTile = new(34, 10);
+        private static readonly Point LewisAnnouncerTile = new(56, 9);
+        // Spectator tiles for players/NPCs who didn't make the podium, spread east-to-west south of the winners circle.
+        private static readonly Point[] SpectatorTiles =
+        {
+            new(56, 15),
+            new(54, 15),
+            new(58, 15),
+            new(52, 15),
+            new(60, 15),
+        };
 
         // Delay between the last player crossing the finish line and the ceremony starting.
         private const float CeremonyDelayMs = 2000f;
@@ -98,6 +189,7 @@ namespace HorseTycoon
             public long FakeId;
             public int TotalSpeed;
             public int TotalSprint;
+            public Point[] Route = NpcRaceRoutes[0];
             public int WaypointIndex;
             public bool Finished;
             public SprintPhase NpcSprintPhase = SprintPhase.Ready;
@@ -107,6 +199,8 @@ namespace HorseTycoon
             // A*-computed tile path to the current waypoint; driven by direct position updates.
             public List<Point> ComputedPath = new();
             public int PathIndex;
+            public float HoofSoundTimer;
+            public bool MovementDone;
         }
 
         private readonly IModHelper Helper;
@@ -341,8 +435,9 @@ namespace HorseTycoon
                     this.UpdateStartCountdown();
                     // animateOnce is gated on !Game1.eventUp, so we advance all horses ourselves.
                     AdvanceHorseAnimations();
-                    this.UpdateNpcRacers();
+                    // Check player finish first so the player wins any same-tick tie with an NPC.
                     this.CheckFinish();
+                    this.UpdateNpcRacers();
                     break;
                 case Phase.Finished:
                     AdvanceHorseAnimations();
@@ -532,6 +627,17 @@ namespace HorseTycoon
                 SetGrazingAnimation(horse);
         }
 
+        private static void SetIdleAnimation(Horse horse)
+        {
+            if (horse.Sprite == null) return;
+            bool flip = horse.FacingDirection == Game1.left;
+            horse.Sprite.loop = true;
+            horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
+            {
+                new FarmerSprite.AnimationFrame(7, 1000, secondaryArm: false, flip: flip),
+            });
+        }
+
         private static void SetGrazingAnimation(Horse horse)
         {
             if (horse.Sprite == null)
@@ -629,16 +735,24 @@ namespace HorseTycoon
             if (!Context.IsWorldReady)
                 return;
 
+            if (e.Button == SButton.Z)
+            {
+                this.Monitor.Log(
+                    $"Player tile: {Game1.player.Tile} | mounted: {Game1.player.isRidingHorse()} | location: {Game1.currentLocation?.Name}",
+                    LogLevel.Info);
+                return;
+            }
+
             // During the start countdown swallow action/tool presses. Without this, Fence.checkForAction
             // detects the fully-enclosed rider as "trapped" and smashes an adjacent fence to free them.
             if (this.startCountdown.Value >= 0f)
             {
-                if (e.Button.IsActionButton() || e.Button.IsUseToolButton() || e.Button == SButton.R)
+                if (e.Button.IsActionButton() || e.Button.IsUseToolButton() || e.Button == SButton.LeftShift || e.Button == SButton.RightShift)
                     this.Helper.Input.Suppress(e.Button);
                 return;
             }
 
-            if (RaceRidingActive && e.Button == SButton.R)
+            if (RaceRidingActive && (e.Button == SButton.LeftShift || e.Button == SButton.RightShift))
             {
                 this.TryStartSprint();
                 return;
@@ -893,7 +1007,7 @@ namespace HorseTycoon
                 return;
 
             phase.Value = Phase.Finished;
-            Game1.drawObjectDialogue("You crossed the finish line!");
+            Game1.addHUDMessage(new HUDMessage("Finished!", HUDMessage.achievement_type));
 
             if (IsHost)
                 this.RecordFinish(Game1.player.UniqueMultiplayerID);
@@ -936,7 +1050,7 @@ namespace HorseTycoon
             long localId = Game1.player.UniqueMultiplayerID;
             int placement = rankedPlayerIds.IndexOf(localId); // 0-based; -1 if not in top 3+
 
-            // Move the local rider + horse to their podium tile.
+            // Move the local rider + horse to their podium or spectator tile.
             if (placement >= 0 && placement < WinnersCircleTiles.Length)
             {
                 Point podium = WinnersCircleTiles[placement];
@@ -950,19 +1064,44 @@ namespace HorseTycoon
                     horse.faceDirection(Game1.up);
                 }
             }
+            else
+            {
+                int spectatorSlot = System.Math.Max(0, placement - WinnersCircleTiles.Length);
+                Point spec = SpectatorTiles[System.Math.Min(spectatorSlot, SpectatorTiles.Length - 1)];
+                Game1.player.Position = TileToPixels(spec);
+                Game1.player.faceDirection(Game1.up);
 
-            // Move NPC racers who placed in the top 3 to their podium tiles.
-            for (int i = 0; i < System.Math.Min(rankedPlayerIds.Count, WinnersCircleTiles.Length); i++)
+                Horse? horse = competitor.Value;
+                if (horse != null)
+                {
+                    horse.Position = TileToPixels(spec);
+                    horse.faceDirection(Game1.up);
+                }
+            }
+
+            // Move NPC racers to their podium or spectator tiles.
+            int npcSpectatorSlot = 0;
+            for (int i = 0; i < rankedPlayerIds.Count; i++)
             {
                 long id = rankedPlayerIds[i];
-                if (id >= 0) continue;
+                if (id >= 0) continue; // human player — handled above
                 NpcRacer? racer = npcRacers.Find(r => r.FakeId == id);
                 if (racer == null) continue;
-                Point podium = WinnersCircleTiles[i];
                 racer.Horse.controller = null;
                 racer.Horse.Halt();
-                racer.Horse.Position = TileToPixels(podium);
-                racer.Horse.faceDirection(Game1.up);
+                if (i < WinnersCircleTiles.Length)
+                {
+                    Point podium = WinnersCircleTiles[i];
+                    racer.Horse.Position = TileToPixels(podium);
+                    racer.Horse.faceDirection(Game1.up);
+                }
+                else
+                {
+                    Point spec = SpectatorTiles[System.Math.Min(npcSpectatorSlot, SpectatorTiles.Length - 1)];
+                    npcSpectatorSlot++;
+                    racer.Horse.Position = TileToPixels(spec);
+                    racer.Horse.faceDirection(Game1.up);
+                }
                 if (racer.Rider != null)
                     SyncRiderToHorse(racer.Rider, racer.Horse);
             }
@@ -1070,18 +1209,20 @@ namespace HorseTycoon
             }
         }
 
-        private static string GetFarmerName(long uniqueId) =>
-            Game1.getOnlineFarmers()
+        private static string GetFarmerName(long uniqueId)
+        {
+            if (uniqueId == Game1.player.UniqueMultiplayerID)
+                return Game1.player.Name;
+            return Game1.getAllFarmers()
                 .FirstOrDefault(f => f.UniqueMultiplayerID == uniqueId)
-                ?.displayName ?? "Unknown";
+                ?.Name ?? "Unknown";
+        }
 
         private string GetRacerName(long uniqueId)
         {
-            if (uniqueId < 0)
-            {
-                NpcRacer? racer = npcRacers.Find(r => r.FakeId == uniqueId);
-                return racer?.Rider?.displayName ?? racer?.Rider?.Name ?? "Mystery Rider";
-            }
+            NpcRacer? racer = npcRacers.Find(r => r.FakeId == uniqueId);
+            if (racer != null)
+                return racer.Rider?.displayName ?? racer.Rider?.Name ?? "Mystery Rider";
             return GetFarmerName(uniqueId);
         }
 
@@ -1157,6 +1298,7 @@ namespace HorseTycoon
             {
                 npc.currentLocation?.characters.Remove(npc);
                 npc.EventActor = false;
+                npc.drawOnTop = false;
                 npc.currentLocation = originalLoc;
                 if (originalLoc != null && !originalLoc.characters.Contains(npc))
                     originalLoc.characters.Add(npc);
@@ -1209,15 +1351,16 @@ namespace HorseTycoon
                 horse.EventActor = true;
                 if (!loc.characters.Contains(horse))
                     loc.characters.Add(horse);
-                SetGrazingAnimation(horse);
+                SetIdleAnimation(horse);
 
-                // Seat the rider on the horse.
+                // Seat the rider on the horse. drawOnTop ensures the rider renders above the horse sprite.
                 rider.EventActor = true;
+                rider.drawOnTop = true;
                 SyncRiderToHorse(rider, horse);
 
                 // Randomize Special-quality stats (IV options: 20, 30, 40).
-                int speedIV = rng.Next(2, 5) * 10;
-                int sprintIV = rng.Next(2, 5) * 10;
+                int speedIV = rng.Next(3, 6) * 10;
+                int sprintIV = rng.Next(3, 6) * 10;
 
                 var racer = new NpcRacer
                 {
@@ -1226,6 +1369,7 @@ namespace HorseTycoon
                     FakeId = nextNpcFakeId--,
                     TotalSpeed = speedIV,
                     TotalSprint = sprintIV,
+                    Route = NpcRaceRoutes[i % NpcRaceRoutes.Length],
                     WaypointIndex = 0,
                     NextSprintCheckMs = (float)(rng.NextDouble() * 5000.0 + 3000.0),
                 };
@@ -1252,18 +1396,29 @@ namespace HorseTycoon
 
             foreach (NpcRacer r in npcRacers)
             {
-                if (r.Finished) continue;
+                // Stop only when the full route is exhausted — not on finish crossing, so the
+                // horse rides through the finish band to its final waypoint past the line.
+                if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex >= r.Route.Length)
+                {
+                    if (!r.MovementDone)
+                    {
+                        r.MovementDone = true;
+                        SetGrazingAnimation(r.Horse);
+                    }
+                    continue;
+                }
 
                 UpdateNpcSprint(r, deltaMs);
 
                 // Compute A* path to next waypoint when the previous segment is exhausted.
-                if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex < NpcRaceWaypoints.Length)
-                    TryComputePathToWaypoint(r, loc, NpcRaceWaypoints[r.WaypointIndex++]);
+                if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex < r.Route.Length)
+                    TryComputePathToWaypoint(r, loc, r.Route[r.WaypointIndex++]);
 
                 // Drive position directly along the A*-computed tile path.
                 // This bypasses MovePosition (blocked during eventUp) while still respecting
                 // the collision-aware path that A* produced.
                 float step = ComputeNpcSpeedPixelsPerMs(r) * deltaMs;
+                float moved = 0f;
                 while (step > 0f && r.PathIndex < r.ComputedPath.Count)
                 {
                     Vector2 target = TileToPixels(r.ComputedPath[r.PathIndex]);
@@ -1275,6 +1430,7 @@ namespace HorseTycoon
                     {
                         r.Horse.Position = target;
                         r.Horse.faceDirection(GetFacingDirection(diff));
+                        moved += dist;
                         step -= dist;
                         r.PathIndex++;
                     }
@@ -1283,7 +1439,19 @@ namespace HorseTycoon
                         diff.Normalize();
                         r.Horse.Position += diff * step;
                         r.Horse.faceDirection(GetFacingDirection(diff));
+                        moved += step;
                         step = 0f;
+                    }
+                }
+
+                // Play hoof sounds proportional to distance traveled (one beat per tile).
+                if (moved > 0f)
+                {
+                    r.HoofSoundTimer -= moved;
+                    if (r.HoofSoundTimer <= 0f)
+                    {
+                        r.HoofSoundTimer += 64f; // one beat per tile
+                        loc.localSound("thudStep");
                     }
                 }
 
@@ -1298,15 +1466,17 @@ namespace HorseTycoon
                 if (r.Rider != null)
                     SyncRiderToHorse(r.Rider, r.Horse);
 
-                // Finish detection.
-                Vector2 t = r.Horse.Tile;
-                if (t.X >= FinishMin.X && t.X <= FinishMax.X
-                    && t.Y >= FinishMin.Y && t.Y <= FinishMax.Y)
+                // Finish detection — record the crossing but keep moving; the route ends past the line.
+                if (!r.Finished)
                 {
-                    r.Finished = true;
-                    r.Horse.Halt();
-                    if (IsHost)
-                        this.RecordFinish(r.FakeId);
+                    Vector2 t = r.Horse.Tile;
+                    if (t.X >= FinishMin.X && t.X <= FinishMax.X
+                        && t.Y >= FinishMin.Y && t.Y <= FinishMax.Y)
+                    {
+                        r.Finished = true;
+                        if (IsHost)
+                            this.RecordFinish(r.FakeId);
+                    }
                 }
             }
         }
@@ -1343,7 +1513,7 @@ namespace HorseTycoon
 
         private static float ComputeNpcSpeedPixelsPerMs(NpcRacer r)
         {
-            float tilesPerSec = 2f + (r.TotalSpeed / 50f) * 1.5f;
+            float tilesPerSec = 5f + (r.TotalSpeed / 20);
             if (r.NpcSprintPhase == SprintPhase.Sprinting)
                 tilesPerSec *= 1.5f;
             return tilesPerSec * 64f / 1000f;
@@ -1398,11 +1568,7 @@ namespace HorseTycoon
         private static void SyncRiderToHorse(NPC rider, Horse horse)
         {
             rider.Position = horse.Position + RiderOffset;
-            int dir = horse.FacingDirection;
-            rider.FacingDirection = dir;
-            // First frame of each directional row: down=0, right=4, up=8, left=12.
-            rider.Sprite.currentFrame = dir * 4;
-            rider.Sprite.StopAnimation();
+            rider.faceDirection(horse.FacingDirection);
         }
 
         private static bool IsGalloppingAnimation(Horse horse, int dir)

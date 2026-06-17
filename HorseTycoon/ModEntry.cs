@@ -392,8 +392,8 @@ namespace HorseTycoon
             // buff timer is frozen while the festival pauses time).
             if (FestivalRaceManager.RaceRidingActive) return;
 
-            // 1. Check for Sprint Key 'R'
-            if (e.Button != SButton.R) return;
+            // 1. Check for Sprint Key (Left or Right Shift)
+            if (e.Button != SButton.LeftShift && e.Button != SButton.RightShift) return;
 
             // 2. Get Horse Data
             var horse = HorseHelper.GetFarmAnimalForHorse(Game1.player.mount);
