@@ -52,6 +52,26 @@ namespace HorseTycoon
         private const int WanderRepickMinTicks = 60;
         private const int WanderRepickMaxTicks = 180;
 
+        // NPC racers: Marnie, Leah, Abigail ride in the race as AI opponents.
+        private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail" };
+
+        // Course waypoints: east → south over bridge → west over bridges → north to finish.
+        private static readonly Point[] NpcRaceWaypoints =
+        {
+            new(85, 50),  // east corridor
+            new(89, 69),  // south, approaching bridge
+            new(57, 70),  // west, after first bridge
+            new(39, 84),  // continuing west/south
+            new(39, 97),  // south bridge area
+            new(16, 80),  // west, after bridges
+            new(20, 30),  // north heading
+            new(39, 14),  // into the finish band
+        };
+
+        // Pixel offset applied to each rider NPC so they appear seated on the horse.
+        // Negative Y moves the sprite visually upward on screen; tune if the rider looks off.
+        private static readonly Vector2 RiderOffset = new(0f, -24f);
+
         // The game dismounts the player as they warp into the festival, so we capture the mount each tick
         // beforehand and treat them as "arrived mounted" if they were riding within this window.
         private const int EntryMountWindowTicks = 600;
@@ -70,6 +90,24 @@ namespace HorseTycoon
         private const float CeremonyDelayMs = 2000f;
 
         private enum Phase { None, Pasture, Racing, Finished, Ceremony }
+
+        private class NpcRacer
+        {
+            public Horse Horse = null!;
+            public NPC? Rider;
+            public long FakeId;
+            public int TotalSpeed;
+            public int TotalSprint;
+            public int WaypointIndex;
+            public bool Finished;
+            public SprintPhase NpcSprintPhase = SprintPhase.Ready;
+            public float NpcSprintTimer;
+            public float NextSprintCheckMs;
+            public int LastAnimDir = -1;
+            // A*-computed tile path to the current waypoint; driven by direct position updates.
+            public List<Point> ComputedPath = new();
+            public int PathIndex;
+        }
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
@@ -96,6 +134,40 @@ namespace HorseTycoon
 
         private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
         private readonly PerScreen<int> ceremonyStep = new(() => 0);
+
+        // NPC racers are the same object list for every screen; spawned once per race via guard flags.
+        private readonly List<NpcRacer> npcRacers = new();
+        // Tracks NPCs borrowed from their world locations so they can be restored on festival end.
+        private readonly List<(NPC Npc, GameLocation OriginalLocation)> borrowedRiders = new();
+        private bool npcRidersBorrowed = false;
+        private bool npcRacersSpawned = false;
+        private long nextNpcFakeId = -1L;
+
+        // Holding tiles for borrowed NPCs during the pasture phase (before stall assignment).
+        private static readonly Point[] NpcRiderHoldingTiles = { new(92, 20), new(92, 22), new(92, 24) };
+
+        // PathFindController cannot be referenced by name at compile time (its [InstanceStatics]
+        // attribute causes the type to be absent from the public reference surface), so we access
+        // it entirely through reflection cached here at class-load time.
+        private static readonly System.Type? PfcType =
+            typeof(Game1).Assembly.GetTypes().FirstOrDefault(t => t.Name == "PathFindController");
+        private static readonly System.Reflection.FieldInfo ControllerField =
+            AccessTools.Field(typeof(Character), "controller");
+        private static readonly System.Reflection.MethodInfo? PfcUpdateMethod =
+            PfcType?.GetMethod("update", new[] { typeof(GameTime) });
+        private static readonly System.Reflection.FieldInfo? PfcPathField =
+            PfcType?.GetField("pathToEndPoint",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance);
+        private static readonly System.Reflection.ConstructorInfo? PfcCtor =
+            PfcType?.GetConstructors().FirstOrDefault(c =>
+            {
+                var p = c.GetParameters();
+                return p.Length == 4
+                    && p[2].ParameterType == typeof(Point)
+                    && p[3].ParameterType == typeof(int);
+            });
+
 
         private static FestivalRaceManager? Instance;
 
@@ -157,6 +229,27 @@ namespace HorseTycoon
                 (_, _) => this.Monitor.Log(
                     $"Player tile: {Game1.player.Tile} | mounted: {Game1.player.isRidingHorse()} | location: {Game1.currentLocation?.Name}",
                     LogLevel.Info));
+
+            this.Helper.ConsoleCommands.Add(
+                "ht_race_restart",
+                "Restarts the horse festival race from the pasture phase. Works from any race phase.",
+                (_, _) => this.RestartRace());
+
+            this.Helper.ConsoleCommands.Add(
+                "ht_race_pfc_info",
+                "Dumps PathFindController reflection info for debugging NPC pathfinding.",
+                (_, _) =>
+                {
+                    if (PfcType == null) { this.Monitor.Log("PfcType: NULL", LogLevel.Error); return; }
+                    this.Monitor.Log($"PfcType: {PfcType.FullName}", LogLevel.Info);
+                    foreach (var ctor in PfcType.GetConstructors())
+                    {
+                        var parms = string.Join(", ", System.Array.ConvertAll(ctor.GetParameters(), p => $"{p.ParameterType.Name} {p.Name}"));
+                        this.Monitor.Log($"  ctor({parms})", LogLevel.Info);
+                    }
+                    var upd = PfcType.GetMethod("update", new[] { typeof(GameTime) });
+                    this.Monitor.Log($"PfcUpdateMethod: {(upd == null ? "NULL" : upd.ToString())}", LogLevel.Info);
+                });
         }
 
         /// <summary>True while the local player is mounted and the festival is in its Racing or Finished phase.</summary>
@@ -248,10 +341,12 @@ namespace HorseTycoon
                     this.UpdateStartCountdown();
                     // animateOnce is gated on !Game1.eventUp, so we advance all horses ourselves.
                     AdvanceHorseAnimations();
+                    this.UpdateNpcRacers();
                     this.CheckFinish();
                     break;
                 case Phase.Finished:
                     AdvanceHorseAnimations();
+                    this.UpdateNpcRacers();
                     break;
                 case Phase.Ceremony:
                     AdvanceHorseAnimations();
@@ -351,6 +446,7 @@ namespace HorseTycoon
             // Every client builds its own stalls — the festival temp map's objects aren't net-synced.
             this.SpawnStartingStalls();
             this.SpawnPenHorse();
+            // NPC riders are borrowed in SpawnNpcRacers (race start) so they aren't visible during the pasture phase.
 
             Horse? horse = lastRiddenMount.Value;
             bool arrivedMounted = horse != null && (Game1.ticks - lastMountedTick.Value) <= EntryMountWindowTicks;
@@ -676,6 +772,8 @@ namespace HorseTycoon
             Game1.player.Halt();
             Game1.player.UsingTool = false;
 
+            this.SpawnNpcRacers(loc, System.Math.Max(1, Game1.getOnlineFarmers().Count()));
+
             Game1.playSound(RaceStartSoundCue);
             this.startCountdown.Value = RaceStartSoundMs;
         }
@@ -695,7 +793,7 @@ namespace HorseTycoon
             if (stallsSpawned.Value || loc == null)
                 return;
 
-            int count = System.Math.Max(1, Game1.getOnlineFarmers().Count());
+            int count = System.Math.Max(1, Game1.getOnlineFarmers().Count()) + NpcRiderNames.Length;
 
             int minYOffset = 0, maxYOffset = 0;
             for (int i = 0; i < count; i++)
@@ -755,7 +853,8 @@ namespace HorseTycoon
             this.startCountdown.Value = -1f;
             Game1.player.CanMove = true;
             int totalPlayers = System.Math.Max(1, Game1.getOnlineFarmers().Count());
-            for (int i = 0; i < totalPlayers; i++)
+            int totalSlots = totalPlayers + NpcRiderNames.Length;
+            for (int i = 0; i < totalSlots; i++)
                 this.OpenStartGate(i);
         }
 
@@ -812,7 +911,7 @@ namespace HorseTycoon
             FinishOrder.Add(farmerId);
             this.Monitor.Log($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}", LogLevel.Debug);
 
-            int totalPlayers = Game1.getOnlineFarmers().Count();
+            int totalPlayers = Game1.getOnlineFarmers().Count() + NpcRiderNames.Length;
             if (FinishOrder.Count >= totalPlayers && HostCeremonyCountdown < 0f)
                 HostCeremonyCountdown = CeremonyDelayMs;
         }
@@ -850,6 +949,22 @@ namespace HorseTycoon
                     horse.Position = TileToPixels(podium);
                     horse.faceDirection(Game1.up);
                 }
+            }
+
+            // Move NPC racers who placed in the top 3 to their podium tiles.
+            for (int i = 0; i < System.Math.Min(rankedPlayerIds.Count, WinnersCircleTiles.Length); i++)
+            {
+                long id = rankedPlayerIds[i];
+                if (id >= 0) continue;
+                NpcRacer? racer = npcRacers.Find(r => r.FakeId == id);
+                if (racer == null) continue;
+                Point podium = WinnersCircleTiles[i];
+                racer.Horse.controller = null;
+                racer.Horse.Halt();
+                racer.Horse.Position = TileToPixels(podium);
+                racer.Horse.faceDirection(Game1.up);
+                if (racer.Rider != null)
+                    SyncRiderToHorse(racer.Rider, racer.Horse);
             }
 
             Game1.player.CanMove = false;
@@ -897,7 +1012,7 @@ namespace HorseTycoon
                 case 2: // Announce 3rd place
                     if (order.Count >= 3)
                         Game1.drawObjectDialogue(
-                            $"Lewis: In 3rd place... {GetFarmerName(order[2])}! Congratulations!");
+                            $"Lewis: In 3rd place... {this.GetRacerName(order[2])}! Congratulations!");
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -912,7 +1027,7 @@ namespace HorseTycoon
                 case 4: // Announce 2nd place
                     if (order.Count >= 2)
                         Game1.drawObjectDialogue(
-                            $"Lewis: In 2nd place... {GetFarmerName(order[1])}! Well done!");
+                            $"Lewis: In 2nd place... {this.GetRacerName(order[1])}! Well done!");
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -928,7 +1043,7 @@ namespace HorseTycoon
                     if (order.Count >= 1)
                     {
                         Game1.drawObjectDialogue(
-                            $"Lewis: And the winner is... {GetFarmerName(order[0])}! " +
+                            $"Lewis: And the winner is... {this.GetRacerName(order[0])}! " +
                             "What a ride! You've earned a diamond and a prize ticket!");
                         Game1.playSound("achievement");
                     }
@@ -960,6 +1075,16 @@ namespace HorseTycoon
                 .FirstOrDefault(f => f.UniqueMultiplayerID == uniqueId)
                 ?.displayName ?? "Unknown";
 
+        private string GetRacerName(long uniqueId)
+        {
+            if (uniqueId < 0)
+            {
+                NpcRacer? racer = npcRacers.Find(r => r.FakeId == uniqueId);
+                return racer?.Rider?.displayName ?? racer?.Rider?.Name ?? "Mystery Rider";
+            }
+            return GetFarmerName(uniqueId);
+        }
+
         private static void AwardPrizes(params string[] itemIds)
         {
             var items = itemIds.Select(id => ItemRegistry.Create(id)).ToList<Item>();
@@ -969,12 +1094,397 @@ namespace HorseTycoon
 
         private void EndFestival()
         {
+            this.RestoreNpcRiders();
+
             Game1.viewportFreeze = false;
             Game1.player.CanMove = true;
 
             Event? festival = RaceFestival;
             if (festival != null)
                 festival.endBehaviors(new[] { "end" }, Game1.currentLocation);
+        }
+
+        // ======================== NPC Racer System ========================
+
+        /// <summary>
+        /// Pull Marnie, Leah, and Abigail out of their current world locations and place them
+        /// in the festival location so they are visible during the pasture phase and available
+        /// when the race starts. Called from <see cref="EnterPasture"/>; guarded against double-run.
+        /// </summary>
+        private void BorrowNpcRiders()
+        {
+            if (npcRidersBorrowed) return;
+            npcRidersBorrowed = true;
+
+            GameLocation festLoc = Game1.currentLocation;
+
+            for (int i = 0; i < NpcRiderNames.Length; i++)
+            {
+                string name = NpcRiderNames[i];
+                NPC? npc = Game1.getCharacterFromName(name);
+                if (npc == null)
+                {
+                    this.Monitor.Log($"Could not find NPC '{name}' to borrow for the race.", LogLevel.Warn);
+                    continue;
+                }
+
+                GameLocation originalLoc = npc.currentLocation;
+                borrowedRiders.Add((npc, originalLoc));
+
+                originalLoc?.characters.Remove(npc);
+                npc.currentLocation = festLoc;
+                Point holdTile = i < NpcRiderHoldingTiles.Length
+                    ? NpcRiderHoldingTiles[i]
+                    : new Point(92, 20 + i * 2);
+                npc.Position = TileToPixels(holdTile);
+                npc.faceDirection(Game1.left);
+                npc.EventActor = true;
+
+                if (!festLoc.characters.Contains(npc))
+                    festLoc.characters.Add(npc);
+
+                this.Monitor.Log($"Borrowed '{name}' from {originalLoc?.Name ?? "null"} for the race.", LogLevel.Debug);
+            }
+        }
+
+        /// <summary>
+        /// Return all borrowed rider NPCs to their original world locations.
+        /// Safe to call multiple times; clears <see cref="borrowedRiders"/> after running.
+        /// </summary>
+        private void RestoreNpcRiders()
+        {
+            foreach ((NPC npc, GameLocation originalLoc) in borrowedRiders)
+            {
+                npc.currentLocation?.characters.Remove(npc);
+                npc.EventActor = false;
+                npc.currentLocation = originalLoc;
+                if (originalLoc != null && !originalLoc.characters.Contains(npc))
+                    originalLoc.characters.Add(npc);
+            }
+            borrowedRiders.Clear();
+            npcRidersBorrowed = false;
+        }
+
+        /// <summary>
+        /// Spawn one Horse + rider pair per NpcRiderNames entry into the stalls immediately after
+        /// the player slots. Idempotent — guarded by <see cref="npcRacersSpawned"/>.
+        /// </summary>
+        private void SpawnNpcRacers(GameLocation loc, int playerSlotCount)
+        {
+            if (npcRacersSpawned) return;
+            npcRacersSpawned = true;
+
+            this.BorrowNpcRiders();
+
+            var rng = new System.Random(
+                (int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
+
+            for (int i = 0; i < NpcRiderNames.Length; i++)
+            {
+                string riderName = NpcRiderNames[i];
+                int slot = playerSlotCount + i;
+                Point stallTile = StallHorseTile(slot);
+
+                // The rider NPC must already be in the festival location (placed by the event script).
+                NPC? rider = loc.characters.OfType<NPC>()
+                    .FirstOrDefault(c => c.Name == riderName);
+                if (rider == null)
+                {
+                    this.Monitor.Log(
+                        $"NPC racer '{riderName}' not found in festival location — skipping.",
+                        LogLevel.Warn);
+                    continue;
+                }
+
+                // Create the AI horse in the stall.
+                var horse = new Horse(System.Guid.NewGuid(), stallTile.X, stallTile.Y);
+                horse.Name = riderName + "RaceHorse";
+                horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
+                horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
+                horse.currentLocation = loc;
+                horse.Position = TileToPixels(stallTile);
+                horse.Halt();
+                horse.faceDirection(Game1.right);
+                // Suppress Horse.update() so it can't overwrite the gallop animation with idle frames.
+                horse.EventActor = true;
+                if (!loc.characters.Contains(horse))
+                    loc.characters.Add(horse);
+                SetGrazingAnimation(horse);
+
+                // Seat the rider on the horse.
+                rider.EventActor = true;
+                SyncRiderToHorse(rider, horse);
+
+                // Randomize Special-quality stats (IV options: 20, 30, 40).
+                int speedIV = rng.Next(2, 5) * 10;
+                int sprintIV = rng.Next(2, 5) * 10;
+
+                var racer = new NpcRacer
+                {
+                    Horse = horse,
+                    Rider = rider,
+                    FakeId = nextNpcFakeId--,
+                    TotalSpeed = speedIV,
+                    TotalSprint = sprintIV,
+                    WaypointIndex = 0,
+                    NextSprintCheckMs = (float)(rng.NextDouble() * 5000.0 + 3000.0),
+                };
+                npcRacers.Add(racer);
+
+                this.Monitor.Log(
+                    $"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}",
+                    LogLevel.Debug);
+            }
+        }
+
+        /// <summary>
+        /// Called every Racing tick. Moves each NPC horse directly toward its current waypoint
+        /// at a stat-scaled speed, syncs the rider position, and checks the finish band.
+        /// Waypoints are predefined to follow the open navigable paths on the course map, so
+        /// direct interpolation is equivalent to path-following for collision purposes.
+        /// </summary>
+        private void UpdateNpcRacers()
+        {
+            if (startCountdown.Value >= 0f) return;
+
+            GameLocation loc = Game1.currentLocation;
+            int deltaMs = Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+
+            foreach (NpcRacer r in npcRacers)
+            {
+                if (r.Finished) continue;
+
+                UpdateNpcSprint(r, deltaMs);
+
+                // Compute A* path to next waypoint when the previous segment is exhausted.
+                if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex < NpcRaceWaypoints.Length)
+                    TryComputePathToWaypoint(r, loc, NpcRaceWaypoints[r.WaypointIndex++]);
+
+                // Drive position directly along the A*-computed tile path.
+                // This bypasses MovePosition (blocked during eventUp) while still respecting
+                // the collision-aware path that A* produced.
+                float step = ComputeNpcSpeedPixelsPerMs(r) * deltaMs;
+                while (step > 0f && r.PathIndex < r.ComputedPath.Count)
+                {
+                    Vector2 target = TileToPixels(r.ComputedPath[r.PathIndex]);
+                    Vector2 diff = target - r.Horse.Position;
+                    float dist = diff.Length();
+                    if (dist < 0.5f) { r.PathIndex++; continue; }
+
+                    if (step >= dist)
+                    {
+                        r.Horse.Position = target;
+                        r.Horse.faceDirection(GetFacingDirection(diff));
+                        step -= dist;
+                        r.PathIndex++;
+                    }
+                    else
+                    {
+                        diff.Normalize();
+                        r.Horse.Position += diff * step;
+                        r.Horse.faceDirection(GetFacingDirection(diff));
+                        step = 0f;
+                    }
+                }
+
+                // Re-apply gallop animation on direction change or if horse.update() reset it.
+                int dir = r.Horse.FacingDirection;
+                if (dir != r.LastAnimDir || !IsGalloppingAnimation(r.Horse, dir))
+                {
+                    r.LastAnimDir = dir;
+                    SetGalloppingAnimation(r.Horse, dir);
+                }
+
+                if (r.Rider != null)
+                    SyncRiderToHorse(r.Rider, r.Horse);
+
+                // Finish detection.
+                Vector2 t = r.Horse.Tile;
+                if (t.X >= FinishMin.X && t.X <= FinishMax.X
+                    && t.Y >= FinishMin.Y && t.Y <= FinishMax.Y)
+                {
+                    r.Finished = true;
+                    r.Horse.Halt();
+                    if (IsHost)
+                        this.RecordFinish(r.FakeId);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Runs A* via PathFindController's constructor, then extracts the computed tile path into
+        /// <paramref name="r"/>.ComputedPath. The controller itself is discarded — we drive
+        /// position directly so we never call MovePosition (blocked during eventUp).
+        /// </summary>
+        private bool TryComputePathToWaypoint(NpcRacer r, GameLocation loc, Point dest)
+        {
+            if (PfcCtor == null || PfcPathField == null)
+            {
+                this.Monitor.Log("PathFindController reflection unavailable — NPC horses cannot pathfind.", LogLevel.Error);
+                return false;
+            }
+            try
+            {
+                var pfc = PfcCtor.Invoke(new object?[] { r.Horse, loc, dest, -1 });
+                if (pfc == null) return false;
+                var stack = PfcPathField.GetValue(pfc) as Stack<Point>;
+                if (stack == null || stack.Count == 0) return false;
+                // Stack top = next step from current position; List preserves that order.
+                r.ComputedPath = new List<Point>(stack);
+                r.PathIndex = 0;
+                return true;
+            }
+            catch (System.Exception ex)
+            {
+                this.Monitor.Log($"Path computation failed for {dest}: {ex.InnerException?.Message ?? ex.Message}", LogLevel.Warn);
+                return false;
+            }
+        }
+
+        private static float ComputeNpcSpeedPixelsPerMs(NpcRacer r)
+        {
+            float tilesPerSec = 2f + (r.TotalSpeed / 50f) * 1.5f;
+            if (r.NpcSprintPhase == SprintPhase.Sprinting)
+                tilesPerSec *= 1.5f;
+            return tilesPerSec * 64f / 1000f;
+        }
+
+        private static int GetFacingDirection(Vector2 moveDir)
+        {
+            if (System.Math.Abs(moveDir.X) > System.Math.Abs(moveDir.Y))
+                return moveDir.X > 0 ? Game1.right : Game1.left;
+            return moveDir.Y > 0 ? Game1.down : Game1.up;
+        }
+
+        private static void UpdateNpcSprint(NpcRacer r, int deltaMs)
+        {
+            if (r.NpcSprintPhase == SprintPhase.Sprinting || r.NpcSprintPhase == SprintPhase.Exhausted)
+            {
+                r.NpcSprintTimer -= deltaMs;
+                if (r.NpcSprintTimer > 0f) return;
+
+                if (r.NpcSprintPhase == SprintPhase.Sprinting)
+                {
+                    r.NpcSprintPhase = SprintPhase.Exhausted;
+                    r.NpcSprintTimer = SprintCooldownMs;
+                }
+                else
+                {
+                    r.NpcSprintPhase = SprintPhase.Ready;
+                    r.NpcSprintTimer = 0f;
+                }
+                return;
+            }
+
+            // Ready — count down to the next sprint opportunity.
+            r.NextSprintCheckMs -= deltaMs;
+            if (r.NextSprintCheckMs > 0f) return;
+
+            if (Game1.random.NextDouble() < 0.5)
+            {
+                float durationMs = System.Math.Clamp((r.TotalSprint / 4f) * 1000f, 1000f, 25000f);
+                r.NpcSprintPhase = SprintPhase.Sprinting;
+                r.NpcSprintTimer = durationMs;
+            }
+            r.NextSprintCheckMs = (float)(Game1.random.NextDouble() * 8000.0 + 3000.0);
+        }
+
+
+        /// <summary>
+        /// Moves a rider NPC to the horse's position + <see cref="RiderOffset"/> and locks their
+        /// sprite to the neutral standing frame that matches the horse's facing direction.
+        /// Standard NPC spritesheet layout: down=0, right=4, up=8, left=12.
+        /// </summary>
+        private static void SyncRiderToHorse(NPC rider, Horse horse)
+        {
+            rider.Position = horse.Position + RiderOffset;
+            int dir = horse.FacingDirection;
+            rider.FacingDirection = dir;
+            // First frame of each directional row: down=0, right=4, up=8, left=12.
+            rider.Sprite.currentFrame = dir * 4;
+            rider.Sprite.StopAnimation();
+        }
+
+        private static bool IsGalloppingAnimation(Horse horse, int dir)
+        {
+            var anim = horse.Sprite?.CurrentAnimation;
+            if (anim == null || anim.Count == 0) return false;
+            int expectedFirst = dir switch { 0 => 15, 1 or 3 => 8, _ => 1 };
+            return anim[0].frame == expectedFirst;
+        }
+
+        /// <summary>
+        /// Sets the horse's sprite to the vanilla mounted-gallop animation for the given direction.
+        /// Frames sourced from Horse.update() in vanilla 1.6: right/left use 8–13, up uses 15–20,
+        /// down uses 1–6, each at 70 ms. Only reassigns when direction actually changes.
+        /// </summary>
+        private static void SetGalloppingAnimation(Horse horse, int dir)
+        {
+            bool flip = dir == Game1.left;
+            List<FarmerSprite.AnimationFrame> frames = dir switch
+            {
+                // up
+                0 => new List<FarmerSprite.AnimationFrame>
+                {
+                    new(15, 70), new(16, 70), new(17, 70),
+                    new(18, 70), new(19, 70), new(20, 70),
+                },
+                // right or left (same frames, left uses flip)
+                1 or 3 => new List<FarmerSprite.AnimationFrame>
+                {
+                    new(8,  70, false, flip), new(9,  70, false, flip),
+                    new(10, 70, false, flip), new(11, 70, false, flip),
+                    new(12, 70, false, flip), new(13, 70, false, flip),
+                },
+                // down
+                _ => new List<FarmerSprite.AnimationFrame>
+                {
+                    new(1, 70), new(2, 70), new(3, 70),
+                    new(4, 70), new(5, 70), new(6, 70),
+                },
+            };
+            horse.Sprite.loop = true;
+            horse.Sprite.setCurrentAnimation(frames);
+        }
+
+        // ======================== End NPC Racer System ========================
+
+        private void RestartRace()
+        {
+            if (RaceFestival == null)
+            {
+                this.Monitor.Log("ht_race_restart: not currently in the horse festival.", LogLevel.Warn);
+                return;
+            }
+
+            // Capture competitor before Reset() clears it.
+            Horse? horse = competitor.Value ?? Game1.player.mount;
+
+            this.Reset(); // removes stalls/NPC racers, sets phase = None
+
+            // Fully undo LineUp()'s player state: dismount, clear jump physics, restore movement.
+            if (Game1.player.mount != null)
+                Game1.player.mount.rider = null;
+            Game1.player.mount = null;
+            Game1.player.freezePause = 0;
+            Game1.player.yJumpVelocity = 0f;
+            Game1.player.yJumpOffset = 0;
+            Game1.player.CanMove = true;
+            Game1.player.Halt();
+            Game1.player.completelyStopAnimatingOrDoingAction();
+
+            // Return their horse to the pasture and seed lastRiddenMount so EnterPasture
+            // (called on the next Phase.None tick) picks it up automatically.
+            if (horse != null)
+            {
+                int slot = PastureSlotFor(Game1.player);
+                PlaceHorseInPasture(horse, slot);
+                Game1.player.Position = TileToPixels(PastureSpawnForSlot(slot));
+                lastRiddenMount.Value = horse;
+                lastMountedTick.Value = Game1.ticks;
+            }
+
+            this.Monitor.Log("ht_race_restart: reset to pasture phase.", LogLevel.Info);
         }
 
         private void Reset()
@@ -1011,6 +1521,19 @@ namespace HorseTycoon
             FinishOrder.Clear();
             HostCeremonyCountdown = -1f;
             Game1.viewportFreeze = false;
+
+            // NPC racer cleanup: remove AI horses; restore rider NPCs to their original locations.
+            foreach (NpcRacer r in npcRacers)
+            {
+                r.Horse.controller = null;
+                r.Horse.currentLocation?.characters.Remove(r.Horse);
+            }
+            npcRacers.Clear();
+            npcRacersSpawned = false;
+            nextNpcFakeId = -1L;
+            this.RestoreNpcRiders(); // safety net if EndFestival wasn't reached
+            borrowedRiders.Clear();
+            npcRidersBorrowed = false;
         }
 
         private static Vector2 TileToPixels(Point tile) => new(tile.X * 64f, tile.Y * 64f);
@@ -1030,5 +1553,9 @@ namespace HorseTycoon
 
         public override Rectangle GetBoundingBoxAt(int x, int y) =>
             this.gatePosition.Value >= 88 ? Rectangle.Empty : base.GetBoundingBoxAt(x, y);
+
+        // PathFindController A* uses isTileOccupied → obj.isPassable() to decide walkability.
+        // Without this override the open gate still blocks NPC horse pathfinding.
+        public override bool isPassable() => this.gatePosition.Value >= 88;
     }
 }
