@@ -53,7 +53,10 @@ namespace HorseTycoon
         private const int WanderRepickMaxTicks = 180;
 
         // NPC racers: Marnie, Leah, Abigail ride in the race as AI opponents.
-        private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail" };
+        // Speed stat drives tiles/sec via 5 + (speed / 20): 20 → 6 t/s, 40 → 7 t/s, 60 → 8 t/s.
+        private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail", "Sebastian" };
+        private static readonly int[] NpcRiderSpeeds = { 10, 30, 40, 35 };
+        private static readonly int[] NpcRiderSprints = { 20, 40, 40, 50 };
 
 
         // Per-NPC race routes. Each NPC is assigned a different route by index.
@@ -148,6 +151,41 @@ namespace HorseTycoon
                 new(24, 17),
                 new(44, 15), // past the finish
             },
+            // Route 3 (Sebastian) — similar to Abigail but with slight variations
+            new Point[]
+            {
+                new(61, 48),
+                new(73, 50),
+                new(84, 51),
+                new(87, 58),
+                new(85, 65),
+                new(86, 72),
+                new(84, 77),
+                new(80, 78),
+                new(76, 80),
+                new(72, 77),
+                new(71, 73),
+                new(68, 70),
+                new(59, 72),
+                new(55, 76),
+                new(51, 79),
+                new(45, 79),
+                new(39, 84),
+                new(36, 89),
+                new(38, 93),
+                new(33, 97),
+                new(23, 93),
+                new(19, 89),
+                new(14, 84),
+                new(12, 76),
+                new(15, 69),
+                new(15, 57),
+                new(15, 44),
+                new(19, 37),
+                new(18, 25),
+                new(23, 17),
+                new(44, 15), // past the finish
+            },
         };
 
         // Pixel offset applied to each rider NPC so they appear seated on the horse.
@@ -179,6 +217,8 @@ namespace HorseTycoon
 
         // Delay between the last player crossing the finish line and the ceremony starting.
         private const float CeremonyDelayMs = 2000f;
+        // Hard cap on total racers (players + NPCs). NPC slots are filled first-come, first-dropped.
+        private const int MaxRacers = 8;
 
         private enum Phase { None, Pasture, Racing, Finished, Ceremony }
         private enum AiMode { Normal, Match }
@@ -203,12 +243,20 @@ namespace HorseTycoon
             public float HoofSoundTimer;
             public bool MovementDone;
             public AiMode AiMode = AiMode.Match;
-            // Cumulative pixels moved along the path since race start; used by match AI.
-            public float TotalDistanceTraveled;
+            // Last multiplier applied by match AI; used to suppress redundant log lines.
+            public float LastMatchMultiplier = 1f;
         }
+
+        private static readonly bool VerboseLogging = false;
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
+
+        private void LogVerbose(string message)
+        {
+            if (VerboseLogging)
+                this.Monitor.Log(message, LogLevel.Debug);
+        }
 
         private readonly PerScreen<Phase> phase = new(() => Phase.None);
         private readonly PerScreen<Horse?> competitor = new(() => null);
@@ -229,9 +277,6 @@ namespace HorseTycoon
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
-        // Match AI: cumulative pixels the player's mount has moved since the race started.
-        private readonly PerScreen<float> playerRaceDistanceTraveled = new(() => 0f);
-        private readonly PerScreen<Vector2?> lastPlayerRacePos = new(() => null);
 
         private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
         private readonly PerScreen<int> ceremonyStep = new(() => 0);
@@ -385,7 +430,7 @@ namespace HorseTycoon
         public static bool EventUpForSpeed() => Game1.eventUp && !RaceRidingActive;
 
         /// <summary>True whenever the horse festival is active (any phase).</summary>
-        public static bool InFestival => Instance?.phase.Value != Phase.None;
+        public static bool InFestival => Instance?.phase.Value is Phase.Racing or Phase.Finished;
 
         private static void GetMovementSpeed_Postfix(ref float __result)
         {
@@ -421,15 +466,6 @@ namespace HorseTycoon
             if (!Context.IsWorldReady)
                 return;
 
-            // Track cumulative player movement for match AI distance comparison.
-            if (phase.Value == Phase.Racing && startCountdown.Value < 0f)
-            {
-                Vector2 curPos = Game1.player.Position;
-                if (lastPlayerRacePos.Value is Vector2 prev)
-                    playerRaceDistanceTraveled.Value += Vector2.Distance(curPos, prev);
-                lastPlayerRacePos.Value = curPos;
-            }
-
             // Capture the ridden horse every tick before the festival dismounts the player on warp.
             if (Game1.player.isRidingHorse() && Game1.player.mount != null)
             {
@@ -464,11 +500,13 @@ namespace HorseTycoon
                     AdvanceHorseAnimations();
                     // Check player finish first so the player wins any same-tick tie with an NPC.
                     this.CheckFinish();
-                    this.UpdateNpcRacers();
+                    if (Context.IsMainPlayer)
+                        this.UpdateNpcRacers();
                     break;
                 case Phase.Finished:
                     AdvanceHorseAnimations();
-                    this.UpdateNpcRacers();
+                    if (Context.IsMainPlayer)
+                        this.UpdateNpcRacers();
                     break;
                 case Phase.Ceremony:
                     AdvanceHorseAnimations();
@@ -584,7 +622,7 @@ namespace HorseTycoon
                 MsgPastureHorse,
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
 
-            this.Monitor.Log($"Brought '{horse.Name}' into the festival pasture (slot {slot}).", LogLevel.Debug);
+            this.LogVerbose($"Brought '{horse.Name}' into the festival pasture (slot {slot}).");
         }
 
         private void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
@@ -624,7 +662,7 @@ namespace HorseTycoon
 
             RaceFestival.showWorldCharacters = true;
             PlaceHorseInPasture(horse, msg.Slot);
-            this.Monitor.Log($"Placed remote horse '{horse.Name}' in pasture slot {msg.Slot}.", LogLevel.Debug);
+            this.LogVerbose($"Placed remote horse '{horse.Name}' in pasture slot {msg.Slot}.");
         }
 
         private static void PlaceHorseInPasture(Horse horse, int slot)
@@ -1050,7 +1088,7 @@ namespace HorseTycoon
             if (FinishOrder.Contains(farmerId))
                 return;
             FinishOrder.Add(farmerId);
-            this.Monitor.Log($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}", LogLevel.Debug);
+            this.LogVerbose($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}");
 
             int totalPlayers = Game1.getOnlineFarmers().Count() + NpcRiderNames.Length;
             if (FinishOrder.Count >= totalPlayers && HostCeremonyCountdown < 0f)
@@ -1150,7 +1188,7 @@ namespace HorseTycoon
                 lewis.faceDirection(Game1.down);
             }
 
-            this.Monitor.Log($"Ceremony started. Local placement (0-based): {placement}", LogLevel.Debug);
+            this.LogVerbose($"Ceremony started. Local placement (0-based): {placement}");
         }
 
         private void UpdateCeremony()
@@ -1311,7 +1349,7 @@ namespace HorseTycoon
                 if (!festLoc.characters.Contains(npc))
                     festLoc.characters.Add(npc);
 
-                this.Monitor.Log($"Borrowed '{name}' from {originalLoc?.Name ?? "null"} for the race.", LogLevel.Debug);
+                this.LogVerbose($"Borrowed '{name}' from {originalLoc?.Name ?? "null"} for the race.");
             }
         }
 
@@ -1348,7 +1386,13 @@ namespace HorseTycoon
             var rng = new System.Random(
                 (int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
 
-            for (int i = 0; i < NpcRiderNames.Length; i++)
+            int npcSlots = System.Math.Max(0, MaxRacers - playerSlotCount);
+            if (npcSlots < NpcRiderNames.Length)
+                this.Monitor.Log(
+                    $"Race is full ({playerSlotCount} players, max {MaxRacers}) — dropping {NpcRiderNames.Length - npcSlots} NPC racer(s).",
+                    LogLevel.Info);
+
+            for (int i = 0; i < System.Math.Min(NpcRiderNames.Length, npcSlots); i++)
             {
                 string riderName = NpcRiderNames[i];
                 int slot = playerSlotCount + i;
@@ -1385,9 +1429,8 @@ namespace HorseTycoon
                 rider.drawOnTop = true;
                 SyncRiderToHorse(rider, horse);
 
-                // Randomize Special-quality stats (IV options: 20, 30, 40).
-                int speedIV = rng.Next(3, 6) * 10;
-                int sprintIV = rng.Next(3, 6) * 10;
+                int speedIV = NpcRiderSpeeds[i % NpcRiderSpeeds.Length];
+                int sprintIV = NpcRiderSprints[i % NpcRiderSprints.Length];
 
                 var racer = new NpcRacer
                 {
@@ -1396,15 +1439,13 @@ namespace HorseTycoon
                     FakeId = nextNpcFakeId--,
                     TotalSpeed = speedIV,
                     TotalSprint = sprintIV,
-                    Route = NpcRaceRoutes[i % NpcRaceRoutes.Length],
+                    Route = NpcRaceRoutes[i == 0 ? 2 : i % NpcRaceRoutes.Length],
                     WaypointIndex = 0,
                     NextSprintCheckMs = (float)(rng.NextDouble() * 5000.0 + 3000.0),
                 };
                 npcRacers.Add(racer);
 
-                this.Monitor.Log(
-                    $"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}",
-                    LogLevel.Debug);
+                this.LogVerbose($"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}");
             }
         }
 
@@ -1445,19 +1486,52 @@ namespace HorseTycoon
                 // This bypasses MovePosition (blocked during eventUp) while still respecting
                 // the collision-aware path that A* produced.
                 float step = ComputeNpcSpeedPixelsPerMs(r) * deltaMs;
-                // Match AI: when the NPC is more than 15 tiles from the player, scale their
-                // speed up or down based on who is further along the course.
-                if (r.AiMode == AiMode.Match)
+                // Match AI: when the NPC is more than 15 tiles from the nearest farmer, scale
+                // their speed up or down based on who is further along the course.
+                // Progress is measured by waypoint index on the NPC's own route so that raw
+                // movement speed differences between NPCs and players don't skew the comparison.
+                bool allPlayersFinished = Game1.getAllFarmers().All(f => FinishOrder.Contains(f.UniqueMultiplayerID));
+                if (r.AiMode == AiMode.Match && allPlayersFinished && r.LastMatchMultiplier != 1f)
                 {
-                    float tileDist = Vector2.Distance(r.Horse.Tile, Game1.player.Tile);
-                    if (tileDist > 15f)
+                    this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: all players finished — resuming normal speed");
+                    r.LastMatchMultiplier = 1f;
+                }
+                if (r.AiMode == AiMode.Match && !allPlayersFinished)
+                {
+                    float minTileDist = float.MaxValue;
+                    Farmer? nearestFarmer = null;
+                    foreach (Farmer farmer in Game1.getAllFarmers())
                     {
-                        // Positive gap = NPC ahead; negative = NPC behind.
-                        float progressGap = r.TotalDistanceTraveled - playerRaceDistanceTraveled.Value;
-                        float gapTiles = progressGap / 64f;
-                        // Decrease speed when ahead, increase when behind. Clamp to [0.5x, 1.75x].
-                        float matchMultiplier = System.Math.Clamp(1f - gapTiles / 40f, 0.5f, 1.75f);
+                        float d = Vector2.Distance(r.Horse.Tile, farmer.Tile);
+                        if (d < minTileDist) { minTileDist = d; nearestFarmer = farmer; }
+                    }
+
+                    if (minTileDist > 15f && nearestFarmer != null)
+                    {
+                        // Find where the nearest farmer sits on this NPC's route.
+                        int playerWpIdx = NearestWaypointIndex(r.Route, nearestFarmer.Tile);
+
+                        // Positive gap = NPC has passed more waypoints = NPC is ahead.
+                        int wpGap = r.WaypointIndex - playerWpIdx;
+                        // Normalise by route length so the ramp is proportional regardless of route size.
+                        float matchMultiplier = System.Math.Clamp(1f - (float)wpGap / r.Route.Length * 3f, 0.5f, 1.75f);
                         step *= matchMultiplier;
+
+                        float roundedMultiplier = (float)System.Math.Round(matchMultiplier, 2);
+                        if (System.Math.Abs(roundedMultiplier - r.LastMatchMultiplier) >= 0.01f)
+                        {
+                            string direction = matchMultiplier < 1f ? "slowing down" : "speeding up";
+                            this.LogVerbose(
+                                $"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: {direction} to {roundedMultiplier:F2}x " +
+                                $"(NPC waypoint {r.WaypointIndex}, player nearest waypoint {playerWpIdx}/{r.Route.Length - 1}, " +
+                                $"nearest player {minTileDist:F1} tiles away)");
+                            r.LastMatchMultiplier = roundedMultiplier;
+                        }
+                    }
+                    else if (r.LastMatchMultiplier != 1f)
+                    {
+                        this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: back to normal speed (nearest player {minTileDist:F1} tiles away)");
+                        r.LastMatchMultiplier = 1f;
                     }
                 }
 
@@ -1486,8 +1560,6 @@ namespace HorseTycoon
                         step = 0f;
                     }
                 }
-
-                r.TotalDistanceTraveled += moved;
 
                 // Play hoof sounds proportional to distance traveled (one beat per tile).
                 if (moved > 0f)
@@ -1556,11 +1628,25 @@ namespace HorseTycoon
             }
         }
 
+        /// <summary>Returns the index of the waypoint in <paramref name="route"/> closest to <paramref name="tile"/>.</summary>
+        private static int NearestWaypointIndex(Point[] route, Vector2 tile)
+        {
+            int idx = 0;
+            float minDist = float.MaxValue;
+            for (int i = 0; i < route.Length; i++)
+            {
+                float d = Vector2.Distance(tile, new Vector2(route[i].X, route[i].Y));
+                if (d < minDist) { minDist = d; idx = i; }
+            }
+            return idx;
+        }
+
+        // NPC Speed
         private static float ComputeNpcSpeedPixelsPerMs(NpcRacer r)
         {
             float tilesPerSec = 5f + (r.TotalSpeed / 20);
             if (r.NpcSprintPhase == SprintPhase.Sprinting)
-                tilesPerSec *= 1.5f;
+                tilesPerSec *= 1.25f;
             return tilesPerSec * 64f / 1000f;
         }
 
@@ -1690,7 +1776,7 @@ namespace HorseTycoon
             {
                 int slot = PastureSlotFor(Game1.player);
                 PlaceHorseInPasture(horse, slot);
-                Game1.player.Position = TileToPixels(PastureSpawnForSlot(slot));
+                Game1.player.Position = TileToPixels(new Point(56, 10));
                 lastRiddenMount.Value = horse;
                 lastMountedTick.Value = Game1.ticks;
             }
@@ -1705,8 +1791,6 @@ namespace HorseTycoon
             this.startCountdown.Value = -1f;
             sprintPhase.Value = SprintPhase.Ready;
             sprintTimer.Value = 0f;
-            playerRaceDistanceTraveled.Value = 0f;
-            lastPlayerRacePos.Value = null;
             if (penHorse.Value != null)
             {
                 penHorse.Value.currentLocation?.characters.Remove(penHorse.Value);

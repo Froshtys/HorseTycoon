@@ -27,10 +27,6 @@ namespace HorseTycoon
             }
             var stats = new HorseTycoon.Models.HorseStats(horseAnimal);
 
-            // --- LOGGING ---
-            Manager.Monitor.Log($"Horse: {horseAnimal.Name} | TotalJump Stat: {stats.TotalJump}", LogLevel.Debug);
-            Manager.Monitor.Log($"Calculated Jump -> Distance: {stats.JumpDistance} tiles", LogLevel.Debug);
-
             GameLocation location = Game1.player.currentLocation;
             (int ox, int oy) = GetDirectionOffset(Game1.player.FacingDirection);
             List<bool> collisions = GetCollisions(location, ox, oy, stats.JumpDistance);
