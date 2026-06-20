@@ -138,6 +138,20 @@ namespace HorseTycoon
             if (string.IsNullOrEmpty(Game1.player.horseName.Value))
                 Game1.player.horseName.Value = __instance.Name;
 
+            // On mount (not dismount), pet the horse if it hasn't been pet today.
+            bool isMounting = Game1.player.mount != __instance;
+            if (isMounting)
+            {
+                FarmAnimal? animal = HorseHelper.GetFarmAnimalForHorse(__instance);
+                if (animal != null && !animal.wasPet.Value)
+                {
+                    animal.wasPet.Value = true;
+                    __instance.doEmote(20);
+                    Game1.playSound("CP.HorseTycoon_Neigh");
+                    return false; // don't mount yet — let the player interact again to ride
+                }
+            }
+
             return true;
         }
 

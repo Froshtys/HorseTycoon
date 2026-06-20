@@ -223,7 +223,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)EmsHorse.ShoeCopper",
+		"RequiredItemId": "(O)HorseTycoon.ShoeCopper",
 		"RequiredCount": 1
 		}
 	],
@@ -254,7 +254,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)EmsHorse.ShoeCopper",
+		"RequiredItemId": "(O)HorseTycoon.ShoeCopper",
 		"RequiredCount": 3
 		}
 	],
@@ -285,7 +285,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)EmsHorse.ShoeIron",
+		"RequiredItemId": "(O)HorseTycoon.ShoeIron",
 		"RequiredCount": 1
 		}
 	],
@@ -316,7 +316,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)EmsHorse.ShoeIron",
+		"RequiredItemId": "(O)HorseTycoon.ShoeIron",
 		"RequiredCount": 3
 		}
 	],
@@ -347,7 +347,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)EmsHorse.ShoeGold",
+		"RequiredItemId": "(O)HorseTycoon.ShoeGold",
 		"RequiredCount": 1
 		}
 	],
@@ -378,7 +378,7 @@
 		"Triggers": [
 		{
 		"Trigger": "ItemPlacedInMachine",
-		"RequiredItemId": "(O)EmsHorse.ShoeGold",
+		"RequiredItemId": "(O)HorseTycoon.ShoeGold",
 		"RequiredCount": 3
 		}
 	],
