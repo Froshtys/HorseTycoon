@@ -181,6 +181,7 @@ namespace HorseTycoon
         private const float CeremonyDelayMs = 2000f;
 
         private enum Phase { None, Pasture, Racing, Finished, Ceremony }
+        private enum AiMode { Normal, Match }
 
         private class NpcRacer
         {
@@ -201,6 +202,9 @@ namespace HorseTycoon
             public int PathIndex;
             public float HoofSoundTimer;
             public bool MovementDone;
+            public AiMode AiMode = AiMode.Match;
+            // Cumulative pixels moved along the path since race start; used by match AI.
+            public float TotalDistanceTraveled;
         }
 
         private readonly IModHelper Helper;
@@ -225,6 +229,9 @@ namespace HorseTycoon
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
+        // Match AI: cumulative pixels the player's mount has moved since the race started.
+        private readonly PerScreen<float> playerRaceDistanceTraveled = new(() => 0f);
+        private readonly PerScreen<Vector2?> lastPlayerRacePos = new(() => null);
 
         private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
         private readonly PerScreen<int> ceremonyStep = new(() => 0);
@@ -307,9 +314,11 @@ namespace HorseTycoon
 
             // getMovementSpeed zeroes the horse bonus / addedSpeed during events. Report non-event during
             // our race so riding speed, SpeedBoost stat, and the sprint buff all apply normally.
+            // A postfix then applies a 20% speed penalty for the duration of the festival.
             harmony.Patch(
                 original: AccessTools.Method(typeof(Farmer), nameof(Farmer.getMovementSpeed)),
-                transpiler: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Transpiler)));
+                transpiler: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Transpiler)),
+                postfix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Postfix)));
 
             // Block dismounting during the race. Patching checkAction (which initiates the dismount slide)
             // rather than dismount() prevents the rider getting stuck mid-slide.
@@ -375,6 +384,15 @@ namespace HorseTycoon
         /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" during our race.</summary>
         public static bool EventUpForSpeed() => Game1.eventUp && !RaceRidingActive;
 
+        /// <summary>True whenever the horse festival is active (any phase).</summary>
+        public static bool InFestival => Instance?.phase.Value != Phase.None;
+
+        private static void GetMovementSpeed_Postfix(ref float __result)
+        {
+            if (InFestival)
+                __result *= 0.8f;
+        }
+
         private static IEnumerable<CodeInstruction> GetMovementSpeed_Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             FieldInfo eventUpField = AccessTools.Field(typeof(Game1), nameof(Game1.eventUp));
@@ -402,6 +420,15 @@ namespace HorseTycoon
         {
             if (!Context.IsWorldReady)
                 return;
+
+            // Track cumulative player movement for match AI distance comparison.
+            if (phase.Value == Phase.Racing && startCountdown.Value < 0f)
+            {
+                Vector2 curPos = Game1.player.Position;
+                if (lastPlayerRacePos.Value is Vector2 prev)
+                    playerRaceDistanceTraveled.Value += Vector2.Distance(curPos, prev);
+                lastPlayerRacePos.Value = curPos;
+            }
 
             // Capture the ridden horse every tick before the festival dismounts the player on warp.
             if (Game1.player.isRidingHorse() && Game1.player.mount != null)
@@ -1418,6 +1445,22 @@ namespace HorseTycoon
                 // This bypasses MovePosition (blocked during eventUp) while still respecting
                 // the collision-aware path that A* produced.
                 float step = ComputeNpcSpeedPixelsPerMs(r) * deltaMs;
+                // Match AI: when the NPC is more than 15 tiles from the player, scale their
+                // speed up or down based on who is further along the course.
+                if (r.AiMode == AiMode.Match)
+                {
+                    float tileDist = Vector2.Distance(r.Horse.Tile, Game1.player.Tile);
+                    if (tileDist > 15f)
+                    {
+                        // Positive gap = NPC ahead; negative = NPC behind.
+                        float progressGap = r.TotalDistanceTraveled - playerRaceDistanceTraveled.Value;
+                        float gapTiles = progressGap / 64f;
+                        // Decrease speed when ahead, increase when behind. Clamp to [0.5x, 1.75x].
+                        float matchMultiplier = System.Math.Clamp(1f - gapTiles / 40f, 0.5f, 1.75f);
+                        step *= matchMultiplier;
+                    }
+                }
+
                 float moved = 0f;
                 while (step > 0f && r.PathIndex < r.ComputedPath.Count)
                 {
@@ -1443,6 +1486,8 @@ namespace HorseTycoon
                         step = 0f;
                     }
                 }
+
+                r.TotalDistanceTraveled += moved;
 
                 // Play hoof sounds proportional to distance traveled (one beat per tile).
                 if (moved > 0f)
@@ -1660,6 +1705,8 @@ namespace HorseTycoon
             this.startCountdown.Value = -1f;
             sprintPhase.Value = SprintPhase.Ready;
             sprintTimer.Value = 0f;
+            playerRaceDistanceTraveled.Value = 0f;
+            lastPlayerRacePos.Value = null;
             if (penHorse.Value != null)
             {
                 penHorse.Value.currentLocation?.characters.Remove(penHorse.Value);
