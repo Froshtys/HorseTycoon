@@ -41,7 +41,7 @@ namespace HorseTycoon
             new(0, 0), new(-4, 0), new(0, -4), new(4, 0), new(0, 4),
         };
         // Stall i's horse tile is (StartStall.X, StartStall.Y + i); horses break east into the course.
-        private static readonly Point StartStall = new(39, 47);
+        private static readonly Point StartStall = new(39, 48);
         // Finish band (inclusive tile rectangle).
         private static readonly Point FinishMin = new(40, 11);
         private static readonly Point FinishMax = new(40, 17);
@@ -49,7 +49,7 @@ namespace HorseTycoon
         private static readonly Point PenHorseTile = new(94, 31);
         private static readonly string[] AllSkins = { "Roan", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
         private static readonly string[] MarnieHorseNames = {
-            "Clover", "Daisy", "Biscuit", "Maple", "Rosie", "Pepper",
+            "Clover", "Daisy", "Biscuit", "Big Red", "Rosie", "Pepper",
             "Nutmeg", "Ember", "Cobalt", "Juniper", "Bramble", "Dusty",
         };
 
@@ -312,6 +312,7 @@ namespace HorseTycoon
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
+        private readonly PerScreen<System.TimeSpan> raceStartTime = new(() => System.TimeSpan.Zero);
 
         // Set true while re-invoking warpFarmer from the "Yes" path so our prefix doesn't re-intercept it.
         private static bool SkipHorseWarning = false;
@@ -322,10 +323,27 @@ namespace HorseTycoon
         // NPC racers are the same object list for every screen; spawned once per race via guard flags.
         private readonly List<NpcRacer> npcRacers = new();
         // Tracks NPCs borrowed from their world locations so they can be restored on festival end.
-        private readonly List<(NPC Npc, GameLocation OriginalLocation)> borrowedRiders = new();
+        private readonly List<NPC> spawnedRiders = new();
         private bool npcRidersBorrowed = false;
         private bool npcRacersSpawned = false;
         private long nextNpcFakeId = -1L;
+
+        // Fresh event-actor NPCs spawned for the Racing / AwardsEvent phases.
+        private readonly List<NPC> spawnedSpectators = new();
+        private List<NpcSpectatorPlacement>? racingSpectators;
+        private List<NpcSpectatorPlacement>? ceremonySpectators;
+
+        // NPC names in the same order as the Characters tileset sprite sheet (matches Data/Characters.json insertion order).
+        private static readonly string[] CharacterTileNames =
+        {
+            "Abigail", "Caroline", "Clint", "Demetrius", "Willy", "Elliott", "Emily", "Evelyn",
+            "George", "Gus", "Haley", "Harvey", "Jas", "Jodi", "Alex", "Kent", "Leah",
+            "Lewis", "Linus", "Marlon", "Marnie", "Maru", "Pam", "Penny", "Pierre",
+            "Robin", "Sam", "Sebastian", "Shane", "Vincent", "Wizard", "Dwarf", "Sandy",
+            "Krobus", "Leo",
+        };
+
+        private record NpcSpectatorPlacement(string Name, Point Tile, int Direction);
 
         // Holding tiles for borrowed NPCs during the pasture phase (before stall assignment).
         private static readonly Point[] NpcRiderHoldingTiles = { new(92, 20), new(92, 22), new(92, 24) };
@@ -378,6 +396,8 @@ namespace HorseTycoon
         private const string MsgPlayerFinished = "PlayerFinished";
         private const string MsgStartCeremony = "StartCeremony";
         private record StartCeremonyMessage(List<long> RankedPlayerIds);
+        private const string MsgNpcSprint = "NpcSprint";
+        private record NpcSprintMessage(int NpcIndex, float DurationMs);
 
         // Custom start sound registered as a Data/AudioChanges cue in [CP] HorseTycoon/data/sound.json.
         private const string RaceStartSoundCue = "CP.HorseTycoon_RaceStart";
@@ -625,13 +645,11 @@ namespace HorseTycoon
                     AdvanceHorseAnimations();
                     // Check player finish first so the player wins any same-tick tie with an NPC.
                     this.CheckFinish();
-                    if (Context.IsMainPlayer)
-                        this.UpdateNpcRacers();
+                    this.UpdateNpcRacers();
                     break;
                 case Phase.Finished:
                     AdvanceHorseAnimations();
-                    if (Context.IsMainPlayer)
-                        this.UpdateNpcRacers();
+                    this.UpdateNpcRacers();
                     break;
                 case Phase.Ceremony:
                     AdvanceHorseAnimations();
@@ -719,10 +737,24 @@ namespace HorseTycoon
             return new Point(PastureSpawn.X + offset.X, PastureSpawn.Y + offset.Y);
         }
 
+        private void SetLayerVisible(string layerName, bool visible)
+        {
+            var layer = Game1.currentLocation?.map.GetLayer(layerName);
+            if (layer != null) layer.Visible = visible;
+        }
+
         private void EnterPasture(Event festival)
         {
             phase.Value = Phase.Pasture;
             competitor.Value = null;
+
+            // Hide phase-specific layers regardless of what the TMX file saved.
+            this.SetLayerVisible("Racing", false);
+            this.SetLayerVisible("AwardsEvent", false);
+
+            // Cache NPC placement data from the phase layers.
+            racingSpectators = this.ReadNpcPlacements("Racing");
+            ceremonySpectators = this.ReadNpcPlacements("AwardsEvent");
 
             // showWorldCharacters must be set on every client so the event renderer draws horses placed by any client.
             festival.showWorldCharacters = true;
@@ -731,6 +763,7 @@ namespace HorseTycoon
             this.SpawnStartingStalls();
             this.SpawnPenHorse();
             // NPC riders are borrowed in SpawnNpcRacers (race start) so they aren't visible during the pasture phase.
+
 
             Horse? horse = lastRiddenMount.Value;
             bool arrivedMounted = horse != null && (Game1.ticks - lastMountedTick.Value) <= EntryMountWindowTicks;
@@ -757,6 +790,7 @@ namespace HorseTycoon
                 return;
             }
 
+
             if (e.Type == MsgPlayerFinished && IsHost && RaceFestival != null)
             {
                 this.RecordFinish(e.ReadAs<long>());
@@ -781,6 +815,18 @@ namespace HorseTycoon
                 RaceFestival.showWorldCharacters = true;
                 PlaceHorseInPasture(borrowedHorse, bmsg.Slot);
                 this.LogVerbose($"Placed remote borrowed horse in pasture slot {bmsg.Slot}.");
+                return;
+            }
+
+            if (e.Type == MsgNpcSprint && RaceFestival != null && !IsHost)
+            {
+                var sprintMsg = e.ReadAs<NpcSprintMessage>();
+                if (sprintMsg.NpcIndex >= 0 && sprintMsg.NpcIndex < npcRacers.Count)
+                {
+                    NpcRacer r = npcRacers[sprintMsg.NpcIndex];
+                    r.NpcSprintPhase = SprintPhase.Sprinting;
+                    r.NpcSprintTimer = sprintMsg.DurationMs;
+                }
                 return;
             }
 
@@ -1119,6 +1165,9 @@ namespace HorseTycoon
 
             phase.Value = Phase.Racing;
 
+            this.SetLayerVisible("Racing", true);
+            this.SpawnSpectators(racingSpectators);
+
             this.SuppressOtherBuffs();
 
             int slot = PastureSlotFor(Game1.player);
@@ -1235,6 +1284,7 @@ namespace HorseTycoon
 
             this.startCountdown.Value = -1f;
             Game1.player.CanMove = true;
+            raceStartTime.Value = Game1.currentGameTime.TotalGameTime;
             int totalPlayers = System.Math.Max(1, Game1.getOnlineFarmers().Count());
             int totalSlots = totalPlayers + NpcRiderNames.Length;
             for (int i = 0; i < totalSlots; i++)
@@ -1277,6 +1327,8 @@ namespace HorseTycoon
 
             phase.Value = Phase.Finished;
             Game1.addHUDMessage(new HUDMessage("Finished!", HUDMessage.achievement_type));
+            var elapsed = Game1.currentGameTime.TotalGameTime - raceStartTime.Value;
+            this.LogVerbose($"Race time for {Game1.player.Name}: {(int)elapsed.TotalMinutes}:{elapsed.Seconds:D2}.{elapsed.Milliseconds:D3}");
 
             if (IsHost)
                 this.RecordFinish(Game1.player.UniqueMultiplayerID);
@@ -1319,17 +1371,19 @@ namespace HorseTycoon
             long localId = Game1.player.UniqueMultiplayerID;
             int placement = rankedPlayerIds.IndexOf(localId); // 0-based; -1 if not in top 3+
 
+            var ceremonyOffset = new Microsoft.Xna.Framework.Vector2(0f, 64f);
+
             // Move the local rider + horse to their podium or spectator tile.
             if (placement >= 0 && placement < WinnersCircleTiles.Length)
             {
                 Point podium = WinnersCircleTiles[placement];
-                Game1.player.Position = TileToPixels(podium);
+                Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
                 Game1.player.faceDirection(Game1.up);
 
                 Horse? horse = competitor.Value;
                 if (horse != null)
                 {
-                    horse.Position = TileToPixels(podium);
+                    horse.Position = TileToPixels(podium) + ceremonyOffset;
                     horse.faceDirection(Game1.up);
                 }
             }
@@ -1337,13 +1391,13 @@ namespace HorseTycoon
             {
                 int spectatorSlot = System.Math.Max(0, placement - WinnersCircleTiles.Length);
                 Point spec = SpectatorTiles[System.Math.Min(spectatorSlot, SpectatorTiles.Length - 1)];
-                Game1.player.Position = TileToPixels(spec);
+                Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
                 Game1.player.faceDirection(Game1.up);
 
                 Horse? horse = competitor.Value;
                 if (horse != null)
                 {
-                    horse.Position = TileToPixels(spec);
+                    horse.Position = TileToPixels(spec) + ceremonyOffset;
                     horse.faceDirection(Game1.up);
                 }
             }
@@ -1361,14 +1415,14 @@ namespace HorseTycoon
                 if (i < WinnersCircleTiles.Length)
                 {
                     Point podium = WinnersCircleTiles[i];
-                    racer.Horse.Position = TileToPixels(podium);
+                    racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
                     racer.Horse.faceDirection(Game1.up);
                 }
                 else
                 {
                     Point spec = SpectatorTiles[System.Math.Min(npcSpectatorSlot, SpectatorTiles.Length - 1)];
                     npcSpectatorSlot++;
-                    racer.Horse.Position = TileToPixels(spec);
+                    racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
                     racer.Horse.faceDirection(Game1.up);
                 }
                 if (racer.Rider != null)
@@ -1392,11 +1446,29 @@ namespace HorseTycoon
                 lewis.faceDirection(Game1.down);
             }
 
+            this.SetLayerVisible("Racing", false);
+            this.SetLayerVisible("AwardsEvent", true);
+            this.DespawnSpectators();
+            this.SpawnSpectators(ceremonySpectators);
+
             this.LogVerbose($"Ceremony started. Local placement (0-based): {placement}");
         }
 
+        private bool prizeMenuWasOpen = false;
+
         private void UpdateCeremony()
         {
+            bool prizeMenuOpen = Game1.activeClickableMenu is ItemGrabMenu;
+
+            // The event system triggers a screen fade when the ItemGrabMenu closes during a festival.
+            // Detect that transition and immediately clear the fade before it renders.
+            if (prizeMenuWasOpen && !prizeMenuOpen)
+            {
+                Game1.fadeToBlack = false;
+                Game1.fadeToBlackAlpha = 0f;
+            }
+            prizeMenuWasOpen = prizeMenuOpen;
+
             // Wait for any open dialogue/menu to be dismissed before advancing.
             if (Game1.activeClickableMenu != null)
                 return;
@@ -1505,11 +1577,12 @@ namespace HorseTycoon
 
         private void EndFestival()
         {
-            this.RestoreNpcRiders();
-
             Game1.viewportFreeze = false;
             Game1.player.CanMove = true;
 
+            // Do NOT despawn NPCs here — the temp map is still active during the fade and
+            // they must stay visible until the screen is fully black. Reset() clears the
+            // lists once the player has warped back to the real Forest.
             Event? festival = RaceFestival;
             if (festival != null)
                 festival.endBehaviors(new[] { "end" }, Game1.currentLocation);
@@ -1522,7 +1595,7 @@ namespace HorseTycoon
         /// in the festival location so they are visible during the pasture phase and available
         /// when the race starts. Called from <see cref="EnterPasture"/>; guarded against double-run.
         /// </summary>
-        private void BorrowNpcRiders()
+        private void SpawnNpcRiders()
         {
             if (npcRidersBorrowed) return;
             npcRidersBorrowed = true;
@@ -1532,49 +1605,79 @@ namespace HorseTycoon
             for (int i = 0; i < NpcRiderNames.Length; i++)
             {
                 string name = NpcRiderNames[i];
-                NPC? npc = Game1.getCharacterFromName(name);
-                if (npc == null)
-                {
-                    this.Monitor.Log($"Could not find NPC '{name}' to borrow for the race.", LogLevel.Warn);
-                    continue;
-                }
-
-                GameLocation originalLoc = npc.currentLocation;
-                borrowedRiders.Add((npc, originalLoc));
-
-                originalLoc?.characters.Remove(npc);
-                npc.currentLocation = festLoc;
                 Point holdTile = i < NpcRiderHoldingTiles.Length
                     ? NpcRiderHoldingTiles[i]
                     : new Point(92, 20 + i * 2);
-                npc.Position = TileToPixels(holdTile);
-                npc.faceDirection(Game1.left);
-                npc.EventActor = true;
-
-                if (!festLoc.characters.Contains(npc))
-                    festLoc.characters.Add(npc);
-
-                this.LogVerbose($"Borrowed '{name}' from {originalLoc?.Name ?? "null"} for the race.");
+                var actor = new NPC(
+                    new AnimatedSprite("Characters/" + name, 0, 16, 32),
+                    TileToPixels(holdTile),
+                    Game1.left,
+                    name);
+                actor.EventActor = true;
+                festLoc.characters.Add(actor);
+                spawnedRiders.Add(actor);
+                this.LogVerbose($"Spawned rider actor '{name}' at holding tile {holdTile}.");
             }
         }
 
         /// <summary>
-        /// Return all borrowed rider NPCs to their original world locations.
-        /// Safe to call multiple times; clears <see cref="borrowedRiders"/> after running.
+        /// Remove all spawned rider event actors from the festival location.
+        /// Safe to call multiple times.
         /// </summary>
-        private void RestoreNpcRiders()
+        private void DespawnNpcRiders()
         {
-            foreach ((NPC npc, GameLocation originalLoc) in borrowedRiders)
-            {
-                npc.currentLocation?.characters.Remove(npc);
-                npc.EventActor = false;
-                npc.drawOnTop = false;
-                npc.currentLocation = originalLoc;
-                if (originalLoc != null && !originalLoc.characters.Contains(npc))
-                    originalLoc.characters.Add(npc);
-            }
-            borrowedRiders.Clear();
+            var festLoc = Game1.currentLocation;
+            foreach (NPC actor in spawnedRiders)
+                festLoc?.characters.Remove(actor);
+            spawnedRiders.Clear();
             npcRidersBorrowed = false;
+        }
+
+        private List<NpcSpectatorPlacement> ReadNpcPlacements(string layerName)
+        {
+            var results = new List<NpcSpectatorPlacement>();
+            var layer = Game1.currentLocation?.map.GetLayer(layerName);
+            if (layer == null) return results;
+            for (int y = 0; y < layer.LayerHeight; y++)
+            for (int x = 0; x < layer.LayerWidth; x++)
+            {
+                var tile = layer.Tiles[x, y];
+                if (tile?.TileSheet?.Id != "Characters") continue;
+                int npcIdx = tile.TileIndex / 4;
+                int dir = tile.TileIndex % 4;
+                if (npcIdx < CharacterTileNames.Length)
+                    results.Add(new NpcSpectatorPlacement(CharacterTileNames[npcIdx], new Point(x, y), dir));
+            }
+            this.LogVerbose($"ReadNpcPlacements('{layerName}'): {results.Count} entries.");
+            return results;
+        }
+
+        private void SpawnSpectators(List<NpcSpectatorPlacement>? placements)
+        {
+            if (placements == null) return;
+            var festLoc = Game1.currentLocation;
+            if (festLoc == null) return;
+            foreach (var p in placements)
+            {
+                // Create a fresh event-actor NPC — same approach as the game's addTemporaryActor command.
+                // This leaves the real NPC untouched at home with their normal animation state.
+                var sprite = new AnimatedSprite("Characters/" + p.Name, 0, 16, 32);
+                var actor = new NPC(sprite, TileToPixels(p.Tile), p.Direction, p.Name);
+                actor.faceDirection(p.Direction);
+                actor.Sprite.StopAnimation();
+                actor.EventActor = true;
+                festLoc.characters.Add(actor);
+                spawnedSpectators.Add(actor);
+                this.LogVerbose($"Spawned spectator actor '{p.Name}' at {p.Tile}.");
+            }
+        }
+
+        private void DespawnSpectators()
+        {
+            var festLoc = Game1.currentLocation;
+            foreach (NPC actor in spawnedSpectators)
+                festLoc?.characters.Remove(actor);
+            spawnedSpectators.Clear();
         }
 
         /// <summary>
@@ -1586,7 +1689,7 @@ namespace HorseTycoon
             if (npcRacersSpawned) return;
             npcRacersSpawned = true;
 
-            this.BorrowNpcRiders();
+            this.SpawnNpcRiders();
 
             var rng = new System.Random(
                 (int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
@@ -1672,8 +1775,10 @@ namespace HorseTycoon
             GameLocation loc = Game1.currentLocation;
             int deltaMs = Game1.currentGameTime.ElapsedGameTime.Milliseconds;
 
-            foreach (NpcRacer r in npcRacers)
+            for (int npcIdx = 0; npcIdx < npcRacers.Count; npcIdx++)
             {
+                NpcRacer r = npcRacers[npcIdx];
+
                 // Stop only when the full route is exhausted — not on finish crossing, so the
                 // horse rides through the finish band to its final waypoint past the line.
                 if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex >= r.Route.Length)
@@ -1686,7 +1791,7 @@ namespace HorseTycoon
                     continue;
                 }
 
-                UpdateNpcSprint(r, deltaMs);
+                this.UpdateNpcSprint(r, deltaMs, npcIdx);
 
                 // Compute A* path to next waypoint when the previous segment is exhausted.
                 if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex < r.Route.Length)
@@ -1825,6 +1930,7 @@ namespace HorseTycoon
                     }
                 }
             }
+
         }
 
         /// <summary>
@@ -1886,7 +1992,7 @@ namespace HorseTycoon
             return moveDir.Y > 0 ? Game1.down : Game1.up;
         }
 
-        private static void UpdateNpcSprint(NpcRacer r, int deltaMs)
+        private void UpdateNpcSprint(NpcRacer r, int deltaMs, int npcIndex)
         {
             if (r.NpcSprintPhase == SprintPhase.Sprinting || r.NpcSprintPhase == SprintPhase.Exhausted)
             {
@@ -1906,7 +2012,9 @@ namespace HorseTycoon
                 return;
             }
 
-            // Ready — count down to the next sprint opportunity.
+            // Only the host decides when to sprint; farmhands wait for the broadcast.
+            if (!IsHost) return;
+
             r.NextSprintCheckMs -= deltaMs;
             if (r.NextSprintCheckMs > 0f) return;
 
@@ -1915,6 +2023,11 @@ namespace HorseTycoon
                 float durationMs = System.Math.Clamp((r.TotalSprint / 4f) * 1000f, 1000f, 25000f);
                 r.NpcSprintPhase = SprintPhase.Sprinting;
                 r.NpcSprintTimer = durationMs;
+                if (Game1.IsMultiplayer)
+                    this.Helper.Multiplayer.SendMessage(
+                        new NpcSprintMessage(npcIndex, durationMs),
+                        MsgNpcSprint,
+                        modIDs: new[] { this.Helper.ModRegistry.ModID });
             }
             r.NextSprintCheckMs = (float)(Game1.random.NextDouble() * 8000.0 + 3000.0);
         }
@@ -2042,6 +2155,11 @@ namespace HorseTycoon
             }
             phase.Value = Phase.None;
             competitor.Value = null;
+            this.SetLayerVisible("Racing", false);
+            this.SetLayerVisible("AwardsEvent", false);
+            this.DespawnSpectators();
+            racingSpectators = null;
+            ceremonySpectators = null;
             wanderMoving.Value = false;
             wanderDir.Value = -1;
             wanderTicks.Value = 0;
@@ -2062,9 +2180,7 @@ namespace HorseTycoon
             npcRacers.Clear();
             npcRacersSpawned = false;
             nextNpcFakeId = -1L;
-            this.RestoreNpcRiders(); // safety net if EndFestival wasn't reached
-            borrowedRiders.Clear();
-            npcRidersBorrowed = false;
+            this.DespawnNpcRiders(); // safety net if EndFestival wasn't reached
         }
 
         private static Vector2 TileToPixels(Point tile) => new(tile.X * 64f, tile.Y * 64f);
