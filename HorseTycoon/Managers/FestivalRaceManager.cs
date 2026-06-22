@@ -55,136 +55,166 @@ namespace HorseTycoon
         // NPC racers: Marnie, Leah, Abigail ride in the race as AI opponents.
         // Speed stat drives tiles/sec via 5 + (speed / 20): 20 → 6 t/s, 40 → 7 t/s, 60 → 8 t/s.
         private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail", "Sebastian" };
-        private static readonly int[] NpcRiderSpeeds = { 10, 30, 40, 35 };
-        private static readonly int[] NpcRiderSprints = { 20, 40, 40, 50 };
+        private static readonly int[] NpcRiderSpeeds = { 15, 30, 40, 35 };
+        private static readonly int[] NpcRiderSprints = { 20, 40, 50, 50 };
 
 
         // Per-NPC race routes. Each NPC is assigned a different route by index.
         // Add more routes here and each new NPC slot will pick the next one (cycling if needed).
         private static readonly Point[][] NpcRaceRoutes =
         {
-            // Route 0 (Marnie) — main route east → south → west → north
+            // Route 0 (Marnie)
             new Point[]
             {
-                new(85, 50),
-                new(89, 69),
-                new(57, 70),
-                new(39, 84),
-                new(39, 97),
-                new(16, 80),
-                new(20, 30),
-                new(44, 11), // past the finish
+                new(49, 49),
+                new(58, 48),
+                new(74, 49),
+                new(85, 51),
+                new(88, 60),
+                new(89, 66),
+                new(91, 70),
+                new(91, 75),
+                new(91, 80),
+                new(87, 85),
+                new(74, 82),
+                new(73, 74),
+                new(72, 70),
+                new(68, 70),
+                new(59, 72),
+                new(52, 74),
+                new(45, 77),
+                new(38, 84),
+                new(37, 89),
+                new(38, 95),
+                new(31, 97),
+                new(23, 94),
+                new(20, 87),
+                new(19, 84),
+                new(19, 78),
+                new(20, 74),
+                new(20, 66),
+                new(19, 62),
+                new(20, 59),
+                new(21, 54),
+                new(24, 47),
+                new(25, 41),
+                new(21, 37),
+                new(18, 33),
+                new(20, 22),
+                new(23, 18),
+                new(27, 16),
+                new(35, 16),
+                new(43, 16), // past the finish
             },
             // Route 1 (Leah)
             new Point[]
             {
-                new(58, 47),
-                new(72, 49),
-                new(86, 51),
-                new(88, 59),
-                new(91, 69),
-                new(88, 73),
-                new(89, 76),
-                new(84, 77),
+                new(49, 45),
+                new(58, 45),
+                new(69, 45),
+                new(76, 49),
+                new(87, 51),
+                new(88, 61),
+                new(91, 73),
+                new(88, 81),
+                new(82, 84),
                 new(76, 79),
-                new(71, 76),
-                new(71, 72),
-                new(66, 70),
-                new(59, 72),
-                new(55, 76),
-                new(48, 79),
-                new(41, 78),
-                new(39, 84),
-                new(37, 89),
-                new(40, 94),
-                new(31, 97),
-                new(26, 94),
-                new(19, 93),
-                new(13, 86),
-                new(15, 82),
-                new(16, 75),
-                new(16, 68),
-                new(24, 62),
-                new(24, 53),
-                new(22, 48),
-                new(25, 40),
-                new(18, 30),
-                new(19, 24),
-                new(22, 18),
-                new(28, 14),
+                new(69, 70),
+                new(57, 75),
+                new(45, 77),
+                new(38, 84),
+                new(38, 95),
+                new(27, 93),
+                new(28, 88),
+                new(24, 85),
+                new(19, 79),
+                new(18, 62),
+                new(22, 50),
+                new(20, 41),
+                new(18, 36),
+                new(21, 20),
+                new(33, 14),
                 new(44, 13), // past the finish
             },
             // Route 2 (Abigail)
 
             new Point[]
             {
-                new(60, 48),
-                new(72, 49),
-                new(84, 50),
-                new(87, 57),
-                new(85, 64),
-                new(86, 71),
-                new(85, 76),
-                new(82, 78),
-                new(78, 78),
-                new(76, 79),
-                new(73, 76),
-                new(72, 73),
-                new(69, 70),
+                new(54, 49),
+                new(68, 49),
+                new(75, 49),
+                new(85, 50),
+                new(88, 63),
+                new(86, 64),
+                new(87, 67),
+                new(92, 73),
+                new(87, 80),
+                new(86, 85),
+                new(73, 79),
+                new(69, 72),
                 new(60, 71),
-                new(56, 75),
-                new(53, 79),
-                new(47, 79),
-                new(39, 84),
+                new(54, 77),
+                new(46, 79),
+                new(41, 84),
                 new(37, 89),
-                new(39, 92),
-                new(34, 97),
-                new(24, 93),
-                new(20, 90),
-                new(15, 85),
-                new(12, 77),
-                new(15, 70),
-                new(15, 58),
-                new(15, 44),
-                new(19, 38),
-                new(18, 25),
+                new(40, 93),
+                new(39, 96),
+                new(31, 97),
+                new(22, 92),
+                new(18, 83),
+                new(17, 75),
+                new(17, 63),
+                new(17, 55),
+                new(17, 48),
+                new(16, 44),
+                new(18, 39),
+                new(18, 35),
+                new(19, 25),
                 new(24, 17),
-                new(44, 15), // past the finish
+                new(33, 14),
+                new(37, 14),
+                new(46, 14), // past the finish
             },
-            // Route 3 (Sebastian) — similar to Abigail but with slight variations
+            // Route 3 (Sebastian)
             new Point[]
             {
-                new(61, 48),
-                new(73, 50),
-                new(84, 51),
-                new(87, 58),
-                new(85, 65),
-                new(86, 72),
-                new(84, 77),
-                new(80, 78),
-                new(76, 80),
-                new(72, 77),
-                new(71, 73),
-                new(68, 70),
-                new(59, 72),
-                new(55, 76),
-                new(51, 79),
-                new(45, 79),
-                new(39, 84),
-                new(36, 89),
-                new(38, 93),
-                new(33, 97),
+                new(52, 47),
+                new(58, 48),
+                new(65, 48),
+                new(72, 48),
+                new(84, 49),
+                new(88, 58),
+                new(89, 63),
+                new(91, 68),
+                new(91, 72),
+                new(90, 76),
+                new(89, 81),
+                new(85, 85),
+                new(79, 84),
+                new(75, 82),
+                new(72, 76),
+                new(70, 72),
+                new(59, 70),
+                new(49, 75),
+                new(41, 78),
+                new(38, 84),
+                new(38, 89),
+                new(38, 96),
+                new(32, 97),
                 new(23, 93),
-                new(19, 89),
-                new(14, 84),
-                new(12, 76),
-                new(15, 69),
-                new(15, 57),
-                new(15, 44),
-                new(19, 37),
+                new(19, 85),
+                new(18, 77),
+                new(18, 68),
+                new(17, 59),
+                new(22, 53),
+                new(25, 46),
+                new(21, 42),
+                new(18, 35),
                 new(18, 25),
-                new(23, 17),
-                new(44, 15), // past the finish
+                new(22, 20),
+                new(27, 15),
+                new(37, 15),
+                new(47, 13), // past the finish
             },
         };
 
@@ -243,6 +273,8 @@ namespace HorseTycoon
             public float HoofSoundTimer;
             public bool MovementDone;
             public AiMode AiMode = AiMode.Match;
+            // When true, this NPC tracks the race leader instead of the nearest farmer.
+            public bool MatchLeader;
             // Last multiplier applied by match AI; used to suppress redundant log lines.
             public float LastMatchMultiplier = 1f;
         }
@@ -429,13 +461,13 @@ namespace HorseTycoon
         /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" during our race.</summary>
         public static bool EventUpForSpeed() => Game1.eventUp && !RaceRidingActive;
 
-        /// <summary>True whenever the horse festival is active (any phase).</summary>
-        public static bool InFestival => Instance?.phase.Value is Phase.Racing or Phase.Finished;
+        /// <summary>True whenever the horse festival is in any of the racing phases).</summary>
+        public static bool IsInAnyRacingPhase => Instance?.phase.Value is Phase.Racing or Phase.Finished;
 
         private static void GetMovementSpeed_Postfix(ref float __result)
         {
-            if (InFestival)
-                __result *= 0.8f;
+            if (IsInAnyRacingPhase)
+                __result *= 0.75f;
         }
 
         private static IEnumerable<CodeInstruction> GetMovementSpeed_Transpiler(IEnumerable<CodeInstruction> instructions)
@@ -1429,8 +1461,9 @@ namespace HorseTycoon
                 rider.drawOnTop = true;
                 SyncRiderToHorse(rider, horse);
 
-                int speedIV = NpcRiderSpeeds[i % NpcRiderSpeeds.Length];
-                int sprintIV = NpcRiderSprints[i % NpcRiderSprints.Length];
+                int yearBonus = Game1.year >= 2 ? 5 : 0;
+                int speedIV = NpcRiderSpeeds[i % NpcRiderSpeeds.Length] + yearBonus;
+                int sprintIV = NpcRiderSprints[i % NpcRiderSprints.Length] + yearBonus;
 
                 var racer = new NpcRacer
                 {
@@ -1447,6 +1480,10 @@ namespace HorseTycoon
 
                 this.LogVerbose($"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}");
             }
+
+            // The two fastest NPCs track the race leader; the rest track the nearest farmer.
+            foreach (NpcRacer r in npcRacers.OrderByDescending(r => r.TotalSpeed).Take(2))
+                r.MatchLeader = true;
         }
 
         /// <summary>
@@ -1498,18 +1535,35 @@ namespace HorseTycoon
                 }
                 if (r.AiMode == AiMode.Match && !allPlayersFinished)
                 {
-                    float minTileDist = float.MaxValue;
-                    Farmer? nearestFarmer = null;
-                    foreach (Farmer farmer in Game1.getAllFarmers())
+                    Farmer? targetFarmer = null;
+                    float targetTileDist = float.MaxValue;
+
+                    if (r.MatchLeader)
                     {
-                        float d = Vector2.Distance(r.Horse.Tile, farmer.Tile);
-                        if (d < minTileDist) { minTileDist = d; nearestFarmer = farmer; }
+                        // Find the farmer farthest along the course (highest projected waypoint on this route).
+                        int maxWpIdx = -1;
+                        foreach (Farmer farmer in Game1.getAllFarmers())
+                        {
+                            if (FinishOrder.Contains(farmer.UniqueMultiplayerID)) continue;
+                            int wpIdx = NearestWaypointIndex(r.Route, farmer.Tile);
+                            if (wpIdx > maxWpIdx) { maxWpIdx = wpIdx; targetFarmer = farmer; }
+                        }
+                        if (targetFarmer != null)
+                            targetTileDist = Vector2.Distance(r.Horse.Tile, targetFarmer.Tile);
+                    }
+                    else
+                    {
+                        foreach (Farmer farmer in Game1.getAllFarmers())
+                        {
+                            float d = Vector2.Distance(r.Horse.Tile, farmer.Tile);
+                            if (d < targetTileDist) { targetTileDist = d; targetFarmer = farmer; }
+                        }
                     }
 
-                    if (minTileDist > 15f && nearestFarmer != null)
+                    bool applyMatch = targetFarmer != null && targetTileDist > 15f;
+                    if (applyMatch)
                     {
-                        // Find where the nearest farmer sits on this NPC's route.
-                        int playerWpIdx = NearestWaypointIndex(r.Route, nearestFarmer.Tile);
+                        int playerWpIdx = NearestWaypointIndex(r.Route, targetFarmer!.Tile);
 
                         // Positive gap = NPC has passed more waypoints = NPC is ahead.
                         int wpGap = r.WaypointIndex - playerWpIdx;
@@ -1521,16 +1575,17 @@ namespace HorseTycoon
                         if (System.Math.Abs(roundedMultiplier - r.LastMatchMultiplier) >= 0.01f)
                         {
                             string direction = matchMultiplier < 1f ? "slowing down" : "speeding up";
+                            string trackMode = r.MatchLeader ? "leader" : "nearest player";
                             this.LogVerbose(
                                 $"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: {direction} to {roundedMultiplier:F2}x " +
                                 $"(NPC waypoint {r.WaypointIndex}, player nearest waypoint {playerWpIdx}/{r.Route.Length - 1}, " +
-                                $"nearest player {minTileDist:F1} tiles away)");
+                                $"tracking {trackMode} {targetFarmer.Name} {targetTileDist:F1} tiles away)");
                             r.LastMatchMultiplier = roundedMultiplier;
                         }
                     }
                     else if (r.LastMatchMultiplier != 1f)
                     {
-                        this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: back to normal speed (nearest player {minTileDist:F1} tiles away)");
+                        this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: back to normal speed (target player {targetTileDist:F1} tiles away)");
                         r.LastMatchMultiplier = 1f;
                     }
                 }
@@ -1646,7 +1701,7 @@ namespace HorseTycoon
         {
             float tilesPerSec = 5f + (r.TotalSpeed / 20);
             if (r.NpcSprintPhase == SprintPhase.Sprinting)
-                tilesPerSec *= 1.25f;
+                tilesPerSec *= 1f + (r.TotalSprint * 0.005f);
             return tilesPerSec * 64f / 1000f;
         }
 
