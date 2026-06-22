@@ -279,7 +279,7 @@ namespace HorseTycoon
             public float LastMatchMultiplier = 1f;
         }
 
-        private static readonly bool VerboseLogging = false;
+        private static readonly bool VerboseLogging = true;
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
@@ -309,6 +309,9 @@ namespace HorseTycoon
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
+
+        // Set true while re-invoking warpFarmer from the "Yes" path so our prefix doesn't re-intercept it.
+        private static bool SkipHorseWarning = false;
 
         private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
         private readonly PerScreen<int> ceremonyStep = new(() => 0);
@@ -403,6 +406,16 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(Horse), nameof(Horse.checkAction)),
                 prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(CheckAction_Prefix)));
 
+            // Intercept warps to Forest during the festival window so we can warn the player if
+            // they're not mounted and an available horse exists on the farm.
+            // We patch the LocationRequest overload because ALL string overloads delegate into it,
+            // and the festival attendance gate (SP dialog + MP ReadyCheckDialog "festivalStart") lives
+            // inside that overload — so this prefix fires before any of that logic runs.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Game1), "warpFarmer",
+                    new[] { typeof(LocationRequest), typeof(int), typeof(int), typeof(int) }),
+                prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(WarpFarmer_Prefix)));
+
             this.Helper.ConsoleCommands.Add(
                 "ht_race_tile",
                 "Logs the player's current tile (for tuning festival race coordinates).",
@@ -493,10 +506,85 @@ namespace HorseTycoon
             }
         }
 
+        // ======================== Festival Entry Horse Warning ========================
+
+        /// <summary>
+        /// Fires before Game1.warpFarmer(LocationRequest, int, int, int) — the single overload that all
+        /// string convenience warpFarmer overloads delegate into, and where the festival attendance gate
+        /// (SP dialog / MP ReadyCheckDialog "festivalStart") lives. Cancels the warp to Forest during the
+        /// festival window if the player is not mounted and has a rideable horse on the farm, then shows
+        /// a yes/no confirmation. "Yes" re-invokes warpFarmer with a bypass flag; "No" does nothing.
+        /// </summary>
+        private static bool WarpFarmer_Prefix(LocationRequest locationRequest, int tileX, int tileY, int facingDirectionAfterWarp)
+        {
+            if (SkipHorseWarning) return true;
+            if (locationRequest?.Name != "Forest") return true;
+            if (!IsFestivalTimeWindow()) return true;
+            if (Game1.player?.mount != null) return true;
+            if (!HasAvailableUnmountedHorse()) return true;
+
+            var capturedReq = locationRequest;
+            int capturedX = tileX, capturedY = tileY, capturedDir = facingDirectionAfterWarp;
+
+            Game1.currentLocation.createQuestionDialogue(
+                "Are you sure you'd like to enter the horse festival without your horse?",
+                new[]
+                {
+                    new Response("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
+                    new Response("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
+                },
+                (_, answer) =>
+                {
+                    if (answer != "Yes") return;
+                    SkipHorseWarning = true;
+                    Game1.warpFarmer(capturedReq, capturedX, capturedY, capturedDir);
+                    SkipHorseWarning = false;
+                });
+
+            return false; // cancel the original warp
+        }
+
+        private static bool IsFestivalTimeWindow()
+        {
+            return Game1.currentSeason == "spring"
+                && Game1.dayOfMonth == 21
+                && Game1.timeOfDay >= 1200
+                && Game1.timeOfDay < 1800;
+        }
+
+        /// <summary>Returns true if at least one farm horse exists that is not currently mounted by any player.</summary>
+        private static bool HasAvailableUnmountedHorse()
+        {
+            var mountedIds = Game1.getOnlineFarmers()
+                .Where(f => f.mount != null)
+                .Select(f => f.mount!.HorseId)
+                .ToHashSet();
+
+            bool found = false;
+            Utility.ForEachLocation(loc =>
+            {
+                foreach (NPC npc in loc.characters.ToList())
+                {
+                    if (npc is Horse horse
+                        && !mountedIds.Contains(horse.HorseId)
+                        && HorseHelper.GetFarmAnimalForHorse(horse) != null)
+                    {
+                        found = true;
+                        return false;
+                    }
+                }
+                return true;
+            });
+            return found;
+        }
+
+        // ======================== End Festival Entry Horse Warning ========================
+
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
             if (!Context.IsWorldReady)
                 return;
+
 
             // Capture the ridden horse every tick before the festival dismounts the player on warp.
             if (Game1.player.isRidingHorse() && Game1.player.mount != null)
@@ -1527,7 +1615,8 @@ namespace HorseTycoon
                 // their speed up or down based on who is further along the course.
                 // Progress is measured by waypoint index on the NPC's own route so that raw
                 // movement speed differences between NPCs and players don't skew the comparison.
-                bool allPlayersFinished = Game1.getAllFarmers().All(f => FinishOrder.Contains(f.UniqueMultiplayerID));
+                var racingFarmers = Game1.getAllFarmers().Where(f => f.currentLocation == loc).ToList();
+                bool allPlayersFinished = racingFarmers.Count == 0 || racingFarmers.All(f => FinishOrder.Contains(f.UniqueMultiplayerID));
                 if (r.AiMode == AiMode.Match && allPlayersFinished && r.LastMatchMultiplier != 1f)
                 {
                     this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: all players finished — resuming normal speed");
@@ -1542,7 +1631,7 @@ namespace HorseTycoon
                     {
                         // Find the farmer farthest along the course (highest projected waypoint on this route).
                         int maxWpIdx = -1;
-                        foreach (Farmer farmer in Game1.getAllFarmers())
+                        foreach (Farmer farmer in racingFarmers)
                         {
                             if (FinishOrder.Contains(farmer.UniqueMultiplayerID)) continue;
                             int wpIdx = NearestWaypointIndex(r.Route, farmer.Tile);
@@ -1553,7 +1642,7 @@ namespace HorseTycoon
                     }
                     else
                     {
-                        foreach (Farmer farmer in Game1.getAllFarmers())
+                        foreach (Farmer farmer in racingFarmers)
                         {
                             float d = Vector2.Distance(r.Horse.Tile, farmer.Tile);
                             if (d < targetTileDist) { targetTileDist = d; targetFarmer = farmer; }
