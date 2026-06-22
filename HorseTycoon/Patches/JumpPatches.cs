@@ -85,26 +85,16 @@ namespace HorseTycoon
 
         public static void Farmer_getMovementSpeed_Postfix(Farmer __instance, ref float __result)
         {
-            // Ensure the player is on a horse and the mount exists
             if (__instance.isRidingHorse() && __instance.mount != null)
             {
-                // Use your HorseHelper to link the mount back to the FarmAnimal
-                var horse = HorseHelper.GetFarmAnimalForHorse(__instance.mount);
-                if (horse != null)
-                {
-                    // Apply the speed boost calculated in HorseStats
-                    var stats = horse.GetHorseStats();
-                    __result += stats.SpeedBoost;
-                }
+                var (speedBoost, totalSprint) = HorseHelper.GetRaceStats(__instance.mount);
+                __result += speedBoost;
 
                 // The race uses a custom sprint (the vanilla sprint buff's timer is frozen during the
                 // festival), so add its speed bonus here. Base matches a +1 Speed buff in the riding
                 // formula, plus 0.05 per sprint skill point.
                 if (FestivalRaceManager.IsSprinting)
-                {
-                    int sprintSkill = horse?.GetHorseStats().TotalSprint ?? 0;
-                    __result += (1f + sprintSkill * 0.05f) * 0.066f * Game1.currentGameTime.ElapsedGameTime.Milliseconds;
-                }
+                    __result += (1f + totalSprint * 0.05f) * 0.066f * Game1.currentGameTime.ElapsedGameTime.Milliseconds;
             }
         }
     }

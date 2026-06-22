@@ -48,6 +48,10 @@ namespace HorseTycoon
         // Decorative pony-ride horse in the pen to the left of Leah's house.
         private static readonly Point PenHorseTile = new(94, 31);
         private static readonly string[] AllSkins = { "Roan", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
+        private static readonly string[] MarnieHorseNames = {
+            "Clover", "Daisy", "Biscuit", "Maple", "Rosie", "Pepper",
+            "Nutmeg", "Ember", "Cobalt", "Juniper", "Bramble", "Dusty",
+        };
 
         private const int WanderRepickMinTicks = 60;
         private const int WanderRepickMaxTicks = 180;
@@ -55,8 +59,8 @@ namespace HorseTycoon
         // NPC racers: Marnie, Leah, Abigail ride in the race as AI opponents.
         // Speed stat drives tiles/sec via 5 + (speed / 20): 20 → 6 t/s, 40 → 7 t/s, 60 → 8 t/s.
         private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail", "Sebastian" };
-        private static readonly int[] NpcRiderSpeeds = { 15, 30, 40, 35 };
-        private static readonly int[] NpcRiderSprints = { 20, 40, 50, 50 };
+        private static readonly int[] NpcRiderSpeeds = { 15, 25, 35, 40 };
+        private static readonly int[] NpcRiderSprints = { 20, 35, 45, 45 };
 
 
         // Per-NPC race routes. Each NPC is assigned a different route by index.
@@ -142,11 +146,9 @@ namespace HorseTycoon
             {
                 new(54, 49),
                 new(68, 49),
-                new(75, 49),
+                new(75, 50),
                 new(85, 50),
                 new(88, 63),
-                new(86, 64),
-                new(87, 67),
                 new(92, 73),
                 new(87, 80),
                 new(86, 85),
@@ -304,6 +306,7 @@ namespace HorseTycoon
         private readonly PerScreen<bool> stallsSpawned = new(() => false);
         private readonly PerScreen<Horse?> penHorse = new(() => null);
         private readonly PerScreen<NPC?> jasOnHorse = new(() => null);
+        private readonly PerScreen<Horse?> borrowedFestivalHorse = new(() => null);
         // -1 means inactive. Kept in real time so it ticks while the festival pauses the game clock.
         private readonly PerScreen<float> startCountdown = new(() => -1f);
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
@@ -369,6 +372,8 @@ namespace HorseTycoon
 
         private const string MsgPastureHorse = "PastureHorse";
         private record PastureHorseMessage(string HorseId, int Slot);
+        private const string MsgBorrowedHorse = "BorrowedHorse";
+        private record BorrowedHorseMessage(string HorseId, string Skin, int Slot);
         private const string MsgOpenReadyCheck = "OpenReadyCheck";
         private const string MsgPlayerFinished = "PlayerFinished";
         private const string MsgStartCeremony = "StartCeremony";
@@ -675,8 +680,7 @@ namespace HorseTycoon
             if (sprintPhase.Value != SprintPhase.Ready || Game1.player.mount == null)
                 return;
 
-            FarmAnimal? horse = HorseHelper.GetFarmAnimalForHorse(Game1.player.mount);
-            int totalSprint = horse?.GetHorseStats().TotalSprint ?? 0;
+            var (_, totalSprint) = HorseHelper.GetRaceStats(Game1.player.mount);
             float durationMs = System.Math.Clamp((totalSprint / 4f) * 1000f, 1000f, 100000f);
 
             sprintPhase.Value = SprintPhase.Sprinting;
@@ -765,6 +769,21 @@ namespace HorseTycoon
                 return;
             }
 
+            if (e.Type == MsgBorrowedHorse && RaceFestival != null)
+            {
+                var bmsg = e.ReadAs<BorrowedHorseMessage>();
+                if (!System.Guid.TryParse(bmsg.HorseId, out System.Guid bid))
+                    return;
+                var borrowedHorse = new Horse(bid, 0, 0);
+                borrowedHorse.Name = "MarniesLoan_remote";
+                borrowedHorse.modData[HorseHelper.HorseSkinKey] = bmsg.Skin;
+                borrowedHorse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
+                RaceFestival.showWorldCharacters = true;
+                PlaceHorseInPasture(borrowedHorse, bmsg.Slot);
+                this.LogVerbose($"Placed remote borrowed horse in pasture slot {bmsg.Slot}.");
+                return;
+            }
+
             if (e.Type != MsgPastureHorse || RaceFestival == null)
                 return;
 
@@ -783,6 +802,43 @@ namespace HorseTycoon
             RaceFestival.showWorldCharacters = true;
             PlaceHorseInPasture(horse, msg.Slot);
             this.LogVerbose($"Placed remote horse '{horse.Name}' in pasture slot {msg.Slot}.");
+        }
+
+        /// <summary>Creates a borrowed horse and sets competitor/borrowedFestivalHorse. No pasture
+        /// placement or broadcast — call AssignBorrowedHorse for the pasture-phase UI flow.</summary>
+        private void EnsureCompetitorHorse()
+        {
+            if (competitor.Value != null) return;
+
+            string skin = AllSkins[Game1.random.Next(AllSkins.Length)];
+            string name = MarnieHorseNames[Game1.random.Next(MarnieHorseNames.Length)];
+            var horse = new Horse(System.Guid.NewGuid(), 0, 0);
+            horse.Name = name;
+            horse.modData[HorseHelper.HorseSkinKey] = skin;
+            horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
+            horse.modData[HorseHelper.BorrowedSpeedKey] = "10";
+            horse.modData[HorseHelper.BorrowedSprintKey] = "10";
+            borrowedFestivalHorse.Value = horse;
+            competitor.Value = horse;
+            this.LogVerbose($"Auto-assigned borrowed horse '{horse.Name}' to {Game1.player.Name}.");
+        }
+
+        private void AssignBorrowedHorse()
+        {
+            if (Game1.currentLocation == null) return;
+
+            this.EnsureCompetitorHorse();
+            Horse horse = competitor.Value!;
+
+            int slot = PastureSlotFor(Game1.player);
+            PlaceHorseInPasture(horse, slot);
+
+            this.Helper.Multiplayer.SendMessage(
+                new BorrowedHorseMessage(horse.HorseId.ToString(), horse.modData[HorseHelper.HorseSkinKey], slot),
+                MsgBorrowedHorse,
+                modIDs: new[] { this.Helper.ModRegistry.ModID });
+
+            this.LogVerbose($"Placed borrowed horse '{horse.Name}' in pasture slot {slot}.");
         }
 
         private static void PlaceHorseInPasture(Horse horse, int slot)
@@ -960,25 +1016,52 @@ namespace HorseTycoon
 
             this.Helper.Input.Suppress(e.Button);
 
-            // Only the host can start the race; other players wait for the ready check.
-            if (!IsHost)
-            {
-                Game1.drawObjectDialogue("Lewis: We're just waiting on the host to start the race.");
-                return;
-            }
-
-            if (competitor.Value == null)
-            {
-                Game1.drawObjectDialogue("Lewis: Come back riding your horse if you want to race!");
-                return;
-            }
-
-            Response[] answers =
+            Response[] yesNo =
             {
                 new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
                 new("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
             };
-            Game1.currentLocation.createQuestionDialogue("Ready to start the race?", answers,
+
+            if (competitor.Value == null)
+            {
+                if (IsHost)
+                {
+                    // Host without horse: borrow + start race in one step.
+                    Game1.currentLocation.createQuestionDialogue(
+                        "Lewis: It looks like you don't have a horse! Marnie has some available to borrow. Ready to ride one and start the race?",
+                        yesNo,
+                        (_, answer) =>
+                        {
+                            if (answer != "Yes") return;
+                            this.AssignBorrowedHorse();
+                            Game1.drawObjectDialogue($"Lewis: Great! {competitor.Value!.Name} here will treat you well!");
+                            Game1.afterDialogues = this.BeginRace;
+                        }, lewis);
+                }
+                else
+                {
+                    // Non-host without horse: borrow only (host starts the race separately).
+                    Game1.currentLocation.createQuestionDialogue(
+                        "Lewis: It looks like you don't have a horse! Marnie has some available to borrow for the race. Would you like to ride one?",
+                        yesNo,
+                        (_, answer) =>
+                        {
+                            if (answer != "Yes") return;
+                            this.AssignBorrowedHorse();
+                            Game1.drawObjectDialogue($"Lewis: Great! {competitor.Value!.Name} here will treat you well!");
+                        }, lewis);
+                }
+                return;
+            }
+
+            // Only the host can start the race; other players wait for the ready check.
+            if (!IsHost)
+            {
+                Game1.drawObjectDialogue("Lewis: We're just waiting on the host to start the race!");
+                return;
+            }
+
+            Game1.currentLocation.createQuestionDialogue("Ready to start the race?", yesNo,
                 (_, answer) =>
                 {
                     if (answer == "Yes")
@@ -1028,6 +1111,7 @@ namespace HorseTycoon
 
         private void LineUp()
         {
+            this.EnsureCompetitorHorse();
             Horse? horse = competitor.Value;
             GameLocation loc = Game1.currentLocation;
             if (horse == null || loc == null)
@@ -1396,11 +1480,12 @@ namespace HorseTycoon
 
         private static string GetFarmerName(long uniqueId)
         {
-            if (uniqueId == Game1.player.UniqueMultiplayerID)
-                return Game1.player.Name;
-            return Game1.getAllFarmers()
-                .FirstOrDefault(f => f.UniqueMultiplayerID == uniqueId)
-                ?.Name ?? "Unknown";
+            Farmer? farmer = uniqueId == Game1.player.UniqueMultiplayerID
+                ? Game1.player
+                : Game1.getAllFarmers().FirstOrDefault(f => f.UniqueMultiplayerID == uniqueId);
+            if (farmer == null) return "Unknown";
+            string horsePart = farmer.mount != null ? $" on {farmer.mount.Name}" : "";
+            return farmer.Name + horsePart;
         }
 
         private string GetRacerName(long uniqueId)
@@ -1949,6 +2034,11 @@ namespace HorseTycoon
             {
                 pastureAnimal.Value.currentLocation?.animals.Remove(pastureAnimal.Value.myID.Value);
                 pastureAnimal.Value = null;
+            }
+            if (borrowedFestivalHorse.Value != null)
+            {
+                borrowedFestivalHorse.Value.currentLocation?.characters.Remove(borrowedFestivalHorse.Value);
+                borrowedFestivalHorse.Value = null;
             }
             phase.Value = Phase.None;
             competitor.Value = null;

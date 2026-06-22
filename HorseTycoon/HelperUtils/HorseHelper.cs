@@ -15,6 +15,9 @@ namespace HorseTycoon
         public const string HorseSkinKey = "Froshty.HorseTycoon/HorseSkin";
         // Comma-separated overlay names. Absent or empty = no overlays.
         public const string OverlaysKey = "Froshty.HorseTycoon/Overlays";
+        // Fallback stat keys written directly onto a borrowed festival horse (no FarmAnimal backing).
+        public const string BorrowedSpeedKey = "Froshty.HorseTycoon/BorrowedSpeed";
+        public const string BorrowedSprintKey = "Froshty.HorseTycoon/BorrowedSprint";
         public static string? GetOverlaysRaw(FarmAnimal animal) =>
             animal.modData.TryGetValue(OverlaysKey, out string? v) ? v : null;
 
@@ -102,6 +105,24 @@ namespace HorseTycoon
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Returns (SpeedBoost, TotalSprint) for a mounted horse.
+        /// Uses FarmAnimal stats when available; falls back to borrowed-stat modData keys for
+        /// temporary festival horses that have no FarmAnimal backing.
+        /// </summary>
+        public static (float SpeedBoost, int TotalSprint) GetRaceStats(Horse mount)
+        {
+            var animal = GetFarmAnimalForHorse(mount);
+            if (animal != null)
+            {
+                var stats = animal.GetHorseStats();
+                return (stats.SpeedBoost, stats.TotalSprint);
+            }
+            int speed  = mount.modData.TryGetValue(BorrowedSpeedKey,  out string sv) && int.TryParse(sv,  out int s) ? s : 0;
+            int sprint = mount.modData.TryGetValue(BorrowedSprintKey, out string pv) && int.TryParse(pv, out int p) ? p : 0;
+            return (speed / 40f, sprint);
         }
 
         // The "this" keyword is what makes it an extension method!
