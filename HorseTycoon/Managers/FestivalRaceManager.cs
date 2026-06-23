@@ -454,6 +454,31 @@ namespace HorseTycoon
                 (_, _) => this.RestartRace());
 
             this.Helper.ConsoleCommands.Add(
+                "ht_mod_npcs",
+                "Dumps mod NPC detection state for debugging placeholder spectator slots.",
+                (_, _) =>
+                {
+                    var vanillaNames = new HashSet<string>(CharacterTileNames, System.StringComparer.OrdinalIgnoreCase);
+                    if (Game1.characterData == null)
+                    {
+                        this.Monitor.Log("Game1.characterData is NULL", LogLevel.Error);
+                        return;
+                    }
+                    this.Monitor.Log($"Game1.characterData has {Game1.characterData.Count} entries.", LogLevel.Info);
+                    var modNames = Game1.characterData.Keys.Where(n => !vanillaNames.Contains(n)).ToList();
+                    this.Monitor.Log($"Mod NPC names ({modNames.Count}): {string.Join(", ", modNames)}", LogLevel.Info);
+                    var farmers = Game1.getAllFarmers().ToList();
+                    this.Monitor.Log($"Online farmers: {string.Join(", ", farmers.Select(f => f.Name))}", LogLevel.Info);
+                    foreach (string name in modNames)
+                    {
+                        bool anyMet = farmers.Any(f => f.friendshipData.ContainsKey(name));
+                        this.Monitor.Log($"  '{name}': met by any farmer = {anyMet}", LogLevel.Info);
+                    }
+                    var met = this.GetMetModNpcNames();
+                    this.Monitor.Log($"Final met list ({met.Count}): {string.Join(", ", met)}", LogLevel.Info);
+                });
+
+            this.Helper.ConsoleCommands.Add(
                 "ht_race_pfc_info",
                 "Dumps PathFindController reflection info for debugging NPC pathfinding.",
                 (_, _) =>
@@ -699,7 +724,7 @@ namespace HorseTycoon
                 return;
 
             var (_, totalSprint) = HorseHelper.GetRaceStats(Game1.player.mount);
-            float durationMs = System.Math.Clamp((totalSprint / 4f) * 1000f, 1000f, 100000f);
+            float durationMs = System.Math.Clamp(totalSprint / 10f * 1000f, 1000f, 10000f);
 
             sprintPhase.Value = SprintPhase.Sprinting;
             sprintTimer.Value = durationMs;
@@ -1449,7 +1474,7 @@ namespace HorseTycoon
             this.SetLayerVisible("Racing", false);
             this.SetLayerVisible("AwardsEvent", true);
             this.DespawnSpectators();
-            this.SpawnSpectators(ceremonySpectators);
+            this.SpawnSpectators(ceremonySpectators, ceremonyOffset);
 
             this.LogVerbose($"Ceremony started. Local placement (0-based): {placement}");
         }
@@ -1636,23 +1661,72 @@ namespace HorseTycoon
         private List<NpcSpectatorPlacement> ReadNpcPlacements(string layerName)
         {
             var results = new List<NpcSpectatorPlacement>();
+            var placeholderSlots = new List<(Point Tile, int Direction)>();
+
             var layer = Game1.currentLocation?.map.GetLayer(layerName);
             if (layer == null) return results;
+
             for (int y = 0; y < layer.LayerHeight; y++)
-            for (int x = 0; x < layer.LayerWidth; x++)
+                for (int x = 0; x < layer.LayerWidth; x++)
+                {
+                    var tile = layer.Tiles[x, y];
+                    if (tile?.TileSheet?.Id != "Characters") continue;
+                    int npcIdx = tile.TileIndex / 4;
+                    int dir = tile.TileIndex % 4;
+                    if (npcIdx < CharacterTileNames.Length)
+                        results.Add(new NpcSpectatorPlacement(CharacterTileNames[npcIdx], new Point(x, y), dir));
+                    else
+                        placeholderSlots.Add((new Point(x, y), dir));
+                }
+
+            if (placeholderSlots.Count > 0)
             {
-                var tile = layer.Tiles[x, y];
-                if (tile?.TileSheet?.Id != "Characters") continue;
-                int npcIdx = tile.TileIndex / 4;
-                int dir = tile.TileIndex % 4;
-                if (npcIdx < CharacterTileNames.Length)
-                    results.Add(new NpcSpectatorPlacement(CharacterTileNames[npcIdx], new Point(x, y), dir));
+                var modNpcs = this.GetMetModNpcNames();
+                for (int i = 0; i < placeholderSlots.Count; i++)
+                {
+                    if (i >= modNpcs.Count) break;
+                    var (tile, dir) = placeholderSlots[i];
+                    results.Add(new NpcSpectatorPlacement(modNpcs[i], tile, dir));
+                    this.LogVerbose($"ReadNpcPlacements('{layerName}'): assigned mod NPC '{modNpcs[i]}' to placeholder at {tile}.");
+                }
+                if (modNpcs.Count < placeholderSlots.Count)
+                    this.LogVerbose($"ReadNpcPlacements('{layerName}'): {placeholderSlots.Count - modNpcs.Count} placeholder slot(s) left unfilled (not enough met mod NPCs).");
             }
-            this.LogVerbose($"ReadNpcPlacements('{layerName}'): {results.Count} entries.");
+
+            this.LogVerbose($"ReadNpcPlacements('{layerName}'): {results.Count} entries ({placeholderSlots.Count} placeholder slot(s)).");
             return results;
         }
 
-        private void SpawnSpectators(List<NpcSpectatorPlacement>? placements)
+        /// <summary>
+        /// Returns names of mod-added NPCs (not in the vanilla CharacterTileNames list) that at least
+        /// one attending online farmer has already met, in a deterministic shuffled order.
+        /// </summary>
+        private List<string> GetMetModNpcNames()
+        {
+            var vanillaNames = new HashSet<string>(CharacterTileNames, System.StringComparer.OrdinalIgnoreCase);
+
+            var allNames = Game1.characterData?.Keys;
+            if (allNames == null) return new List<string>();
+
+            var farmers = Game1.getAllFarmers().ToList();
+            var met = allNames
+                .Where(name => !vanillaNames.Contains(name)
+                    && farmers.Any(f => f.friendshipData.ContainsKey(name)))
+                .ToList();
+
+            // Shuffle deterministically so all clients assign the same mod NPC to each placeholder.
+            var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
+            for (int i = met.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (met[i], met[j]) = (met[j], met[i]);
+            }
+
+            this.LogVerbose($"GetMetModNpcNames: found {met.Count} met mod NPC(s): {string.Join(", ", met)}");
+            return met;
+        }
+
+        private void SpawnSpectators(List<NpcSpectatorPlacement>? placements, Vector2 pixelOffset = default)
         {
             if (placements == null) return;
             var festLoc = Game1.currentLocation;
@@ -1662,13 +1736,13 @@ namespace HorseTycoon
                 // Create a fresh event-actor NPC — same approach as the game's addTemporaryActor command.
                 // This leaves the real NPC untouched at home with their normal animation state.
                 var sprite = new AnimatedSprite("Characters/" + p.Name, 0, 16, 32);
-                var actor = new NPC(sprite, TileToPixels(p.Tile), p.Direction, p.Name);
+                var actor = new NPC(sprite, TileToPixels(p.Tile) + pixelOffset, p.Direction, p.Name);
                 actor.faceDirection(p.Direction);
                 actor.Sprite.StopAnimation();
                 actor.EventActor = true;
                 festLoc.characters.Add(actor);
                 spawnedSpectators.Add(actor);
-                this.LogVerbose($"Spawned spectator actor '{p.Name}' at {p.Tile}.");
+                this.LogVerbose($"Spawned spectator actor '{p.Name}' at {p.Tile} offset {pixelOffset}.");
             }
         }
 

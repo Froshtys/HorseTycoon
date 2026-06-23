@@ -200,6 +200,10 @@ namespace HorseTycoon.Patches
 
             __instance.modData.TryGetValue(HorseHelper.OverlaysKey, out string? overlaysValue);
 
+            // Horses from saves before the saddle system lack OverlaysKey — default to brown.
+            if (string.IsNullOrEmpty(overlaysValue))
+                overlaysValue = "Saddle_Brown,Bridle_Brown";
+
             Texture2D? texture = GetSkinTexture(skinName, overlaysValue);
             if (texture == null) return;
 

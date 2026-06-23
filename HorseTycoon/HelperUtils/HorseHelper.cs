@@ -15,9 +15,37 @@ namespace HorseTycoon
         public const string HorseSkinKey = "Froshty.HorseTycoon/HorseSkin";
         // Comma-separated overlay names. Absent or empty = no overlays.
         public const string OverlaysKey = "Froshty.HorseTycoon/Overlays";
+        // Unqualified item ID of the currently equipped saddle (e.g. "HorseTycoon.SaddleBrown").
+        public const string EquippedSaddleKey = "Froshty.HorseTycoon/EquippedSaddle";
         // Fallback stat keys written directly onto a borrowed festival horse (no FarmAnimal backing).
         public const string BorrowedSpeedKey = "Froshty.HorseTycoon/BorrowedSpeed";
         public const string BorrowedSprintKey = "Froshty.HorseTycoon/BorrowedSprint";
+
+        // Maps unqualified saddle item ID → "Saddle_X,Bridle_X" overlay string.
+        public static readonly IReadOnlyDictionary<string, string> SaddleItemOverlays =
+            new Dictionary<string, string>
+            {
+                ["HorseTycoon.SaddleBrown"]  = "Saddle_Brown,Bridle_Brown",
+                ["HorseTycoon.SaddleWhite"]  = "Saddle_White,Bridle_White",
+                ["HorseTycoon.SaddleBlack"]  = "Saddle_Black,Bridle_Black",
+                ["HorseTycoon.SaddleRed"]    = "Saddle_Red,Bridle_Red",
+                ["HorseTycoon.SaddleOrange"] = "Saddle_Orange,Bridle_Orange",
+                ["HorseTycoon.SaddleTeal"]   = "Saddle_Teal,Bridle_Teal",
+                ["HorseTycoon.SaddleIce"]    = "Saddle_Ice,Bridle_Ice",
+            };
+
+        public static bool IsSaddleItem(Item? item) =>
+            item != null && SaddleItemOverlays.ContainsKey(item.ItemId);
+
+        public static string GetEquippedSaddleId(Horse horse) =>
+            horse.modData.TryGetValue(EquippedSaddleKey, out string? id) ? id : "HorseTycoon.SaddleBrown";
+
+        public static void EquipSaddle(Horse horse, string itemId)
+        {
+            horse.modData[EquippedSaddleKey] = itemId;
+            if (SaddleItemOverlays.TryGetValue(itemId, out string? overlays))
+                horse.modData[OverlaysKey] = overlays;
+        }
         public static string? GetOverlaysRaw(FarmAnimal animal) =>
             animal.modData.TryGetValue(OverlaysKey, out string? v) ? v : null;
 
@@ -345,12 +373,16 @@ namespace HorseTycoon
         {
             horse.modData[HorseSkinKey] = SkinIdToName(skinId);
 
-            // Sync overlay list: if the animal has an explicit list, copy it; otherwise remove
-            // the key so the draw patch falls back to "use all available overlays".
+            // Sync overlay list from the animal if it has one explicitly set.
             if (sourceAnimal != null && sourceAnimal.modData.ContainsKey(OverlaysKey))
+            {
                 horse.modData[OverlaysKey] = sourceAnimal.modData[OverlaysKey];
-            else
-                horse.modData.Remove(OverlaysKey);
+            }
+            else if (!horse.modData.ContainsKey(EquippedSaddleKey))
+            {
+                // New horse — default to brown saddle.
+                EquipSaddle(horse, "HorseTycoon.SaddleBrown");
+            }
 
             monitor.Log($"Set horse skin to '{horse.modData[HorseSkinKey]}' (from skinId '{skinId}')", LogLevel.Debug);
         }

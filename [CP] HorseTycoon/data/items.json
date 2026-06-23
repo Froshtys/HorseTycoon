@@ -1,6 +1,118 @@
-{	
+{
 	"Changes": [
-			{
+		{
+	"LogName": "Item Data Saddle Brown",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleBrown": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleBrown_Description}}",
+		"DisplayName": "{{i18n:SaddleBrown_Name}}",
+		"Name": "Brown Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleBrown",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle White",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleWhite": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleWhite_Description}}",
+		"DisplayName": "{{i18n:SaddleWhite_Name}}",
+		"Name": "White Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleWhite",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Black",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleBlack": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleBlack_Description}}",
+		"DisplayName": "{{i18n:SaddleBlack_Name}}",
+		"Name": "Black Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleBlack",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Red",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleRed": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleRed_Description}}",
+		"DisplayName": "{{i18n:SaddleRed_Name}}",
+		"Name": "Red Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleRed",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Orange",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleOrange": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleOrange_Description}}",
+		"DisplayName": "{{i18n:SaddleOrange_Name}}",
+		"Name": "Orange Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleOrange",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Teal",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleTeal": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleTeal_Description}}",
+		"DisplayName": "{{i18n:SaddleTeal_Name}}",
+		"Name": "Teal Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleTeal",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Ice",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleIce": {
+		"Category": -18,
+		"Description": "{{i18n:SaddleIce_Description}}",
+		"DisplayName": "{{i18n:SaddleIce_Name}}",
+		"Name": "Ice Saddle",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleIce",
+		"Type": "Basic"
+		}
+	}},
+		{
 	"LogName": "Item Data Manure",
 	"Action": "EditData",
 	"Target": "Data/Objects",

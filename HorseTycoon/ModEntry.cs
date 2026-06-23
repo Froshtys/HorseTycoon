@@ -409,7 +409,7 @@ namespace HorseTycoon
             }
 
             // 4. Calculate Duration (Total Sprint / 4) in milliseconds
-            int durationMs = Math.Clamp((stats.TotalSprint / 4) * 1000, 1000, 100000);
+            int durationMs = Math.Clamp((stats.TotalSprint / 10) * 1000, 1000, 10000);
 
             // 5. Apply Sprint Buff
             Buff sprintBuff = new Buff(

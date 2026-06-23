@@ -133,6 +133,26 @@ namespace HorseTycoon
             if (stable == null || !stable.modData.ContainsKey(HorseHelper.CurrentFarmHorseIdKey))
                 return true;
 
+            // Saddle equip: player holds a saddle item while not mounted.
+            if (Game1.player.mount != __instance && HorseHelper.IsSaddleItem(Game1.player.ActiveItem))
+            {
+                string newSaddleId = Game1.player.ActiveItem.ItemId;
+                string oldSaddleId = HorseHelper.GetEquippedSaddleId(__instance);
+
+                // Return the old saddle to the player's inventory (drop on ground if full).
+                Item oldSaddle = ItemRegistry.Create($"(O){oldSaddleId}");
+                Item? overflow = Game1.player.addItemToInventory(oldSaddle);
+                if (overflow != null)
+                    Game1.createItemDebris(overflow, Game1.player.Position, -1);
+
+                // Consume one from the held stack.
+                Game1.player.reduceActiveItemByOne();
+
+                HorseHelper.EquipSaddle(__instance, newSaddleId);
+                Game1.playSound("dwop");
+                return false;
+            }
+
             // Prevent the vanilla per-player naming dialog by ensuring horseName is never empty
             // for a stable already managed by this mod.
             if (string.IsNullOrEmpty(Game1.player.horseName.Value))

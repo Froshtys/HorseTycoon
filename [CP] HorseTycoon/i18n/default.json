@@ -18,5 +18,26 @@
     "FertilizerGranulator_DisplayName": "Fertilizer Granulator",
 	"FertilizerGranulator_Description": "Converts livestock manure into fertilizer.",
 
-    "HorseFestival_Name": "Horse Festival"
+    "HorseFestival_Name": "Horse Festival",
+
+    "SaddleBrown_Name": "Brown Saddle",
+    "SaddleBrown_Description": "A classic brown leather saddle and matching bridle. Right-click your horse to equip it.",
+
+    "SaddleWhite_Name": "White Saddle",
+    "SaddleWhite_Description": "A clean white saddle and matching bridle. Right-click your horse to equip it.",
+
+    "SaddleBlack_Name": "Black Saddle",
+    "SaddleBlack_Description": "A sleek black saddle and matching bridle. Right-click your horse to equip it.",
+
+    "SaddleRed_Name": "Red Saddle",
+    "SaddleRed_Description": "A bold red saddle and matching bridle. Right-click your horse to equip it.",
+
+    "SaddleOrange_Name": "Orange Saddle",
+    "SaddleOrange_Description": "A vibrant orange saddle and matching bridle. Right-click your horse to equip it.",
+
+    "SaddleTeal_Name": "Teal Saddle",
+    "SaddleTeal_Description": "A striking teal saddle and matching bridle. Right-click your horse to equip it.",
+
+    "SaddleIce_Name": "Ice Saddle",
+    "SaddleIce_Description": "A frosty pale saddle and matching bridle. Right-click your horse to equip it."
 }
