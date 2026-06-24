@@ -45,6 +45,11 @@ namespace HorseTycoon
         // Finish band (inclusive tile rectangle).
         private static readonly Point FinishMin = new(40, 11);
         private static readonly Point FinishMax = new(40, 17);
+        // Disqualification zone: area north of the starting-gate's north fence AND east of the finish-line's east barrier.
+        // A player who enters this zone while racing has jumped off the track and is disqualified.
+        // Tune with `ht_race_tile`.
+        private static readonly int DqZoneNorthOfY = 43;  // player.Tile.Y < this value
+        private static readonly int DqZoneEastOfX = 41;   // player.Tile.X > this value
         // Decorative pony-ride horse in the pen to the left of Leah's house.
         private static readonly Point PenHorseTile = new(94, 31);
         private static readonly string[] AllSkins = { "Roan", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
@@ -314,6 +319,7 @@ namespace HorseTycoon
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
         private readonly PerScreen<System.TimeSpan> raceStartTime = new(() => System.TimeSpan.Zero);
+        private readonly PerScreen<bool> disqualified = new(() => false);
 
         // Set true while re-invoking warpFarmer from the "Yes" path so our prefix doesn't re-intercept it.
         private static bool SkipHorseWarning = false;
@@ -376,6 +382,7 @@ namespace HorseTycoon
 
         // Host-only: tracks finish order (UniqueMultiplayerIDs) and the 2-second ceremony delay.
         private static readonly List<long> FinishOrder = new();
+        private static readonly HashSet<long> DisqualifiedFarmers = new();
         private static float HostCeremonyCountdown = -1f;
 
         /// <summary>True while the local racer's custom sprint is active (read by the speed patch).</summary>
@@ -395,6 +402,7 @@ namespace HorseTycoon
         private record BorrowedHorseMessage(string HorseId, string Skin, int Slot);
         private const string MsgOpenReadyCheck = "OpenReadyCheck";
         private const string MsgPlayerFinished = "PlayerFinished";
+        private const string MsgPlayerDisqualified = "PlayerDisqualified";
         private const string MsgStartCeremony = "StartCeremony";
         private record StartCeremonyMessage(List<long> RankedPlayerIds);
         private const string MsgNpcSprint = "NpcSprint";
@@ -672,6 +680,7 @@ namespace HorseTycoon
                     AdvanceHorseAnimations();
                     // Check player finish first so the player wins any same-tick tie with an NPC.
                     this.CheckFinish();
+                    this.CheckDisqualification();
                     this.UpdateNpcRacers();
                     break;
                 case Phase.Finished:
@@ -821,6 +830,12 @@ namespace HorseTycoon
             if (e.Type == MsgPlayerFinished && IsHost && RaceFestival != null)
             {
                 this.RecordFinish(e.ReadAs<long>());
+                return;
+            }
+
+            if (e.Type == MsgPlayerDisqualified && IsHost && RaceFestival != null)
+            {
+                this.RecordDisqualification(e.ReadAs<long>());
                 return;
             }
 
@@ -1373,6 +1388,39 @@ namespace HorseTycoon
                     modIDs: new[] { this.Helper.ModRegistry.ModID });
         }
 
+        private void CheckDisqualification()
+        {
+            if (disqualified.Value || startCountdown.Value >= 0f)
+                return;
+
+            Vector2 t = Game1.player.Tile;
+            if (!(t.Y < DqZoneNorthOfY && t.X > DqZoneEastOfX))
+                return;
+
+            disqualified.Value = true;
+            phase.Value = Phase.Finished;
+
+            NPC? lewis = RaceFestival?.getActorByName("Lewis");
+            lewis?.doEmote(12);
+            Game1.drawObjectDialogue(
+                "Lewis: You've gone off the track! I'm afraid you are disqualified from this race.");
+
+            if (IsHost)
+                this.RecordDisqualification(Game1.player.UniqueMultiplayerID);
+            else
+                this.Helper.Multiplayer.SendMessage(
+                    Game1.player.UniqueMultiplayerID,
+                    MsgPlayerDisqualified,
+                    modIDs: new[] { this.Helper.ModRegistry.ModID });
+        }
+
+        private void RecordDisqualification(long farmerId)
+        {
+            DisqualifiedFarmers.Add(farmerId);
+            this.LogVerbose($"Farmer {farmerId} disqualified — recording as last-place finish.");
+            this.RecordFinish(farmerId);
+        }
+
         private void RecordFinish(long farmerId)
         {
             if (FinishOrder.Contains(farmerId))
@@ -1387,7 +1435,10 @@ namespace HorseTycoon
 
         private void BroadcastCeremony()
         {
-            var orderedIds = new List<long>(FinishOrder);
+            // DQ'd players always place last; sort them behind everyone who finished legitimately.
+            var orderedIds = FinishOrder
+                .OrderBy(id => DisqualifiedFarmers.Contains(id) ? 1 : 0)
+                .ToList();
             this.Helper.Multiplayer.SendMessage(
                 new StartCeremonyMessage(orderedIds),
                 MsgStartCeremony,
@@ -2248,8 +2299,10 @@ namespace HorseTycoon
             readyCheckOpen.Value = false;
             ceremonyOrder.Value.Clear();
             ceremonyStep.Value = 0;
+            disqualified.Value = false;
             // Static host-side state — safe to clear on any screen since only the host writes to these.
             FinishOrder.Clear();
+            DisqualifiedFarmers.Clear();
             HostCeremonyCountdown = -1f;
             Game1.viewportFreeze = false;
 
