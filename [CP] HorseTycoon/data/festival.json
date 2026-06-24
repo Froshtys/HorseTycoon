@@ -49,51 +49,58 @@
 							"Id": "SaddleBrown",
 							"ItemId": "(O)HorseTycoon.SaddleBrown",
 							"Price": 1000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleWhite",
 							"ItemId": "(O)HorseTycoon.SaddleWhite",
 							"Price": 1000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleBlack",
 							"ItemId": "(O)HorseTycoon.SaddleBlack",
 							"Price": 1000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleRed",
 							"ItemId": "(O)HorseTycoon.SaddleRed",
 							"Price": 1000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleOrange",
 							"ItemId": "(O)HorseTycoon.SaddleOrange",
 							"Price": 1000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleTeal",
 							"ItemId": "(O)HorseTycoon.SaddleTeal",
 							"Price": 1000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleIce",
 							"ItemId": "(O)HorseTycoon.SaddleIce",
 							"Price": 3000,
-							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
-						}
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "SaddleLavender",
+							"ItemId": "(O)HorseTycoon.SaddleLavender",
+							"Price": 1000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
 					]
 				}
 			}
@@ -118,16 +125,30 @@
 						{
 							"Id": "Carrot",
 							"ItemId": "(O)Carrot",
-							"Price": 35,
+							"Price": 50,
 							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "CarrotSeeds",
 							"ItemId": "(O)CarrotSeeds",
-							"Price": 20,
+							"Price": 40,
 							"AvailableStock": -1,
-							"AvailableStockLimit": "Global"
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "AppleSapling",
+							"ItemId": "(O)633",
+							"Price": 3000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "ScarecrowHorse",
+							"ItemId": "(BC){{ModId}}_ScarecrowHorse",
+							"Price": 2500,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
 						}
 					]
 				}

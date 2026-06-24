@@ -1,7 +1,7 @@
 from PIL import Image
 
 OVERLAY_DIR = '/Users/kemurray/StardewValleyKristinMods/HorseTycoon/HorseTycoon/assets/horse_overlays'
-CP_ASSETS   = '/Users/kemurray/StardewValleyKristinMods/HorseTycoon/[CP] HorseTycoon/assets'
+CP_ASSETS   = '/Users/kemurray/StardewValleyKristinMods/HorseTycoon/[CP] HorseTycoon/assets/tack'
 
 COLORS = {
     'White':    (255, 255, 255),

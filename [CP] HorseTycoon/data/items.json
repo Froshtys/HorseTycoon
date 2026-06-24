@@ -225,6 +225,25 @@
 		}
 	}},
 	{
+	"LogName": "ScarecrowHorse Rarecrow",
+	"Action": "EditData",
+	"Target": "Data/BigCraftables",
+	"Entries": {
+		"{{ModId}}_ScarecrowHorse": {
+		"Name": "ScarecrowHorse",
+		"DisplayName": "{{i18n:ScarecrowHorse_Name}}",
+		"Description": "{{i18n:ScarecrowHorse_Description}}",
+		"Price": 0,
+		"Fragility": 0,
+		"CanBePlacedOutdoors": true,
+		"CanBePlacedIndoors": true,
+		"IsLamp": false,
+		"Texture": "{{ModId}}/ScarecrowHorse",
+		"SpriteIndex": 0,
+		"ContextTags": ["crow_scare"]
+		}
+	}},
+	{
 	"LogName": "Item Data Manure",
 	"Action": "EditData",
 	"Target": "Data/Objects",

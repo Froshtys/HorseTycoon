@@ -3,8 +3,14 @@
 	{
 		"LogName": "Load assets",
 		"Action": "Load",
-		"Target": "{{ModId}}/Granulator, {{ModId}}/Manure, {{ModId}}/Roan, {{ModId}}/RoanFoal, {{ModId}}/BlueRoan, {{ModId}}/BlueRoanFoal, {{ModId}}/Dapple, {{ModId}}/DappleFoal, {{ModId}}/HorseShoeCopper, {{ModId}}/HorseShoeIron, {{ModId}}/HorseShoeGold, {{ModId}}/HorseIcon, {{ModId}}/Belgian, {{ModId}}/BelgianFoal, {{ModId}}/Shire, {{ModId}}/ShireFoal, {{ModId}}/Bay, {{ModId}}/BayFoal, {{ModId}}/Chestnut, {{ModId}}/ChestnutFoal, {{ModId}}/SaddleBrown, {{ModId}}/SaddleWhite, {{ModId}}/SaddleBlack, {{ModId}}/SaddleRed, {{ModId}}/SaddleOrange, {{ModId}}/SaddleTeal, {{ModId}}/SaddleIce, {{ModId}}/SaddleLavender, {{ModId}}/SaddleRainbow, {{ModId}}/SaddleTrans, {{ModId}}/SaddleLesbian, {{ModId}}/SaddleAce, {{ModId}}/SaddleNonBinary, {{ModId}}/SaddleBisexual",
+		"Target": "{{ModId}}/Granulator, {{ModId}}/Manure, {{ModId}}/Roan, {{ModId}}/RoanFoal, {{ModId}}/BlueRoan, {{ModId}}/BlueRoanFoal, {{ModId}}/Dapple, {{ModId}}/DappleFoal, {{ModId}}/HorseShoeCopper, {{ModId}}/HorseShoeIron, {{ModId}}/HorseShoeGold, {{ModId}}/HorseIcon, {{ModId}}/Belgian, {{ModId}}/BelgianFoal, {{ModId}}/Shire, {{ModId}}/ShireFoal, {{ModId}}/Bay, {{ModId}}/BayFoal, {{ModId}}/Chestnut, {{ModId}}/ChestnutFoal, {{ModId}}/ScarecrowHorse",
 		"FromFile": "assets/{{TargetWithoutPath}}.png"
+		},
+	{
+		"LogName": "Load tack assets",
+		"Action": "Load",
+		"Target": "{{ModId}}/SaddleBrown, {{ModId}}/SaddleWhite, {{ModId}}/SaddleBlack, {{ModId}}/SaddleRed, {{ModId}}/SaddleOrange, {{ModId}}/SaddleTeal, {{ModId}}/SaddleIce, {{ModId}}/SaddleLavender, {{ModId}}/SaddleRainbow, {{ModId}}/SaddleTrans, {{ModId}}/SaddleLesbian, {{ModId}}/SaddleAce, {{ModId}}/SaddleNonBinary, {{ModId}}/SaddleBisexual",
+		"FromFile": "assets/tack/{{TargetWithoutPath}}.png"
 		},
 		{
 	"LogName": "Animal Data",
