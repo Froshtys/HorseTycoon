@@ -20,24 +20,45 @@
 
     "HorseFestival_Name": "Horse Festival",
 
-    "SaddleBrown_Name": "Brown Saddle",
-    "SaddleBrown_Description": "A classic brown leather saddle and matching bridle. Right-click your horse to equip it.",
+    "SaddleBrown_Name": "Brown Tack",
+    "SaddleBrown_Description": "A classic brown leather saddle and matching bridle.",
 
-    "SaddleWhite_Name": "White Saddle",
-    "SaddleWhite_Description": "A clean white saddle and matching bridle. Right-click your horse to equip it.",
+    "SaddleWhite_Name": "White Tack",
+    "SaddleWhite_Description": "A clean white saddle and matching bridle.",
 
-    "SaddleBlack_Name": "Black Saddle",
-    "SaddleBlack_Description": "A sleek black saddle and matching bridle. Right-click your horse to equip it.",
+    "SaddleBlack_Name": "Black Tack",
+    "SaddleBlack_Description": "A sleek black saddle and matching bridle.",
 
-    "SaddleRed_Name": "Red Saddle",
-    "SaddleRed_Description": "A bold red saddle and matching bridle. Right-click your horse to equip it.",
+    "SaddleRed_Name": "Red Tack",
+    "SaddleRed_Description": "A bold red saddle and matching bridle.",
 
-    "SaddleOrange_Name": "Orange Saddle",
-    "SaddleOrange_Description": "A vibrant orange saddle and matching bridle. Right-click your horse to equip it.",
+    "SaddleOrange_Name": "Orange Tack",
+    "SaddleOrange_Description": "A vibrant orange saddle and matching bridle.",
 
-    "SaddleTeal_Name": "Teal Saddle",
-    "SaddleTeal_Description": "A striking teal saddle and matching bridle. Right-click your horse to equip it.",
+    "SaddleTeal_Name": "Teal Tack",
+    "SaddleTeal_Description": "A striking teal saddle and matching bridle.",
 
-    "SaddleIce_Name": "Ice Saddle",
-    "SaddleIce_Description": "A frosty pale saddle and matching bridle. Right-click your horse to equip it."
+    "SaddleIce_Name": "Ice Tack",
+    "SaddleIce_Description": "A frosty pale saddle and matching bridle.",
+
+    "SaddleLavender_Name": "Lavender Tack",
+    "SaddleLavender_Description": "A soft lavender saddle and matching bridle.",
+
+    "SaddleRainbow_Name": "Rainbow Tack",
+    "SaddleRainbow_Description": "A dazzling rainbow saddle and matching bridle.",
+
+    "SaddleTrans_Name": "Trans Pride Tack",
+    "SaddleTrans_Description": "A saddle in the colors of the trans pride flag.",
+
+    "SaddleLesbian_Name": "Lesbian Pride Tack",
+    "SaddleLesbian_Description": "A saddle in the colors of the lesbian pride flag.",
+
+    "SaddleAce_Name": "Ace Pride Tack",
+    "SaddleAce_Description": "A saddle in the colors of the ace pride flag.",
+
+    "SaddleNonBinary_Name": "Non-Binary Pride Tack",
+    "SaddleNonBinary_Description": "A saddle in the colors of the non-binary pride flag.",
+
+    "SaddleBisexual_Name": "Bisexual Pride Tack",
+    "SaddleBisexual_Description": "A saddle in the colors of the bisexual pride flag."
 }

@@ -31,7 +31,14 @@ namespace HorseTycoon
                 ["HorseTycoon.SaddleRed"]    = "Saddle_Red,Bridle_Red",
                 ["HorseTycoon.SaddleOrange"] = "Saddle_Orange,Bridle_Orange",
                 ["HorseTycoon.SaddleTeal"]   = "Saddle_Teal,Bridle_Teal",
-                ["HorseTycoon.SaddleIce"]    = "Saddle_Ice,Bridle_Ice",
+                ["HorseTycoon.SaddleIce"]      = "Saddle_Ice,Bridle_Ice",
+                ["HorseTycoon.SaddleLavender"] = "Saddle_Lavender,Bridle_Lavender",
+                ["HorseTycoon.SaddleRainbow"]  = "Saddle_Rainbow,Bridle_Rainbow",
+                ["HorseTycoon.SaddleTrans"]    = "Saddle_Trans,Bridle_Trans",
+                ["HorseTycoon.SaddleLesbian"]  = "Saddle_Lesbian,Bridle_Lesbian",
+                ["HorseTycoon.SaddleAce"]       = "Saddle_Ace,Bridle_Ace",
+                ["HorseTycoon.SaddleNonBinary"] = "Saddle_NonBinary,Bridle_NonBinary",
+                ["HorseTycoon.SaddleBisexual"]  = "Saddle_Bisexual,Bridle_Bisexual",
             };
 
         public static bool IsSaddleItem(Item? item) =>
