@@ -285,6 +285,7 @@ namespace HorseTycoon
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
+        private Texture2D? sprintBuffIcon;
 
         private void LogVerbose(string message)
         {
@@ -405,6 +406,7 @@ namespace HorseTycoon
 
         public void Initialize()
         {
+            sprintBuffIcon = this.Helper.ModContent.Load<Texture2D>("assets/HorseRunningBuff.png");
             this.Helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             this.Helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             this.Helper.Events.Display.RenderedHud += this.OnRenderedHud;
@@ -1029,12 +1031,19 @@ namespace HorseTycoon
             string timeText = (secondsLeft / 60) + ":" + (secondsLeft % 60).ToString("00");
 
             SpriteBatch b = e.SpriteBatch;
-            Rectangle src = Game1.getSourceRectForStandardTileSheet(Game1.buffsIcons, sheetIndex, 16, 16);
             const int iconSize = 64;
             int x = Game1.uiViewport.Width - iconSize - 24;
             int y = 24;
 
-            b.Draw(Game1.buffsIcons, new Vector2(x, y), src, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
+            if (sprinting && sprintBuffIcon != null)
+            {
+                b.Draw(sprintBuffIcon, new Rectangle(x, y, iconSize, iconSize), Color.White);
+            }
+            else
+            {
+                Rectangle src = Game1.getSourceRectForStandardTileSheet(Game1.buffsIcons, sheetIndex, 16, 16);
+                b.Draw(Game1.buffsIcons, new Vector2(x, y), src, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
+            }
             Utility.drawTextWithShadow(b, timeText, Game1.smallFont,
                 new Vector2(x + (iconSize - Game1.smallFont.MeasureString(timeText).X) / 2f, y + iconSize - 8f), Color.White);
 
@@ -1474,7 +1483,7 @@ namespace HorseTycoon
             this.SetLayerVisible("Racing", false);
             this.SetLayerVisible("AwardsEvent", true);
             this.DespawnSpectators();
-            this.SpawnSpectators(ceremonySpectators, ceremonyOffset);
+            this.SpawnSpectators(ceremonySpectators);
 
             this.LogVerbose($"Ceremony started. Local placement (0-based): {placement}");
         }
@@ -1726,7 +1735,7 @@ namespace HorseTycoon
             return met;
         }
 
-        private void SpawnSpectators(List<NpcSpectatorPlacement>? placements, Vector2 pixelOffset = default)
+        private void SpawnSpectators(List<NpcSpectatorPlacement>? placements)
         {
             if (placements == null) return;
             var festLoc = Game1.currentLocation;
@@ -1736,13 +1745,12 @@ namespace HorseTycoon
                 // Create a fresh event-actor NPC — same approach as the game's addTemporaryActor command.
                 // This leaves the real NPC untouched at home with their normal animation state.
                 var sprite = new AnimatedSprite("Characters/" + p.Name, 0, 16, 32);
-                var actor = new NPC(sprite, TileToPixels(p.Tile) + pixelOffset, p.Direction, p.Name);
+                var actor = new NPC(sprite, TileToPixels(p.Tile), p.Direction, p.Name);
                 actor.faceDirection(p.Direction);
                 actor.Sprite.StopAnimation();
                 actor.EventActor = true;
                 festLoc.characters.Add(actor);
                 spawnedSpectators.Add(actor);
-                this.LogVerbose($"Spawned spectator actor '{p.Name}' at {p.Tile} offset {pixelOffset}.");
             }
         }
 

@@ -3,6 +3,7 @@ using HorseOverhaul.HorseTycoon;
 using HorseTycoon.Models;
 using HorseTycoon.Patches;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
@@ -21,8 +22,10 @@ namespace HorseTycoon
     {
         private JumpManager? jumpManager;
         private FestivalRaceManager? festivalRaceManager;
+        private Texture2D? sprintBuffIcon;
         public override void Entry(IModHelper helper)
         {
+            sprintBuffIcon = helper.ModContent.Load<Texture2D>("assets/HorseRunningBuff.png");
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
             helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
@@ -417,7 +420,11 @@ namespace HorseTycoon
                 displayName: "Horse Sprint",
                 duration: durationMs,
                 effects: new BuffEffects { Speed = { 1f } }
-            );
+            )
+            {
+                iconTexture = sprintBuffIcon,
+                iconSheetIndex = 0,
+            };
             Game1.player.applyBuff(sprintBuff);
 
             // Play a sound to indicate the sprint started

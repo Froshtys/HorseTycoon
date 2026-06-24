@@ -73,7 +73,6 @@ namespace HorseTycoon
 
             // Hook Events
             this.Helper.Events.Input.ButtonPressed += OnButtonPressed;
-            this.Helper.Events.Content.AssetRequested += OnAssetRequested;
             this.Helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             // Add the daily reset
             this.Helper.Events.GameLoop.DayStarted += (s, e) =>
@@ -191,15 +190,6 @@ namespace HorseTycoon
                 Game1.player.position.Y += VelY;
             }
             LastYJumpVelocity = Game1.player.yJumpVelocity;
-        }
-
-        private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
-        {
-
-            if (e.NameWithoutLocale.IsEquivalentTo("Animals/horse"))
-            {
-                e.LoadFromModFile<Texture2D>(Path.Combine("assets", "horse.png"), AssetLoadPriority.Medium);
-            }
         }
 
         private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
