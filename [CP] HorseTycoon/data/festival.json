@@ -29,6 +29,76 @@
 			"FromFile": "assets/maps/Forest-HorseFestival.tmx"
 		},
 		{
+			"LogName": "Horse Festival - Leah's saddle shop",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"Entries": {
+				"Festival_HorseFestival_Leah": {
+					"Currency": 0,
+					"Owners": [
+						{
+							"Id": "Leah",
+							"Name": "Leah",
+							"Dialogues": [],
+							"RandomizeDialogueOnOpen": false,
+							"ClosedMessage": null
+						}
+					],
+					"Items": [
+						{
+							"Id": "SaddleBrown",
+							"ItemId": "(O)HorseTycoon.SaddleBrown",
+							"Price": 1000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "SaddleWhite",
+							"ItemId": "(O)HorseTycoon.SaddleWhite",
+							"Price": 1000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "SaddleBlack",
+							"ItemId": "(O)HorseTycoon.SaddleBlack",
+							"Price": 1000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "SaddleRed",
+							"ItemId": "(O)HorseTycoon.SaddleRed",
+							"Price": 1000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "SaddleOrange",
+							"ItemId": "(O)HorseTycoon.SaddleOrange",
+							"Price": 1000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "SaddleTeal",
+							"ItemId": "(O)HorseTycoon.SaddleTeal",
+							"Price": 1000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						},
+						{
+							"Id": "SaddleIce",
+							"ItemId": "(O)HorseTycoon.SaddleIce",
+							"Price": 3000,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Global"
+						}
+					]
+				}
+			}
+		},
+		{
 			"LogName": "Horse Festival - Pierre's shop (carrots)",
 			"Action": "EditData",
 			"Target": "Data/Shops",
