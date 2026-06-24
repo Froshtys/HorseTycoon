@@ -50,6 +50,8 @@ namespace HorseTycoon
         // Tune with `ht_race_tile`.
         private static readonly int DqZoneNorthOfY = 43;  // player.Tile.Y < this value
         private static readonly int DqZoneEastOfX = 41;   // player.Tile.X > this value
+        // Where a DQ'd player (and their horse) is teleported — just past the finish line in the spectator area.
+        private static readonly Point DqArrivalTile = new(44, 14);
         // Decorative pony-ride horse in the pen to the left of Leah's house.
         private static readonly Point PenHorseTile = new(94, 31);
         private static readonly string[] AllSkins = { "Roan", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
@@ -686,10 +688,20 @@ namespace HorseTycoon
                 case Phase.Finished:
                     AdvanceHorseAnimations();
                     this.UpdateNpcRacers();
+                    if (disqualified.Value)
+                    {
+                        // The festival event re-enables fadeToBlack every tick; suppress it continuously.
+                        Game1.fadeToBlack = false;
+                        Game1.fadeToBlackAlpha = 0f;
+                        // Horse.update re-enables CanMove every tick while mounted; counteract it.
+                        Game1.player.CanMove = false;
+                    }
                     break;
                 case Phase.Ceremony:
                     AdvanceHorseAnimations();
                     this.UpdateCeremony();
+                    if (disqualified.Value)
+                        Game1.player.CanMove = false;
                     break;
             }
 
@@ -1399,11 +1411,31 @@ namespace HorseTycoon
 
             disqualified.Value = true;
             phase.Value = Phase.Finished;
+            Game1.player.CanMove = false;
+
+            // Teleport player and horse to just past the finish line so they wait in the spectator area.
+            var arrivalOffset = new Vector2(0f, 64f);
+            Game1.player.Position = TileToPixels(DqArrivalTile) + arrivalOffset;
+            Horse? dqHorse = competitor.Value;
+            if (dqHorse != null)
+            {
+                dqHorse.Position = TileToPixels(DqArrivalTile) + arrivalOffset;
+                dqHorse.Halt();
+            }
 
             NPC? lewis = RaceFestival?.getActorByName("Lewis");
             lewis?.doEmote(12);
-            Game1.drawObjectDialogue(
-                "Lewis: You've gone off the track! I'm afraid you are disqualified from this race.");
+            if (lewis != null)
+            {
+                lewis.CurrentDialogue.Clear();
+                lewis.CurrentDialogue.Push(new Dialogue(lewis, "HorseTycoon.DQ",
+                    "$a You've gone off the track! I'm afraid you are disqualified from this race."));
+                Game1.drawDialogue(lewis);
+            }
+            else
+                Game1.drawObjectDialogue(
+                    "Lewis: You've gone off the track! I'm afraid you are disqualified from this race.");
+
 
             if (IsHost)
                 this.RecordDisqualification(Game1.player.UniqueMultiplayerID);
@@ -1618,7 +1650,7 @@ namespace HorseTycoon
 
                 case 7: // Prize for 1st
                     if (order.Count >= 1 && order[0] == localId)
-                        AwardPrizes("(O)PrizeTicket", "(O)72");
+                        AwardPrizes("(O)PrizeTicket", "(O)72", "(F)CP.HorseTycoon.HorseStatue");
                     else
                         this.AdvanceCeremonyStep();
                     break;

@@ -637,6 +637,20 @@
 		"MinutesUntilReady": 50
 		}
 		}
+		},
+	{
+		"LogName": "Horse Race Trophy - Load Texture",
+		"Action": "Load",
+		"Target": "{{ModId}}_HorseStatue",
+		"FromFile": "assets/HorseStatueSmall.png"
+	},
+	{
+		"LogName": "Horse Race Trophy - Furniture Data",
+		"Action": "EditData",
+		"Target": "Data/Furniture",
+		"Entries": {
+			"{{ModId}}.HorseStatue": "Horse Race Trophy/decor/2 2/2 1/1/0/-1/Horse Race Trophy/0/{{ModId}}_HorseStatue/true"
 		}
+	}
 	]
 }
