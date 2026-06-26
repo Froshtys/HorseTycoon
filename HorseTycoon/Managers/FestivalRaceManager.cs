@@ -353,9 +353,10 @@ namespace HorseTycoon
             "Krobus", "Leo",
         };
 
-        // Blank tile rows prepended to SVEcharacterSheet.png so SVE tile indices start at 144 —
-        // past the vanilla Characters sheet's 144 tiles — making loadActors ignore them safely.
+        // Blank tile rows prepended to SVEcharacterSheet.png / EScharacterSheet.png so indices start
+        // at 144 — past the vanilla Characters sheet's 144 tiles — making loadActors ignore them safely.
         private const int SveCharacterSheetPadding = 144;
+        private const int EsCharacterSheetPadding  = 144;
 
         // NPC names in the same order as SVEcharacterSheet.png (alphabetical, matches the generator script).
         private static readonly string[] SveCharacterTileNames =
@@ -364,6 +365,18 @@ namespace HorseTycoon
             "Claire", "Gunther", "Hank", "Henchman", "HighlandsDwarf", "Isaac", "Jace", "Jadu",
             "Jolyne", "Krobus", "Lance", "Magnus", "Marlon", "Martin", "Morgan", "Morris",
             "Olivia", "Peaches", "Scarlett", "Sophia", "Susan", "Treyvon", "Victor", "Zoey",
+        };
+
+        // NPC names in the same order as EScharacterSheet.png (alphabetical, matches the generator script).
+        private static readonly string[] EsCharacterTileNames =
+        {
+            "Abyssrooster", "Aideen", "Beatrice", "CameronLK", "CaptainRod", "CorwinLK",
+            "DaleWaede", "Duck2NPC", "DuckNPC", "EdithHart", "Eloise", "EthanHart",
+            "Eyvinder", "Gremlin", "HappySlime", "Jacob", "JadeMalic", "Jasper",
+            "Jessie", "JosephineK", "Juliet", "KatarynaLK", "KeanuAvis", "KennedyLK",
+            "LadySheba", "LumaJunimo", "MichaelHart", "Munchboi", "OliverK", "PepperPup",
+            "RichieTheMacaw", "Rosa", "StellaHart", "ToriLK", "TristanLK", "ValkyrieDog",
+            "VivienneLK",
         };
 
         private record NpcSpectatorPlacement(string Name, Point Tile, int Direction);
@@ -1801,6 +1814,20 @@ namespace HorseTycoon
                         string name = SveCharacterTileNames[sveIdx];
                         if (Game1.characterData?.ContainsKey(name) != true)
                             this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (SVE not installed?).");
+                        else
+                            results.Add(new NpcSpectatorPlacement(name, new Point(x, y), dir));
+                    }
+                    else if (tile.TileSheet.Id == "ESCharacters"
+                          && tile.TileIndex >= EsCharacterSheetPadding
+                          && (tile.TileIndex - EsCharacterSheetPadding) / 4 < EsCharacterTileNames.Length)
+                    {
+                        int esIdx = (tile.TileIndex - EsCharacterSheetPadding) / 4;
+                        string name = EsCharacterTileNames[esIdx];
+                        if (Game1.characterData?.ContainsKey(name) != true)
+                            this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (East Scarp not installed?).");
+                        // TODO: re-enable met check before shipping
+                        //else if (!Game1.getAllFarmers().Any(f => f.friendshipData.ContainsKey(name)))
+                        //    this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not met by any attending farmer.");
                         else
                             results.Add(new NpcSpectatorPlacement(name, new Point(x, y), dir));
                     }
