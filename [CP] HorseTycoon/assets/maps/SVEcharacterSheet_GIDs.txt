@@ -1,0 +1,42 @@
+# SVEcharacterSheet.png — GID Reference
+# Format: 128x256px, 8 cols x 16 rows of 16x16 tiles
+# Tile layout per character: up(0), right(1), down(2), left(3)
+# GIDs below assume firstgid=1 for this tileset.
+# If your TMX uses a different firstgid (e.g. 4601), add (firstgid - 1) to each GID.
+#
+# Formula: GID = 4 * char_index + direction_offset + 1
+#   direction_offset: 0=up  1=right  2=down  3=left
+#
+# Name             Index  GID_up  GID_right  GID_down  GID_left
+Alesia                 0       1          2         3         4
+Andy                   1       5          6         7         8
+Apples                 2       9         10        11        12
+Axel                   3      13         14        15        16
+Brooklyn               4      17         18        19        20
+Camilla                5      21         22        23        24
+Charlie                6      25         26        27        28
+Chloe                  7      29         30        31        32
+Claire                 8      33         34        35        36
+Gunther                9      37         38        39        40
+Hank                  10      41         42        43        44
+Henchman              11      45         46        47        48
+HighlandsDwarf        12      49         50        51        52
+Isaac                 13      53         54        55        56
+Jace                  14      57         58        59        60
+Jadu                  15      61         62        63        64
+Jolyne                16      65         66        67        68
+Krobus                17      69         70        71        72
+Lance                 18      73         74        75        76
+Magnus                19      77         78        79        80
+Marlon                20      81         82        83        84
+Martin                21      85         86        87        88
+Morgan                22      89         90        91        92
+Morris                23      93         94        95        96
+Olivia                24      97         98        99       100
+Peaches               25     101        102       103       104
+Scarlett              26     105        106       107       108
+Sophia                27     109        110       111       112
+Susan                 28     113        114       115       116
+Treyvon               29     117        118       119       120
+Victor                30     121        122       123       124
+Zoey                  31     125        126       127       128

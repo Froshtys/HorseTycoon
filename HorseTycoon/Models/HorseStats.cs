@@ -43,8 +43,8 @@ namespace HorseTycoon.Models
                     < 20 => 2, // No Tiles
                     >= 20 and < 50 => 3, // 1 tile
                     >= 50 and < 80 => 4, // 2 Tiles
-                    >= 80 and < 95 => 5, // 3 Tiles
-                    >= 95 => 6 // 4 Tiles
+                    >= 80 and < 100 => 5, // 3 Tiles
+                    >= 100 => 6 // 4 Tiles
                 };
             }
         }

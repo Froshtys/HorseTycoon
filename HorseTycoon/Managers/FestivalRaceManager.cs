@@ -339,6 +339,7 @@ namespace HorseTycoon
 
         // Fresh event-actor NPCs spawned for the Racing / AwardsEvent phases.
         private readonly List<NPC> spawnedSpectators = new();
+        private List<NpcSpectatorPlacement>? setupSpectators;
         private List<NpcSpectatorPlacement>? racingSpectators;
         private List<NpcSpectatorPlacement>? ceremonySpectators;
 
@@ -350,6 +351,19 @@ namespace HorseTycoon
             "Lewis", "Linus", "Marlon", "Marnie", "Maru", "Pam", "Penny", "Pierre",
             "Robin", "Sam", "Sebastian", "Shane", "Vincent", "Wizard", "Dwarf", "Sandy",
             "Krobus", "Leo",
+        };
+
+        // Blank tile rows prepended to SVEcharacterSheet.png so SVE tile indices start at 144 —
+        // past the vanilla Characters sheet's 144 tiles — making loadActors ignore them safely.
+        private const int SveCharacterSheetPadding = 144;
+
+        // NPC names in the same order as SVEcharacterSheet.png (alphabetical, matches the generator script).
+        private static readonly string[] SveCharacterTileNames =
+        {
+            "Alesia", "Andy", "Apples", "Axel", "Brooklyn", "Camilla", "Charlie", "Chloe",
+            "Claire", "Gunther", "Hank", "Henchman", "HighlandsDwarf", "Isaac", "Jace", "Jadu",
+            "Jolyne", "Krobus", "Lance", "Magnus", "Marlon", "Martin", "Morgan", "Morris",
+            "Olivia", "Peaches", "Scarlett", "Sophia", "Susan", "Treyvon", "Victor", "Zoey",
         };
 
         private record NpcSpectatorPlacement(string Name, Point Tile, int Direction);
@@ -801,6 +815,7 @@ namespace HorseTycoon
             this.SetLayerVisible("AwardsEvent", false);
 
             // Cache NPC placement data from the phase layers.
+            setupSpectators = this.ReadNpcPlacements("Set-Up", sveOnly: true);
             racingSpectators = this.ReadNpcPlacements("Racing");
             ceremonySpectators = this.ReadNpcPlacements("AwardsEvent");
 
@@ -810,6 +825,7 @@ namespace HorseTycoon
             // Every client builds its own stalls — the festival temp map's objects aren't net-synced.
             this.SpawnStartingStalls();
             this.SpawnPenHorse();
+            this.SpawnSpectators(setupSpectators);
             // NPC riders are borrowed in SpawnNpcRacers (race start) so they aren't visible during the pasture phase.
 
 
@@ -1227,6 +1243,7 @@ namespace HorseTycoon
             phase.Value = Phase.Racing;
 
             this.SetLayerVisible("Racing", true);
+            this.DespawnSpectators();
             this.SpawnSpectators(racingSpectators);
 
             this.SuppressOtherBuffs();
@@ -1750,7 +1767,9 @@ namespace HorseTycoon
             npcRidersBorrowed = false;
         }
 
-        private List<NpcSpectatorPlacement> ReadNpcPlacements(string layerName)
+        // sveOnly: skip vanilla Characters tileset tiles (used when reading Set-Up, where loadActors
+        // already handles them — processing them here would create duplicate event actors).
+        private List<NpcSpectatorPlacement> ReadNpcPlacements(string layerName, bool sveOnly = false)
         {
             var results = new List<NpcSpectatorPlacement>();
             var placeholderSlots = new List<(Point Tile, int Direction)>();
@@ -1762,13 +1781,29 @@ namespace HorseTycoon
                 for (int x = 0; x < layer.LayerWidth; x++)
                 {
                     var tile = layer.Tiles[x, y];
-                    if (tile?.TileSheet?.Id != "Characters") continue;
+                    if (tile?.TileSheet == null) continue;
+
                     int npcIdx = tile.TileIndex / 4;
                     int dir = tile.TileIndex % 4;
-                    if (npcIdx < CharacterTileNames.Length)
-                        results.Add(new NpcSpectatorPlacement(CharacterTileNames[npcIdx], new Point(x, y), dir));
-                    else
-                        placeholderSlots.Add((new Point(x, y), dir));
+
+                    if (!sveOnly && tile.TileSheet.Id == "Characters")
+                    {
+                        if (npcIdx < CharacterTileNames.Length)
+                            results.Add(new NpcSpectatorPlacement(CharacterTileNames[npcIdx], new Point(x, y), dir));
+                        else
+                            placeholderSlots.Add((new Point(x, y), dir));
+                    }
+                    else if (tile.TileSheet.Id == "SVECharacters"
+                          && tile.TileIndex >= SveCharacterSheetPadding
+                          && (tile.TileIndex - SveCharacterSheetPadding) / 4 < SveCharacterTileNames.Length)
+                    {
+                        int sveIdx = (tile.TileIndex - SveCharacterSheetPadding) / 4;
+                        string name = SveCharacterTileNames[sveIdx];
+                        if (Game1.characterData?.ContainsKey(name) != true)
+                            this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (SVE not installed?).");
+                        else
+                            results.Add(new NpcSpectatorPlacement(name, new Point(x, y), dir));
+                    }
                 }
 
             if (placeholderSlots.Count > 0)
@@ -1844,6 +1879,7 @@ namespace HorseTycoon
                 festLoc?.characters.Remove(actor);
             spawnedSpectators.Clear();
         }
+
 
         /// <summary>
         /// Spawn one Horse + rider pair per NpcRiderNames entry into the stalls immediately after
@@ -2323,6 +2359,7 @@ namespace HorseTycoon
             this.SetLayerVisible("Racing", false);
             this.SetLayerVisible("AwardsEvent", false);
             this.DespawnSpectators();
+            setupSpectators = null;
             racingSpectators = null;
             ceremonySpectators = null;
             wanderMoving.Value = false;
