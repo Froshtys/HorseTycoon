@@ -320,6 +320,7 @@ namespace HorseTycoon
         private readonly PerScreen<Horse?> borrowedFestivalHorse = new(() => null);
         // -1 means inactive. Kept in real time so it ticks while the festival pauses the game clock.
         private readonly PerScreen<float> startCountdown = new(() => -1f);
+        private readonly PerScreen<bool> raceMusicStarted = new(() => false);
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
@@ -334,7 +335,6 @@ namespace HorseTycoon
         private readonly PerScreen<string?> betTargetNpcName = new(() => null);
         private readonly PerScreen<int> betAmount = new(() => 0);
         private readonly PerScreen<bool> showBettingMoneyBox = new(() => false);
-        private ClickableTextureComponent? betCancelButton;
 
         private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
         private readonly PerScreen<int> ceremonyStep = new(() => 0);
@@ -457,7 +457,6 @@ namespace HorseTycoon
             this.Helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             this.Helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             this.Helper.Events.Display.RenderedHud += this.OnRenderedHud;
-            this.Helper.Events.Display.RenderedActiveMenu += this.OnRenderedActiveMenu;
             this.Helper.Events.Multiplayer.ModMessageReceived += this.OnMessageReceived;
 
             // isRidingHorse() forces false during ANY event, suppressing mount drawing, riding pose, and
@@ -1152,14 +1151,6 @@ namespace HorseTycoon
             if (phase.Value != Phase.Pasture || readyCheckOpen.Value)
                 return;
 
-            if (e.Button == SButton.MouseLeft && betCancelButton != null
-                && betCancelButton.containsPoint(Game1.getMouseX(ui_scale: true), Game1.getMouseY(ui_scale: true)))
-            {
-                this.Helper.Input.Suppress(e.Button);
-                this.CancelBetDialog();
-                return;
-            }
-
             if (Game1.activeClickableMenu != null)
                 return;
             if (!e.Button.IsActionButton())
@@ -1219,6 +1210,7 @@ namespace HorseTycoon
                                     };
                                     if (Game1.year >= 2)
                                         amountOptions.Add(new Response("5000", "5000g"));
+                                    amountOptions.Add(new Response("nevermind", "Nevermind"));
 
                                     Game1.afterDialogues = () =>
                                         Game1.currentLocation.createQuestionDialogue(
@@ -1226,6 +1218,13 @@ namespace HorseTycoon
                                             amountOptions.ToArray(),
                                             (_, amountAnswer) =>
                                             {
+                                                if (amountAnswer == "nevermind")
+                                                {
+                                                    betTargetFarmerId.Value = null;
+                                                    betTargetNpcName.Value = null;
+                                                    Game1.afterDialogues = () => { showBettingMoneyBox.Value = false; };
+                                                    return;
+                                                }
                                                 if (int.TryParse(amountAnswer, out int amount) && Game1.player.Money >= amount)
                                                 {
                                                     betAmount.Value = amount;
@@ -1272,35 +1271,6 @@ namespace HorseTycoon
                 responses.Add(new Response($"npc_{NpcRiderNames[i]}", NpcRiderNames[i]));
 
             return responses.ToArray();
-        }
-
-        private void OnRenderedActiveMenu(object? sender, RenderedActiveMenuEventArgs e)
-        {
-            if (!showBettingMoneyBox.Value || Game1.activeClickableMenu is not DialogueBox dlg)
-            {
-                betCancelButton = null;
-                return;
-            }
-
-            int bx = dlg.xPositionOnScreen + dlg.width + 36;
-            int by = dlg.yPositionOnScreen - 8;
-            if (betCancelButton == null)
-                betCancelButton = new ClickableTextureComponent(new Rectangle(bx, by, 48, 48), Game1.mouseCursors, new Rectangle(337, 494, 12, 12), 4f);
-            else
-                betCancelButton.bounds = new Rectangle(bx, by, 48, 48);
-
-            betCancelButton.draw(e.SpriteBatch);
-        }
-
-        private void CancelBetDialog()
-        {
-            Game1.currentLocation.afterQuestion = null;
-            Game1.afterDialogues = null;
-            betTargetFarmerId.Value = null;
-            betTargetNpcName.Value = null;
-            betCancelButton = null;
-            showBettingMoneyBox.Value = false;
-            Game1.activeClickableMenu?.exitThisMenu();
         }
 
         private void RecordBet(string answer)
@@ -1462,6 +1432,7 @@ namespace HorseTycoon
             Game1.changeMusicTrack("none", track_interruptable: false, MusicContext.Event);
             Game1.playSound(RaceStartSoundCue);
             this.startCountdown.Value = RaceStartSoundMs;
+            this.raceMusicStarted.Value = false;
         }
 
         // Slot 0 = center, odd slots go below (+), even slots above (-), alternating outward.
@@ -1532,12 +1503,16 @@ namespace HorseTycoon
             {
                 Game1.player.CanMove = false;
                 this.startCountdown.Value -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+                if (!this.raceMusicStarted.Value && this.startCountdown.Value <= 1000f)
+                {
+                    this.raceMusicStarted.Value = true;
+                    Game1.changeMusicTrack("Cowboy_OVERWORLD", track_interruptable: false, MusicContext.Event);
+                }
                 if (this.startCountdown.Value > 0f)
                     return;
             }
 
             this.startCountdown.Value = -1f;
-            Game1.changeMusicTrack("cowboy_outlawsong", track_interruptable: false, MusicContext.Event);
             Game1.player.CanMove = true;
             raceStartTime.Value = Game1.currentGameTime.TotalGameTime;
             int totalPlayers = System.Math.Max(1, Game1.getOnlineFarmers().Count());
@@ -1836,7 +1811,7 @@ namespace HorseTycoon
                     {
                         Game1.drawObjectDialogue(
                             $"Lewis: And the winner is... {this.GetRacerName(order[0])}! " +
-                            "What a ride! You've earned a diamond and a prize ticket!");
+                            "What a ride! You've earned a Rainbow Tack set and a prize ticket!");
                         Game1.playSound("achievement");
                     }
                     else
@@ -1845,7 +1820,7 @@ namespace HorseTycoon
 
                 case 7: // Prize for 1st
                     if (order.Count >= 1 && order[0] == localId)
-                        AwardPrizes("(O)PrizeTicket", "(O)72", "(F)CP.HorseTycoon.HorseStatue");
+                        AwardPrizes("(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue");
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -2126,6 +2101,13 @@ namespace HorseTycoon
                     $"Race is full ({playerSlotCount} players, max {MaxRacers}) — dropping {NpcRiderNames.Length - npcSlots} NPC racer(s).",
                     LogLevel.Info);
 
+            bool anyPlayerHorseIsfast = Game1.getAllFarmers()
+                .Select(f => f.mount)
+                .Where(m => m != null)
+                .Select(m => HorseHelper.GetFarmAnimalForHorse(m))
+                .Where(a => a != null)
+                .Any(a => a!.GetHorseStats().TotalSpeed >= 40);
+
             for (int i = 0; i < System.Math.Min(NpcRiderNames.Length, npcSlots); i++)
             {
                 string riderName = NpcRiderNames[i];
@@ -2163,7 +2145,7 @@ namespace HorseTycoon
                 rider.drawOnTop = true;
                 SyncRiderToHorse(rider, horse);
 
-                int yearBonus = Game1.year >= 2 ? 5 : 0;
+                int yearBonus = anyPlayerHorseIsfast ? 5 : 0;
                 int speedIV = NpcRiderSpeeds[i % NpcRiderSpeeds.Length] + yearBonus;
                 int sprintIV = NpcRiderSprints[i % NpcRiderSprints.Length] + yearBonus;
 
@@ -2629,6 +2611,7 @@ namespace HorseTycoon
             this.RestoreSuppressedBuffs();
             this.RemoveStartingStalls();
             this.startCountdown.Value = -1f;
+            this.raceMusicStarted.Value = false;
             sprintPhase.Value = SprintPhase.Ready;
             sprintTimer.Value = 0f;
             if (penHorse.Value != null)
@@ -2668,7 +2651,6 @@ namespace HorseTycoon
             disqualified.Value = false;
             lewisGreeted.Value = false;
             showBettingMoneyBox.Value = false;
-            betCancelButton = null;
             betTargetFarmerId.Value = null;
             betTargetNpcName.Value = null;
             betAmount.Value = 0;

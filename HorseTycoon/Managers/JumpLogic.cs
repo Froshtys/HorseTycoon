@@ -37,6 +37,8 @@ namespace HorseTycoon
             Manager.VelX = 0;
             Manager.VelY = 0;
 
+            bool checkFestivalBarriers = FestivalRaceManager.RaceRidingActive;
+
             if (!collisions[0] && !collisions[1])
             {
                 PerformBlockedJump(stats.JumpDistance);
@@ -47,6 +49,11 @@ namespace HorseTycoon
             {
                 if (!collisions[i])
                 {
+                    if (checkFestivalBarriers && HasNoJumpBarrierInPath(location, ox, oy, i))
+                    {
+                        PerformBlockedJump(stats.JumpDistance);
+                        return;
+                    }
                     PerformFreeJump(ox, oy, i);
                     return;
                 }
@@ -133,6 +140,21 @@ namespace HorseTycoon
             Game1.player.synchronizedJump(v);
             // Link back to the manager's event handler
             Manager.SubscribeToUpdate();
+        }
+
+        // Returns true if any tile from 1..(toDistance-1) along (ox,oy) has the "NoJumpOver"
+        // property in the Buildings layer — set on the specific festival track barrier tiles in the TMX.
+        private static bool HasNoJumpBarrierInPath(GameLocation location, int ox, int oy, int toDistance)
+        {
+            Vector2 horseTile = Game1.player.mount!.Tile;
+            for (int i = 1; i < toDistance; i++)
+            {
+                int tx = (int)(horseTile.X + ox * i);
+                int ty = (int)(horseTile.Y + oy * i);
+                if (location.doesTileHaveProperty(tx, ty, "NoJumpOver", "Buildings") != null)
+                    return true;
+            }
+            return false;
         }
 
         public static bool IsOutOfMap(GameLocation location, Rectangle position)
