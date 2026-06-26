@@ -379,7 +379,7 @@ namespace HorseTycoon
             "VivienneLK",
         };
 
-        private record NpcSpectatorPlacement(string Name, Point Tile, int Direction);
+        private record NpcSpectatorPlacement(string Name, Point Tile, int Direction, bool IsAutoFilled = false);
 
         // Holding tiles for borrowed NPCs during the pasture phase (before stall assignment).
         private static readonly Point[] NpcRiderHoldingTiles = { new(92, 20), new(92, 22), new(92, 24) };
@@ -1840,7 +1840,7 @@ namespace HorseTycoon
                 {
                     if (i >= modNpcs.Count) break;
                     var (tile, dir) = placeholderSlots[i];
-                    results.Add(new NpcSpectatorPlacement(modNpcs[i], tile, dir));
+                    results.Add(new NpcSpectatorPlacement(modNpcs[i], tile, dir, IsAutoFilled: true));
                     this.LogVerbose($"ReadNpcPlacements('{layerName}'): assigned mod NPC '{modNpcs[i]}' to placeholder at {tile}.");
                 }
                 if (modNpcs.Count < placeholderSlots.Count)
@@ -1858,6 +1858,10 @@ namespace HorseTycoon
         private List<string> GetMetModNpcNames()
         {
             var vanillaNames = new HashSet<string>(CharacterTileNames, System.StringComparer.OrdinalIgnoreCase);
+            // SVE and ES NPCs are excluded entirely from auto-fill (placed manually in the map).
+            var manuallyPlacedNames = new HashSet<string>(
+                SveCharacterTileNames.Concat(EsCharacterTileNames),
+                System.StringComparer.OrdinalIgnoreCase);
 
             var allNames = Game1.characterData?.Keys;
             if (allNames == null) return new List<string>();
@@ -1865,6 +1869,7 @@ namespace HorseTycoon
             var farmers = Game1.getAllFarmers().ToList();
             var met = allNames
                 .Where(name => !vanillaNames.Contains(name)
+                    && !manuallyPlacedNames.Contains(name)
                     && farmers.Any(f => f.friendshipData.ContainsKey(name)))
                 .ToList();
 
@@ -1880,6 +1885,18 @@ namespace HorseTycoon
             return met;
         }
 
+        private static readonly string[] AutoFilledSpectatorDialogKeys =
+        {
+            "FestivalSpectator_Dialog_0",
+            "FestivalSpectator_Dialog_1",
+            "FestivalSpectator_Dialog_2",
+            "FestivalSpectator_Dialog_3",
+            "FestivalSpectator_Dialog_4",
+            "FestivalSpectator_Dialog_5",
+            "FestivalSpectator_Dialog_6",
+            "FestivalSpectator_Dialog_7",
+        };
+
         private void SpawnSpectators(List<NpcSpectatorPlacement>? placements)
         {
             if (placements == null) return;
@@ -1894,6 +1911,15 @@ namespace HorseTycoon
                 actor.faceDirection(p.Direction);
                 actor.Sprite.StopAnimation();
                 actor.EventActor = true;
+                if (p.IsAutoFilled)
+                {
+                    // Auto-filled NPCs have no festival-specific dialog, so give them a generic line.
+                    // Pick deterministically from the NPC's name so all clients agree.
+                    int idx = System.Math.Abs(p.Name.GetHashCode()) % AutoFilledSpectatorDialogKeys.Length;
+                    string text = this.Helper.Translation.Get(AutoFilledSpectatorDialogKeys[idx]);
+                    actor.TemporaryDialogue = new System.Collections.Generic.Stack<Dialogue>();
+                    actor.TemporaryDialogue.Push(new Dialogue(actor, "HorseTycoon.spectator." + p.Name, text));
+                }
                 festLoc.characters.Add(actor);
                 spawnedSpectators.Add(actor);
             }
