@@ -46,20 +46,6 @@
 					],
 					"Items": [
 						{
-							"Id": "SaddleBrown",
-							"ItemId": "(O)HorseTycoon.SaddleBrown",
-							"Price": 1000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "SaddleWhite",
-							"ItemId": "(O)HorseTycoon.SaddleWhite",
-							"Price": 1000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
 							"Id": "SaddleBlack",
 							"ItemId": "(O)HorseTycoon.SaddleBlack",
 							"Price": 1000,
@@ -69,27 +55,20 @@
 						{
 							"Id": "SaddleRed",
 							"ItemId": "(O)HorseTycoon.SaddleRed",
-							"Price": 1000,
+							"Price": 2000,
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleOrange",
 							"ItemId": "(O)HorseTycoon.SaddleOrange",
-							"Price": 1000,
+							"Price": 3000,
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
 						},
 						{
 							"Id": "SaddleTeal",
 							"ItemId": "(O)HorseTycoon.SaddleTeal",
-							"Price": 1000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "SaddleIce",
-							"ItemId": "(O)HorseTycoon.SaddleIce",
 							"Price": 3000,
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
@@ -97,7 +76,7 @@
 						{
 							"Id": "SaddleLavender",
 							"ItemId": "(O)HorseTycoon.SaddleLavender",
-							"Price": 1000,
+							"Price": 3000,
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
 						},
@@ -137,9 +116,16 @@
 							"AvailableStockLimit": "Player"
 						},
 						{
+							"Id": "OrnamentalHayBale",
+							"ItemId": "(BC)45",
+							"Price": 100,
+							"AvailableStock": -1,
+							"AvailableStockLimit": "Player"
+						},
+						{
 							"Id": "AppleSapling",
 							"ItemId": "(O)633",
-							"Price": 3000,
+							"Price": 2000,
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
 						},
@@ -147,6 +133,20 @@
 							"Id": "ScarecrowHorse",
 							"ItemId": "(BC){{ModId}}_ScarecrowHorse",
 							"Price": 2500,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "StumpSeat",
+							"ItemId": "(F)88",
+							"Price": 1000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "CurlyTree",
+							"ItemId": "(F)CurlyTree",
+							"Price": 3000,
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
 						}

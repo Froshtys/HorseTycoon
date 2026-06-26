@@ -20,7 +20,7 @@ namespace HorseTycoon
 {
     /// <summary>
     /// Drives the Spring 21 Horse Festival race in Cindersap Forest.
-    /// The host starts the race by talking to Lewis, which raises a <see cref="ReadyCheckDialog"/> on every
+    /// The host starts the race by talking to Pam (for betting) then Lewis, which raises a <see cref="ReadyCheckDialog"/> on every
     /// client; once everyone accepts, each player is lined up in a fenced starting stall, a start sound plays,
     /// and when it finishes the gates open. Horses run east to the finish band, which ends the race.
     /// Local state is PerScreen; multiplayer sync uses Game1.netReady and explicit mod messages.
@@ -35,13 +35,24 @@ namespace HorseTycoon
         private enum SprintPhase { Ready, Sprinting, Exhausted }
 
         // --- Tunable map coordinates (tiles) for CP.HorseTycoon_ForestFestival. Tune in-game with `ht_race_tile`. ---
-        private static readonly Point PastureMin = new(80, 18);
-        private static readonly Point PastureMax = new(90, 23);
-        private static readonly Point PastureSpawn = new(98, 20);
-        // Clockwise slot offsets (tiles) from PastureSpawn, one per player.
-        private static readonly Point[] PastureSlotOffsets =
+        // Pen slots for player horses + NPC racer horses shown during the pasture phase.
+        // Slots fill in order: players first (by UniqueMultiplayerID), then NPC racers.
+        private static readonly Point[] PenSlots =
         {
-            new(0, 0), new(-4, 0), new(0, -4), new(4, 0), new(0, 4),
+            new(80, 32), new(73, 34), new(75, 32), new(69, 29),
+            new(69, 32), new(71, 28), new(72, 30), new(75, 29),
+        };
+
+        // Biased facing direction pool: left/right first, up/down less common.
+        private static readonly int[] HorseFacingPool =
+        {
+            Game1.left, Game1.right, Game1.left, Game1.right, Game1.up, Game1.down,
+        };
+
+        // Decorative generated horses displayed in Marnie's background pasture during the festival.
+        private static readonly Point[] PastureBgSlots =
+        {
+            new(98, 20), new(94, 20), new(98, 16), new(102, 20),
         };
         // Stall i's horse tile is (StartStall.X, StartStall.Y + i); horses break east into the course.
         private static readonly Point StartStall = new(39, 48);
@@ -330,7 +341,7 @@ namespace HorseTycoon
         // Set true while re-invoking warpFarmer from the "Yes" path so our prefix doesn't re-intercept it.
         private static bool SkipHorseWarning = false;
 
-        private readonly PerScreen<bool> lewisGreeted = new(() => false);
+        private readonly PerScreen<bool> pamGreeted = new(() => false);
         private readonly PerScreen<long?> betTargetFarmerId = new(() => null);
         private readonly PerScreen<string?> betTargetNpcName = new(() => null);
         private readonly PerScreen<int> betAmount = new(() => 0);
@@ -346,6 +357,11 @@ namespace HorseTycoon
         private bool npcRidersBorrowed = false;
         private bool npcRacersSpawned = false;
         private long nextNpcFakeId = -1L;
+
+        // NPC racer horses shown in the pen during the pasture phase (before race start).
+        private readonly List<Horse> penNpcHorses = new();
+        // Decorative generated horses in Marnie's background pasture.
+        private readonly List<Horse> decorativeHorses = new();
 
         // Fresh event-actor NPCs spawned for the Racing / AwardsEvent phases.
         private readonly List<NPC> spawnedSpectators = new();
@@ -390,6 +406,13 @@ namespace HorseTycoon
         };
 
         private record NpcSpectatorPlacement(string Name, Point Tile, int Direction, bool IsAutoFilled = false);
+
+        // These NPCs are only included when at least one attending farmer has met them.
+        // Kent is absent in year 1; Morgan/Scarlett are SVE; TristanLK is East Scarp.
+        private static readonly HashSet<string> MetRequiredNpcNames = new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "Kent", "Morgan", "Scarlett", "TristanLK",
+        };
 
         // Holding tiles for borrowed NPCs during the pasture phase (before stall assignment).
         private static readonly Point[] NpcRiderHoldingTiles = { new(92, 20), new(92, 22), new(92, 24) };
@@ -815,11 +838,8 @@ namespace HorseTycoon
                 .ToList()
                 .IndexOf(farmer));
 
-        private static Point PastureSpawnForSlot(int slot)
-        {
-            Point offset = slot < PastureSlotOffsets.Length ? PastureSlotOffsets[slot] : new(slot * 4, 0);
-            return new Point(PastureSpawn.X + offset.X, PastureSpawn.Y + offset.Y);
-        }
+        private static Point PastureSpawnForSlot(int slot) =>
+            slot < PenSlots.Length ? PenSlots[slot] : new Point(PenSlots[^1].X + (slot - PenSlots.Length + 1) * 2, PenSlots[^1].Y);
 
         private void SetLayerVisible(string layerName, bool visible)
         {
@@ -848,8 +868,9 @@ namespace HorseTycoon
             // Every client builds its own stalls — the festival temp map's objects aren't net-synced.
             this.SpawnStartingStalls();
             this.SpawnPenHorse();
+            this.SpawnPenNpcHorses();
+            this.SpawnDecorativeHorses();
             this.SpawnSpectators(setupSpectators);
-            // NPC riders are borrowed in SpawnNpcRacers (race start) so they aren't visible during the pasture phase.
 
 
             Horse? horse = lastRiddenMount.Value;
@@ -1060,6 +1081,74 @@ namespace HorseTycoon
             this.LockJasOnHorse(loc);
         }
 
+        private void SpawnPenNpcHorses()
+        {
+            GameLocation loc = Game1.currentLocation;
+            int playerSlotCount = Game1.getOnlineFarmers().Count();
+            var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
+
+            for (int i = 0; i < NpcRiderNames.Length; i++)
+            {
+                Point tile = PastureSpawnForSlot(playerSlotCount + i);
+                var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
+                horse.Name = NpcRiderNames[i] + "PenHorse";
+                horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
+                string saddleId = NpcRiderNames[i] switch
+                {
+                    "Abigail" => "HorseTycoon.SaddleLavender",
+                    "Sebastian" => "HorseTycoon.SaddleRed",
+                    _ => "HorseTycoon.SaddleBrown",
+                };
+                HorseHelper.EquipSaddle(horse, saddleId);
+                horse.currentLocation = loc;
+                horse.Position = TileToPixels(tile);
+                horse.Halt();
+                horse.faceDirection(HorseFacingPool[rng.Next(HorseFacingPool.Length)]);
+                horse.EventActor = true;
+                if (!loc.characters.Contains(horse))
+                    loc.characters.Add(horse);
+                SetGrazingAnimation(horse);
+                penNpcHorses.Add(horse);
+            }
+        }
+
+        private void DespawnPenNpcHorses()
+        {
+            var loc = Game1.currentLocation;
+            foreach (Horse h in penNpcHorses)
+                loc?.characters.Remove(h);
+            penNpcHorses.Clear();
+        }
+
+        private void SpawnDecorativeHorses()
+        {
+            GameLocation loc = Game1.currentLocation;
+            var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays) + 1);
+            foreach (Point tile in PastureBgSlots)
+            {
+                var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
+                horse.Name = "DecorativeHorse";
+                horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
+                horse.currentLocation = loc;
+                horse.Position = TileToPixels(tile);
+                horse.Halt();
+                horse.faceDirection(HorseFacingPool[rng.Next(HorseFacingPool.Length)]);
+                horse.EventActor = true;
+                if (!loc.characters.Contains(horse))
+                    loc.characters.Add(horse);
+                SetGrazingAnimation(horse);
+                decorativeHorses.Add(horse);
+            }
+        }
+
+        private void DespawnDecorativeHorses()
+        {
+            var loc = Game1.currentLocation;
+            foreach (Horse h in decorativeHorses)
+                loc?.characters.Remove(h);
+            decorativeHorses.Clear();
+        }
+
         private void LockJasOnHorse(GameLocation loc)
         {
             NPC? jas = loc.characters.OfType<NPC>().FirstOrDefault(c => c.Name == "Jas");
@@ -1157,16 +1246,19 @@ namespace HorseTycoon
                 return;
 
             Event? festival = RaceFestival;
+            NPC? pam = festival?.getActorByName("Pam");
             NPC? lewis = festival?.getActorByName("Lewis");
-            if (lewis == null)
-                return;
 
-            if (Vector2.Distance(Game1.player.Tile, lewis.Tile) > 2f)
+            bool nearPam = pam != null && IsPlayerFacing(pam);
+            bool nearLewis = lewis != null && IsPlayerFacing(lewis);
+
+            if (!nearPam && !nearLewis)
                 return;
 
             this.Helper.Input.Suppress(e.Button);
 
-            if (!lewisGreeted.Value)
+            // Pam handles betting.
+            if (nearPam && !pamGreeted.Value)
             {
                 showBettingMoneyBox.Value = true;
                 Response[] betResponses =
@@ -1175,13 +1267,13 @@ namespace HorseTycoon
                     new("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
                 };
                 Game1.currentLocation.createQuestionDialogue(
-                    "Lewis: Would you like to place a bet before we start the race? All proceeds help with community projects!",
+                    "Hey, wanna put some money on the race? I'm runnin' the book. Winner takes double.",
                     betResponses,
                     (_, betAnswer) =>
                     {
                         if (betAnswer != "Yes")
                         {
-                            // Player declined — hide the money box; they can re-approach Lewis to be asked again.
+                            // Player declined — hide the money box; they can re-approach Pam to be asked again.
                             Game1.afterDialogues = () => { showBettingMoneyBox.Value = false; };
                             return;
                         }
@@ -1189,14 +1281,13 @@ namespace HorseTycoon
                         Response[] racerOptions = BuildBetRacerResponses();
                         if (racerOptions.Length == 0)
                         {
-                            lewisGreeted.Value = true;
-                            Game1.afterDialogues = () => this.ShowLewisRaceDialog(lewis);
+                            pamGreeted.Value = true;
                             return;
                         }
 
                         Game1.afterDialogues = () =>
                             Game1.currentLocation.createQuestionDialogue(
-                                "Lewis: Excluding yourself, who do you think will place the highest?",
+                                 "Alright, who's gonna place the best? Can't bet on yourself.",
                                 racerOptions,
                                 (_, racerAnswer) =>
                                 {
@@ -1204,17 +1295,16 @@ namespace HorseTycoon
 
                                     var amountOptions = new List<Response>
                                     {
-                                        new("500",  "500g"),
-                                        new("1000", "1000g"),
-                                        new("2000", "2000g"),
+                                        new("250",  "250g"),
+                                        new("500", "500g"),
                                     };
                                     if (Game1.year >= 2)
-                                        amountOptions.Add(new Response("5000", "5000g"));
+                                        amountOptions.Add(new Response("1000", "1000g"));
                                     amountOptions.Add(new Response("nevermind", "Nevermind"));
 
                                     Game1.afterDialogues = () =>
                                         Game1.currentLocation.createQuestionDialogue(
-                                            "Lewis: How much would you like to bet? Prize doubles your bet.",
+                                            "How much you puttin' in?",
                                             amountOptions.ToArray(),
                                             (_, amountAnswer) =>
                                             {
@@ -1231,27 +1321,33 @@ namespace HorseTycoon
                                                     Game1.player.Money -= amount;
                                                     Game1.playSound("purchase");
                                                     Game1.dayTimeMoneyBox.moneyShakeTimer = 800;
-                                                    lewisGreeted.Value = true;
-                                                    Game1.afterDialogues = () => this.ShowLewisRaceDialog(lewis);
+                                                    pamGreeted.Value = true;
+                                                    Game1.afterDialogues = () =>
+                                                    {
+                                                        Game1.drawObjectDialogue("You're all set! Good luck out there.");
+                                                        Game1.afterDialogues = () => { showBettingMoneyBox.Value = false; };
+                                                    };
                                                 }
                                                 else
                                                 {
                                                     betTargetFarmerId.Value = null;
                                                     betTargetNpcName.Value = null;
-                                                    lewisGreeted.Value = true;
+                                                    pamGreeted.Value = true;
                                                     Game1.afterDialogues = () =>
                                                     {
-                                                        Game1.drawObjectDialogue("Lewis: Hmm, it looks like you don't have enough gold for that bet!");
-                                                        Game1.afterDialogues = () => this.ShowLewisRaceDialog(lewis);
+                                                        Game1.drawObjectDialogue("Ha! You ain't got that kind of money, hon.");
+                                                        Game1.afterDialogues = () => { showBettingMoneyBox.Value = false; };
                                                     };
                                                 }
-                                            }, lewis);
-                                }, lewis);
-                    }, lewis);
+                                            }, pam);
+                                }, pam);
+                    }, pam);
                 return;
             }
 
-            this.ShowLewisRaceDialog(lewis);
+            // Lewis handles race start.
+            if (nearLewis)
+                this.ShowLewisRaceDialog();
         }
 
         private Response[] BuildBetRacerResponses()
@@ -1281,8 +1377,9 @@ namespace HorseTycoon
                 betTargetNpcName.Value = answer.Substring(4);
         }
 
-        private void ShowLewisRaceDialog(NPC lewis)
+        private void ShowLewisRaceDialog()
         {
+            NPC? lewis = RaceFestival?.getActorByName("Lewis");
             Response[] yesNo =
             {
                 new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
@@ -1294,28 +1391,28 @@ namespace HorseTycoon
                 if (IsHost)
                 {
                     Game1.currentLocation.createQuestionDialogue(
-                        "Lewis: It looks like you don't have a horse! Marnie has some available to borrow. Ready to ride one and start the race?",
+                        "It looks like you don't have a horse! Marnie has some available to borrow. Ready to ride one and start the race?",
                         yesNo,
                         (_, answer) =>
                         {
                             showBettingMoneyBox.Value = false;
                             if (answer != "Yes") return;
                             this.AssignBorrowedHorse();
-                            Game1.drawObjectDialogue($"Lewis: Great! {competitor.Value!.Name} here will treat you well!");
+                            Game1.drawObjectDialogue($"Great! {competitor.Value!.Name} here will treat you well!");
                             Game1.afterDialogues = this.BeginRace;
                         }, lewis);
                 }
                 else
                 {
                     Game1.currentLocation.createQuestionDialogue(
-                        "Lewis: It looks like you don't have a horse! Marnie has some available to borrow for the race. Would you like to ride one?",
+                        "It looks like you don't have a horse! Marnie has some available to borrow for the race. Would you like to ride one?",
                         yesNo,
                         (_, answer) =>
                         {
                             showBettingMoneyBox.Value = false;
                             if (answer != "Yes") return;
                             this.AssignBorrowedHorse();
-                            Game1.drawObjectDialogue($"Lewis: Great! {competitor.Value!.Name} here will treat you well!");
+                            Game1.drawObjectDialogue($"Great! {competitor.Value!.Name} here will treat you well!");
                         }, lewis);
                 }
                 return;
@@ -1324,7 +1421,7 @@ namespace HorseTycoon
             if (!IsHost)
             {
                 showBettingMoneyBox.Value = false;
-                Game1.drawObjectDialogue("Lewis: We're just waiting on the host to start the race!");
+                Game1.drawObjectDialogue("We're just waiting on the host to start the race!");
                 return;
             }
 
@@ -1339,6 +1436,22 @@ namespace HorseTycoon
 
         private static bool IsHost =>
             !Game1.IsMultiplayer || Game1.serverHost == null || Game1.player.Equals(Game1.serverHost.Value);
+
+        // Mirrors vanilla's grab-area check: is the player facing this NPC and within reach?
+        private static bool IsPlayerFacing(NPC npc)
+        {
+            Rectangle playerBounds = Game1.player.GetBoundingBox();
+            const int Reach = 64;
+            Rectangle grabArea = Game1.player.FacingDirection switch
+            {
+                Game1.up => new Rectangle(playerBounds.X, playerBounds.Y - Reach, playerBounds.Width, Reach),
+                Game1.right => new Rectangle(playerBounds.Right, playerBounds.Y, Reach, playerBounds.Height),
+                Game1.down => new Rectangle(playerBounds.X, playerBounds.Bottom, playerBounds.Width, Reach),
+                Game1.left => new Rectangle(playerBounds.X - Reach, playerBounds.Y, Reach, playerBounds.Height),
+                _ => Rectangle.Empty,
+            };
+            return npc.GetBoundingBox().Intersects(grabArea);
+        }
 
         private void BeginRace()
         {
@@ -1427,6 +1540,7 @@ namespace HorseTycoon
             Game1.player.Halt();
             Game1.player.UsingTool = false;
 
+            this.DespawnPenNpcHorses();
             this.SpawnNpcRacers(loc, System.Math.Max(1, Game1.getOnlineFarmers().Count()));
 
             Game1.changeMusicTrack("none", track_interruptable: false, MusicContext.Event);
@@ -1972,13 +2086,28 @@ namespace HorseTycoon
                         string name = EsCharacterTileNames[esIdx];
                         if (Game1.characterData?.ContainsKey(name) != true)
                             this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (East Scarp not installed?).");
-                        // TODO: re-enable met check before shipping
-                        //else if (!Game1.getAllFarmers().Any(f => f.friendshipData.ContainsKey(name)))
-                        //    this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not met by any attending farmer.");
                         else
                             results.Add(new NpcSpectatorPlacement(name, new Point(x, y), dir));
                     }
                 }
+
+            // Remove NPCs that require a prior meeting if no attending farmer has met them yet.
+            var farmers = Game1.getAllFarmers().ToList();
+            results.RemoveAll(p =>
+            {
+                if (!MetRequiredNpcNames.Contains(p.Name)) return false;
+                if (farmers.Any(f => f.friendshipData.ContainsKey(p.Name))) return false;
+                this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{p.Name}' — not met by any attending farmer.");
+                return true;
+            });
+
+            // Leo only attends once he has moved to Pelican Town.
+            if (!Game1.MasterPlayer.mailReceived.Contains("leoMoved"))
+            {
+                int removed = results.RemoveAll(p => p.Name == "Leo");
+                if (removed > 0)
+                    this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping 'Leo' — not yet moved to Pelican Town.");
+            }
 
             if (placeholderSlots.Count > 0)
             {
@@ -2518,7 +2647,7 @@ namespace HorseTycoon
             quest.id.Value = BetRewardQuestId;
             quest.questType.Value = Quest.type_basic;
             quest.questTitle = "Horse Race Bet";
-            quest.questDescription = $"You correctly predicted that {winnerName} would place the highest. Lewis owes you your winnings.";
+            quest.questDescription = $"You called it — {winnerName} took the top spot. Go collect your winnings from Pam.";
             quest.currentObjective = "Collect your winnings.";
             quest.moneyReward.Value = winnings;
             quest.completed.Value = true;
@@ -2649,7 +2778,7 @@ namespace HorseTycoon
             ceremonyOrder.Value.Clear();
             ceremonyStep.Value = 0;
             disqualified.Value = false;
-            lewisGreeted.Value = false;
+            pamGreeted.Value = false;
             showBettingMoneyBox.Value = false;
             betTargetFarmerId.Value = null;
             betTargetNpcName.Value = null;
@@ -2659,6 +2788,9 @@ namespace HorseTycoon
             DisqualifiedFarmers.Clear();
             HostCeremonyCountdown = -1f;
             Game1.viewportFreeze = false;
+
+            this.DespawnPenNpcHorses();
+            this.DespawnDecorativeHorses();
 
             // NPC racer cleanup: remove AI horses; restore rider NPCs to their original locations.
             foreach (NpcRacer r in npcRacers)

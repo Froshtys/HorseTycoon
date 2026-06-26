@@ -189,7 +189,7 @@ namespace HorseTycoon
                 e.Edit(asset =>
                 {
                     asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardQuestId] =
-                        "Basic/Horse Race Bet/Congrats on a great bet, here are your horse race winnings. - Lewis/Collect your winnings.";
+                        "Basic/Horse Race Bet/You called it right. Here's what you're owed. Don't spend it all in one place. - Pam/Collect your winnings.";
                 });
             }
         }
