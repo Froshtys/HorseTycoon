@@ -29,6 +29,7 @@ namespace HorseTycoon
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
             helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
+            helper.Events.Content.AssetRequested += this.OnAssetRequested;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
             helper.Events.Display.MenuChanged += this.OnMenuChanged;
@@ -178,6 +179,18 @@ namespace HorseTycoon
             if (Context.IsMainPlayer)
             {
                 ConvertUnassignedStableHorses();
+            }
+        }
+
+        private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
+        {
+            if (e.NameWithoutLocale.IsEquivalentTo("Data/Quests"))
+            {
+                e.Edit(asset =>
+                {
+                    asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardQuestId] =
+                        "Basic/Horse Race Bet/Congrats on a great bet, here are your horse race winnings. - Lewis/Collect your winnings.";
+                });
             }
         }
 
