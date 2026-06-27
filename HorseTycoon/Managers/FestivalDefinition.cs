@@ -213,7 +213,7 @@ namespace HorseTycoon
             PenHorseTile = new Point(94, 31),
 
             // 8 total racers (4 players + 4 NPCs); topmost slot (slot 6, offset -6) lands the gate at (35, 6).
-            StartStall = new Point(34, 12),
+            StartStall = new Point(34, 14),
             FinishMin = new Point(91, 7),
             FinishMax = new Point(91, 14),
             DqZoneNorthOfY = -1,
