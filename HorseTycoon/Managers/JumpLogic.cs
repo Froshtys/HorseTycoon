@@ -88,7 +88,7 @@ namespace HorseTycoon
                 bool isColliding = location.isCollidingPosition(box, Game1.viewport, true, 0, false, Game1.player)
                                  || location.isCollidingPosition(box2, Game1.viewport, true, 0, false, Game1.player)
                                  || IsOutOfMap(location, box)
-                                 || (IsOnWater(location, box) && !Manager.Helper.ModRegistry.IsLoaded("aedenthorn.Swim"));
+                                 || (IsOnWater(location, box) && !FestivalRaceManager.IsBeachFestivalActive && !Manager.Helper.ModRegistry.IsLoaded("aedenthorn.Swim"));
 
                 collisions.Add(isColliding);
             }

@@ -32,11 +32,14 @@ namespace HorseTycoon
         // Decorative generated horses displayed in the background pasture during the festival.
         public Point[] PastureBgSlots = null!;
         // Decorative pony-ride horse placed in the pen (e.g. left of Leah's house in the Forest map).
-        public Point PenHorseTile;
+        // Null means no pony ride (e.g. Fall beach race has no Jas pony ride).
+        public Point? PenHorseTile;
 
         // --- Race course layout (tiles) ---
         // Stall i's horse tile is (StartStall.X, StartStall.Y + offset); horses break east into the course.
         public Point StartStall;
+        // Item ID for the fence panels that form the starting stalls ("322"=wood, "298"=hardwood, etc.).
+        public string StallFenceId = "322";
         // Finish band (inclusive tile rectangle).
         public Point FinishMin;
         public Point FinishMax;
@@ -51,6 +54,8 @@ namespace HorseTycoon
         // --- Ceremony layout (tiles) ---
         // Winner's circle tiles (1st, 2nd, 3rd place left-to-right).
         public Point[] WinnersCircleTiles = null!;
+        // Where Lewis stands in the TMX Set-Up layer (pre-race). Player warps 1 tile south of this on restart.
+        public Point LewisStartTile;
         public Point LewisAnnouncerTile;
         // Tiles for racers who didn't make the podium, spread south of the winners circle.
         public Point[] SpectatorTiles = null!;
@@ -60,9 +65,21 @@ namespace HorseTycoon
         public string[] NpcRiderNames = null!;
         public int[] NpcRiderSpeeds = null!;
         public int[] NpcRiderSprints = null!;
+        // Jump skill (0–100) per NPC racer. Drives route selection and arc height.
+        public int[] NpcRiderJumps = null!;
+        // Minimum TotalJump required to use NpcJumpRoutes instead of NpcRaceRoutes.
+        public int NpcJumpMinSkill = 50;
         // Per-NPC race routes. NPCs are assigned a route by index (cycling if there are more NPCs than routes).
         // Each route is a sequence of tile waypoints ending past the finish line.
         public Point[][] NpcRaceRoutes = null!;
+        // Alternate routes for NPCs with TotalJump >= NpcJumpMinSkill; includes approach/landing tiles
+        // that thread through jump obstacles instead of detouring around them.
+        // Indexed same as NpcRaceRoutes. Leave null to fall back to NpcRaceRoutes for all NPCs.
+        public Point[][]? NpcJumpRoutes = null;
+        // Maps each jump-obstacle approach tile → jump zone data. When an NPC on a jump route reaches
+        // an approach tile, skill is checked: if TotalJump >= MinSkill the NPC clears the obstacle
+        // (arc to LandingTile); otherwise they do an in-place blocked hop and lose time.
+        public System.Collections.Generic.Dictionary<Point, NpcJumpZone> NpcJumpZones = new();
 
         // --- Economy / rewards ---
         // Offered bet amounts. Any amount >= 1000 is only offered from year 2 onward (matches Pam's book).
@@ -113,6 +130,7 @@ namespace HorseTycoon
                 new Point(56, 12), // 2nd place
                 new Point(54, 12), // 3rd place
             },
+            LewisStartTile = new Point(87, 18),
             LewisAnnouncerTile = new Point(56, 9),
             SpectatorTiles = new[]
             {
@@ -126,6 +144,9 @@ namespace HorseTycoon
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
             NpcRiderSpeeds = new[] { 15, 25, 35, 40 },
             NpcRiderSprints = new[] { 20, 35, 45, 45 },
+            NpcRiderJumps = new[] { 20, 45, 65, 80 }, // Marnie low, Leah mid, Abigail/Sebastian high
+            NpcJumpMinSkill = 50,
+            // NpcJumpRoutes and NpcJumpZones populated after in-game route authoring (ht_race_tile).
             NpcRaceRoutes = new[]
             {
                 // Route 0 (Marnie)
@@ -206,11 +227,10 @@ namespace HorseTycoon
                 new Point(80, 32), new Point(73, 34), new Point(75, 32), new Point(69, 29),
                 new Point(69, 32), new Point(71, 28), new Point(72, 30), new Point(75, 29),
             },
-            PastureBgSlots = new[]
-            {
-                new Point(98, 20), new Point(94, 20), new Point(98, 16), new Point(102, 20),
-            },
-            PenHorseTile = new Point(94, 31),
+            PastureBgSlots = Array.Empty<Point>(),
+            PenHorseTile = null,
+
+            StallFenceId = "298",
 
             // 8 total racers (4 players + 4 NPCs); topmost slot (slot 6, offset -6) lands the gate at (35, 6).
             StartStall = new Point(34, 14),
@@ -225,6 +245,7 @@ namespace HorseTycoon
             {
                 new Point(58, 12), new Point(56, 12), new Point(54, 12),
             },
+            LewisStartTile = new Point(24, 6),
             LewisAnnouncerTile = new Point(56, 9),
             SpectatorTiles = new[]
             {
@@ -236,19 +257,33 @@ namespace HorseTycoon
             },
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
-            NpcRiderSpeeds = new[] { 15, 25, 35, 40 },
+            NpcRiderSpeeds = new[] { 5, 10, 15, 20 },
             NpcRiderSprints = new[] { 20, 35, 45, 45 },
+            NpcRiderJumps = new[] { 20, 45, 65, 80 },
+            NpcJumpMinSkill = 50,
             NpcRaceRoutes = new[]
             {
                 new[] { new Point(61, 13), new Point(91, 12) },
-                new[] { new Point(61, 13), new Point(91, 12) },
-                new[] { new Point(61, 13), new Point(91, 12) },
-                new[] { new Point(61, 13), new Point(91, 12) },
+                new[] { new Point(57, 10), new Point(91, 12) },
+                new[] { new Point(58, 17), new Point(91, 12) },
+                new[] { new Point(56, 20), new Point(91, 12) },
             },
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
         };
+    }
+
+    /// <summary>
+    /// One jump obstacle on the race course. NPCs whose TotalJump meets MinSkill clear
+    /// it cleanly (arc to LandingTile); those below MinSkill do an in-place blocked hop.
+    /// </summary>
+    public sealed class NpcJumpZone
+    {
+        /// <summary>Tile the NPC lands on after a successful jump.</summary>
+        public Point LandingTile;
+        /// <summary>Minimum TotalJump skill required to clear this obstacle.</summary>
+        public int MinSkill;
     }
 }

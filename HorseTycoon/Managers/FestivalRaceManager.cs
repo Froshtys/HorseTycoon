@@ -79,6 +79,7 @@ namespace HorseTycoon
             public long FakeId;
             public int TotalSpeed;
             public int TotalSprint;
+            public int TotalJump;
             public Point[] Route = System.Array.Empty<Point>();
             public int WaypointIndex;
             public bool Finished;
@@ -96,6 +97,20 @@ namespace HorseTycoon
             public bool MatchLeader;
             // Last multiplier applied by match AI; used to suppress redundant log lines.
             public float LastMatchMultiplier = 1f;
+            // Jump arc state — active while the NPC is airborne over a jump obstacle.
+            public bool IsJumping;
+            public float JumpTimer;
+            public float JumpDuration;
+            public Vector2 JumpStart;
+            public Vector2 JumpEnd;
+            public float JumpPeakHeight;
+            // Counts down after a forward jump lands; zone triggers are suppressed while > 0
+            // so chained jumps show a visible pause on the intermediate platform.
+            public float JumpCooldownMs;
+            // Approach tile that last triggered a jump; suppresses re-triggering while the NPC
+            // is still on that tile (prevents infinite blocked-hop loops on failed jumps).
+            // Cleared as soon as the NPC moves to a different tile.
+            public Point? LastJumpApproachTile;
         }
 
         private static readonly bool VerboseLogging = true;
@@ -374,6 +389,10 @@ namespace HorseTycoon
             RaceFestival != null
             && (Instance?.phase.Value == Phase.Racing || Instance?.phase.Value == Phase.Finished)
             && Game1.player?.mount != null;
+
+        /// <summary>True when the active festival takes place on the beach, where water landing is permitted.</summary>
+        public static bool IsBeachFestivalActive =>
+            RaceRidingActive && Instance?.activeDef.Value?.LocationName == "Beach";
 
         /// <summary>True while the start countdown is running (rider is penned in the stall).</summary>
         public static bool IsStartCountdownActive =>
@@ -686,7 +705,7 @@ namespace HorseTycoon
 
             // Every client builds its own stalls — the festival temp map's objects aren't net-synced.
             this.SpawnStartingStalls();
-            this.SpawnPenHorse();
+            if (def.PenHorseTile.HasValue) this.SpawnPenHorse();
             this.SpawnPenNpcHorses();
             this.SpawnDecorativeHorses();
             this.SpawnSpectators(setupSpectators);
@@ -928,13 +947,14 @@ namespace HorseTycoon
 
         private void SpawnPenHorse()
         {
+            Point tile = Def.PenHorseTile!.Value;
             GameLocation loc = Game1.currentLocation;
-            var horse = new Horse(System.Guid.NewGuid(), Def.PenHorseTile.X, Def.PenHorseTile.Y);
+            var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
             horse.Name = "PenHorse";
             horse.modData[HorseHelper.HorseSkinKey] = AllSkins[Game1.random.Next(AllSkins.Length)];
             horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
             horse.currentLocation = loc;
-            horse.Position = TileToPixels(Def.PenHorseTile);
+            horse.Position = TileToPixels(tile);
             horse.Halt();
             horse.faceDirection(Game1.left);
             horse.EventActor = true;
@@ -1467,7 +1487,7 @@ namespace HorseTycoon
         {
             if (loc.objects.ContainsKey(tile))
                 return;
-            Fence fence = isGate ? new RaceStartGate(tile) : new Fence(tile, "322", isGate: false);
+            Fence fence = isGate ? new RaceStartGate(tile) : new Fence(tile, Def.StallFenceId, isGate: false);
             if (isGate)
                 fence.gatePosition.Value = 0;
             loc.objects[tile] = fence;
@@ -2198,6 +2218,16 @@ namespace HorseTycoon
                 int yearBonus = anyPlayerHorseIsfast ? 5 : 0;
                 int speedIV = Def.NpcRiderSpeeds[i % Def.NpcRiderSpeeds.Length] + yearBonus;
                 int sprintIV = Def.NpcRiderSprints[i % Def.NpcRiderSprints.Length] + yearBonus;
+                int jumpIV = Def.NpcRiderJumps != null
+                    ? Def.NpcRiderJumps[i % Def.NpcRiderJumps.Length]
+                    : 0;
+
+                bool useJumpRoute = jumpIV >= Def.NpcJumpMinSkill
+                    && Def.NpcJumpRoutes != null
+                    && Def.NpcJumpRoutes.Length > 0;
+                Point[] route = useJumpRoute
+                    ? Def.NpcJumpRoutes![i % Def.NpcJumpRoutes.Length]
+                    : Def.NpcRaceRoutes[i == 0 ? 2 : i % Def.NpcRaceRoutes.Length];
 
                 var racer = new NpcRacer
                 {
@@ -2206,18 +2236,96 @@ namespace HorseTycoon
                     FakeId = nextNpcFakeId--,
                     TotalSpeed = speedIV,
                     TotalSprint = sprintIV,
-                    Route = Def.NpcRaceRoutes[i == 0 ? 2 : i % Def.NpcRaceRoutes.Length],
+                    TotalJump = jumpIV,
+                    Route = route,
                     WaypointIndex = 0,
                     NextSprintCheckMs = (float)(rng.NextDouble() * 5000.0 + 3000.0),
                 };
                 npcRacers.Add(racer);
 
-                this.LogVerbose($"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}");
+                this.LogVerbose($"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}, Jump={jumpIV} ({(useJumpRoute ? "jump route" : "detour route")})");
             }
 
             // The two fastest NPCs track the race leader; the rest track the nearest farmer.
             foreach (NpcRacer r in npcRacers.OrderByDescending(r => r.TotalSpeed).Take(2))
                 r.MatchLeader = true;
+
+            this.LoadNpcJumpZonesFromMap(loc);
+        }
+
+        // Layer names used to author NPC jump zones in Tiled. Place approach-marker tiles on
+        // NpcJumpApproach and landing-marker tiles on NpcJumpLanding; pairs are matched by
+        // scan order (top→bottom, left→right). Set a "MinSkill" tile property on each approach
+        // tile in the tileset to control the skill threshold; omitting it falls back to NpcJumpMinSkill.
+        private const string NpcJumpApproachLayer = "NpcJumpApproach";
+        private const string NpcJumpLandingLayer = "NpcJumpLanding";
+        // NPC jump arcs are capped at this many tiles regardless of zone definition or skill.
+        private const float MaxNpcJumpTiles = 4f;
+
+        /// <summary>
+        /// Scans the festival map for NpcJumpApproach and NpcJumpLanding tile layers and
+        /// populates <see cref="FestivalDefinition.NpcJumpZones"/> for this race session.
+        /// Pairs are matched by top→bottom left→right scan order; counts must be equal.
+        /// </summary>
+        private void LoadNpcJumpZonesFromMap(GameLocation loc)
+        {
+            Def.NpcJumpZones.Clear();
+
+            var approachLayer = loc.map.GetLayer(NpcJumpApproachLayer);
+            var landingLayer  = loc.map.GetLayer(NpcJumpLandingLayer);
+
+            if (approachLayer == null && landingLayer == null)
+                return; // no jump zones on this map — silent, not an error
+
+            if (approachLayer == null || landingLayer == null)
+            {
+                this.Monitor.Log(
+                    $"Map has {NpcJumpApproachLayer} or {NpcJumpLandingLayer} but not both — NPC jump zones disabled.",
+                    LogLevel.Warn);
+                return;
+            }
+
+            int w = approachLayer.LayerWidth;
+            int h = approachLayer.LayerHeight;
+
+            var approaches = new List<(Point Tile, int MinSkill)>();
+            var landings   = new List<Point>();
+
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                var approachTile = approachLayer.Tiles[x, y];
+                if (approachTile != null)
+                {
+                    // Read MinSkill from tileset property first, then per-tile override.
+                    string? raw = null;
+                    approachTile.TileIndexProperties.TryGetValue("MinSkill", out var tv);
+                    if (tv != null) raw = tv.ToString();
+                    if (raw == null) { approachTile.Properties.TryGetValue("MinSkill", out var pv); raw = pv?.ToString(); }
+                    int minSkill = int.TryParse(raw, out int parsed) ? parsed : Def.NpcJumpMinSkill;
+                    approaches.Add((new Point(x, y), minSkill));
+                }
+
+                if (landingLayer.Tiles[x, y] != null)
+                    landings.Add(new Point(x, y));
+            }
+
+            if (approaches.Count != landings.Count)
+            {
+                this.Monitor.Log(
+                    $"{NpcJumpApproachLayer} has {approaches.Count} tile(s) but {NpcJumpLandingLayer} has {landings.Count} — counts must match. NPC jump zones disabled.",
+                    LogLevel.Warn);
+                return;
+            }
+
+            for (int i = 0; i < approaches.Count; i++)
+            {
+                var (tile, minSkill) = approaches[i];
+                Def.NpcJumpZones[tile] = new NpcJumpZone { LandingTile = landings[i], MinSkill = minSkill };
+                this.LogVerbose($"[Jump] Zone {i}: approach {tile} → landing {landings[i]} (MinSkill={minSkill})");
+            }
+
+            this.Monitor.Log($"Loaded {Def.NpcJumpZones.Count} NPC jump zone(s) from map.", LogLevel.Info);
         }
 
         /// <summary>
@@ -2249,11 +2357,103 @@ namespace HorseTycoon
                     continue;
                 }
 
+                // Drive jump arc — while airborne, interpolate position and parabolic Y offset.
+                if (r.IsJumping)
+                {
+                    r.JumpTimer += deltaMs;
+                    float t = System.Math.Clamp(r.JumpTimer / r.JumpDuration, 0f, 1f);
+                    r.Horse.Position = Vector2.Lerp(r.JumpStart, r.JumpEnd, t);
+                    r.Horse.drawOffset = new Vector2(0f, -r.JumpPeakHeight * 4f * t * (1f - t));
+                    r.Horse.drawOnTop = true;
+
+                    if (r.JumpTimer >= r.JumpDuration)
+                    {
+                        r.IsJumping = false;
+                        r.Horse.Position = r.JumpEnd;
+                        r.Horse.drawOffset = Vector2.Zero;
+                        r.Horse.drawOnTop = false;
+                        // For forward jumps, start a cooldown so the NPC visibly touches down
+                        // on the landing platform before the next zone can trigger.
+                        if (r.JumpEnd != r.JumpStart)
+                            r.JumpCooldownMs = 300f;
+                    }
+                    if (r.Rider != null) SyncRiderToHorse(r.Rider, r.Horse);
+                    continue;
+                }
+
+                // Suppress pathfinding and movement while the post-jump cooldown is active so
+                // the NPC stays on the landing platform long enough for the next zone to trigger.
+                if (r.JumpCooldownMs > 0f)
+                {
+                    r.JumpCooldownMs -= deltaMs;
+                    continue;
+                }
+
+                // Zone check runs BEFORE A* so a zone trigger cannot accidentally consume
+                // WaypointIndex. If A* ran first and succeeded, WaypointIndex would advance on
+                // the same tick the zone fires — then after the jump(s) the route-exhausted check
+                // at the top would see WaypointIndex >= Route.Length and stall the NPC.
+                if (Def.NpcJumpZones.Count > 0)
+                {
+                    Point currentTile = new((int)r.Horse.Tile.X, (int)r.Horse.Tile.Y);
+
+                    // Clear the guard once the NPC moves off the tile that last triggered a jump,
+                    // so chained jumps (landing = new takeoff) and future revisits work correctly.
+                    if (r.LastJumpApproachTile.HasValue && currentTile != r.LastJumpApproachTile.Value)
+                        r.LastJumpApproachTile = null;
+
+                    if (r.LastJumpApproachTile == null && Def.NpcJumpZones.TryGetValue(currentTile, out NpcJumpZone? zone))
+                    {
+                        r.LastJumpApproachTile = currentTile;
+                        r.IsJumping = true;
+                        r.JumpTimer = 0f;
+                        r.JumpStart = r.Horse.Position;
+                        r.JumpPeakHeight = 20f + r.TotalJump * 0.5f;
+
+                        // Face the horse (and rider) toward the landing tile before the arc starts.
+                        Vector2 jumpDir = new Vector2(zone.LandingTile.X - currentTile.X, zone.LandingTile.Y - currentTile.Y);
+                        int jumpFacing = GetFacingDirection(jumpDir);
+                        r.Horse.faceDirection(jumpFacing);
+                        if (r.Rider != null) r.Rider.faceDirection(jumpFacing);
+                        // Exhaust the current A* path so that after landing the next-tick A*
+                        // check recomputes from the landing tile. Without this, PathIndex may
+                        // still point at the approach tile (jump fired before the NPC reached
+                        // the tile center) and the movement loop would send it back there.
+                        r.PathIndex = r.ComputedPath.Count;
+
+                        float tileDist = Vector2.Distance(
+                            new Vector2(currentTile.X, currentTile.Y),
+                            new Vector2(zone.LandingTile.X, zone.LandingTile.Y));
+                        bool clears = r.TotalJump >= zone.MinSkill && tileDist <= MaxNpcJumpTiles;
+                        if (clears)
+                        {
+                            // Skill sufficient and within max distance: arc forward to the landing tile.
+                            r.JumpEnd = TileToPixels(zone.LandingTile);
+                            float jumpDist = Vector2.Distance(r.JumpStart, r.JumpEnd);
+                            float speedPxPerMs = ComputeNpcSpeedPixelsPerMs(r);
+                            r.JumpDuration = jumpDist / System.Math.Max(speedPxPerMs, 0.001f);
+                            this.LogVerbose($"[Jump] {r.Rider?.Name ?? r.Horse.Name} clears obstacle at {currentTile} (skill {r.TotalJump} >= {zone.MinSkill}, dist {tileDist:F1} tiles)");
+                        }
+                        else
+                        {
+                            // Skill too low or obstacle too wide: blocked hop — arc in place, no forward progress.
+                            r.JumpEnd = r.JumpStart;
+                            r.JumpDuration = 600f; // fixed penalty duration in ms
+                            this.LogVerbose($"[Jump] {r.Rider?.Name ?? r.Horse.Name} blocked hop at {currentTile} (skill {r.TotalJump}, dist {tileDist:F1} tiles, minSkill {zone.MinSkill}, max {MaxNpcJumpTiles})");
+                        }
+                        continue; // skip A* and movement this tick — WaypointIndex must not advance here
+                    }
+                }
+
                 this.UpdateNpcSprint(r, deltaMs, npcIdx);
 
                 // Compute A* path to next waypoint when the previous segment is exhausted.
+                // Only advance WaypointIndex on success — a failed A* (e.g. NPC on an isolated
+                // platform between two jump zones) should retry the same destination each tick
+                // rather than silently skipping the waypoint and leaving the NPC stranded.
                 if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex < r.Route.Length)
-                    TryComputePathToWaypoint(r, loc, r.Route[r.WaypointIndex++]);
+                    if (TryComputePathToWaypoint(r, loc, r.Route[r.WaypointIndex]))
+                        r.WaypointIndex++;
 
                 // Drive position directly along the A*-computed tile path.
                 // This bypasses MovePosition (blocked during eventUp) while still respecting
@@ -2626,8 +2826,9 @@ namespace HorseTycoon
                 return;
             }
 
-            // Capture competitor before Reset() clears it.
+            // Capture competitor and def before Reset() clears them.
             Horse? horse = competitor.Value ?? Game1.player.mount;
+            FestivalDefinition? def = activeDef.Value;
 
             this.Reset(); // removes stalls/NPC racers, sets phase = None
 
@@ -2644,13 +2845,28 @@ namespace HorseTycoon
 
             // Return their horse to the pasture and seed lastRiddenMount so EnterPasture
             // (called on the next Phase.None tick) picks it up automatically.
-            if (horse != null)
+            // Restore activeDef temporarily so PlaceHorseInPasture/PastureSpawnForSlot can read Def.
+            if (horse != null && def != null)
             {
+                activeDef.Value = def;
                 int slot = PastureSlotFor(Game1.player);
                 PlaceHorseInPasture(horse, slot);
-                Game1.player.Position = TileToPixels(new Point(56, 10));
+                activeDef.Value = null;
+                Game1.player.Position = TileToPixels(new Point(def.LewisStartTile.X, def.LewisStartTile.Y + 1));
+                Game1.player.faceDirection(Game1.up);
                 lastRiddenMount.Value = horse;
                 lastMountedTick.Value = Game1.ticks;
+            }
+
+            if (def != null)
+            {
+                NPC? lewis = RaceFestival?.getActorByName("Lewis");
+                if (lewis != null)
+                {
+                    lewis.Position = TileToPixels(def.LewisStartTile);
+                    lewis.faceDirection(Game1.down);
+                    lewis.Halt();
+                }
             }
 
             this.Monitor.Log("ht_race_restart: reset to pasture phase.", LogLevel.Info);
