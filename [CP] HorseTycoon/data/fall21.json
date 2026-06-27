@@ -1,5 +1,5 @@
 {
 	"name": "Fall Horse Festival",
 	"conditions": "Beach/1200 1800",
-	"set-up": "event1/69 1/farmer 69 1 2/changeToTemporaryMap CP.HorseTycoon_FallBeach/viewport -1000 -1000/loadActors Set-Up/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear"
+	"set-up": "event1/69 1/farmer 38 1 2/changeToTemporaryMap CP.HorseTycoon_FallBeach/viewport -1000 -1000/loadActors Set-Up/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear"
 }

@@ -453,6 +453,12 @@ namespace HorseTycoon
             // 1. Basic safety checks (Runs every tick)
             if (!Context.IsWorldReady || Game1.player.mount == null)
             {
+                // If the player dismounted while the sprint buff was active, swap it for exhaustion.
+                if (WasSprintingLastCheck || Game1.player.buffs.IsApplied("Froshty.HorseTycoon.Sprint"))
+                {
+                    Game1.player.buffs.Remove("Froshty.HorseTycoon.Sprint");
+                    ApplyExhaustion();
+                }
                 WasSprintingLastCheck = false;
                 // Clear the distance anchor while unmounted so the first tick after (re)mounting — possibly
                 // in a new location or the next morning — doesn't credit the gap since the last dismount.
@@ -503,9 +509,6 @@ namespace HorseTycoon
 
         private void ApplyExhaustion()
         {
-            var horse = HorseHelper.GetFarmAnimalForHorse(Game1.player.mount);
-            if (horse == null) return;
-
             // Currently we do a flat 10 sec exhaustion
             int durationMs = 10000;
 

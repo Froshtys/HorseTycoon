@@ -124,6 +124,7 @@ namespace HorseTycoon
         private readonly PerScreen<int> wanderDir = new(() => -1);
         private readonly PerScreen<int> wanderTicks = new(() => 0);
         private readonly PerScreen<bool> readyCheckOpen = new(() => false);
+        private readonly PerScreen<bool> pendingRaceReadyCheck = new(() => false);
         private readonly PerScreen<List<Vector2>> stallFenceTiles = new(() => new List<Vector2>());
         private readonly PerScreen<bool> stallsSpawned = new(() => false);
         private readonly PerScreen<Horse?> penHorse = new(() => null);
@@ -709,9 +710,12 @@ namespace HorseTycoon
 
         private void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
         {
-            if (e.Type == MsgOpenReadyCheck && RaceFestival != null && phase.Value == Phase.Pasture)
+            if (e.Type == MsgOpenReadyCheck)
             {
-                this.OpenRaceReadyCheck();
+                if (RaceFestival != null && phase.Value == Phase.Pasture)
+                    this.OpenRaceReadyCheck();
+                else
+                    pendingRaceReadyCheck.Value = true;
                 return;
             }
 
@@ -838,6 +842,12 @@ namespace HorseTycoon
 
         private void UpdatePasture()
         {
+            if (pendingRaceReadyCheck.Value && RaceFestival != null && !readyCheckOpen.Value)
+            {
+                pendingRaceReadyCheck.Value = false;
+                this.OpenRaceReadyCheck();
+            }
+
             Horse? horse = competitor.Value;
             if (horse == null)
                 return;
@@ -1284,14 +1294,14 @@ namespace HorseTycoon
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
         }
 
-        /// <summary>ReadyCheckDialog manages Game1.netReady and fires onConfirm on each client once all are ready.</summary>
+        /// <summary>Opens the race ready check on this screen. ReadyCheckDialog's update() loop marks the local
+        /// player ready each tick and fires onConfirm once all online players have confirmed.</summary>
         private void OpenRaceReadyCheck()
         {
             if (readyCheckOpen.Value || phase.Value != Phase.Pasture)
                 return;
 
             readyCheckOpen.Value = true;
-            Game1.netReady.SetLocalReady(ReadyCheckName, ready: true);
             Game1.activeClickableMenu = new ReadyCheckDialog(
                 ReadyCheckName,
                 allowCancel: true,
@@ -1592,70 +1602,62 @@ namespace HorseTycoon
 
             var ceremonyOffset = new Microsoft.Xna.Framework.Vector2(0f, 64f);
 
-            // Single pass over the full ranked list: assigns podium or spectator tiles to everyone.
-            // A shared spectatorSlot counter increments for every non-podium entry (human or NPC),
-            // so no two racers are assigned the same tile regardless of how humans and NPCs are mixed.
-            int spectatorSlot = 0;
+            // Move the local rider + horse to their podium or spectator tile.
+            // Spectator slot = placement index minus podium count, so it's consistent with the NPC loop below.
+            if (placement >= 0 && placement < Def.WinnersCircleTiles.Length)
+            {
+                Point podium = Def.WinnersCircleTiles[placement];
+                Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
+                Game1.player.faceDirection(Game1.up);
+
+                Horse? horse = competitor.Value;
+                if (horse != null)
+                {
+                    horse.Position = TileToPixels(podium) + ceremonyOffset;
+                    horse.faceDirection(Game1.up);
+                }
+            }
+            else if (placement >= 0)
+            {
+                int spectatorSlot = placement - Def.WinnersCircleTiles.Length;
+                Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
+                Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
+                Game1.player.faceDirection(Game1.up);
+
+                Horse? horse = competitor.Value;
+                if (horse != null)
+                {
+                    horse.Position = TileToPixels(spec) + ceremonyOffset;
+                    horse.faceDirection(Game1.up);
+                }
+            }
+
+            // Move NPC racers to their podium or spectator tiles.
+            // Each NPC's spectator slot is its ranked index minus the podium count — the same formula
+            // the player uses above — so humans and NPCs never land on the same tile.
             for (int i = 0; i < rankedPlayerIds.Count; i++)
             {
                 long id = rankedPlayerIds[i];
-                bool isPodium = i < Def.WinnersCircleTiles.Length;
-
-                if (id >= 0)
+                if (id >= 0) continue; // human player — handled above
+                NpcRacer? racer = npcRacers.Find(r => r.FakeId == id);
+                if (racer == null) continue;
+                racer.Horse.controller = null;
+                racer.Horse.Halt();
+                if (i < Def.WinnersCircleTiles.Length)
                 {
-                    // Human player — only the local player positions themselves.
-                    if (id == localId)
-                    {
-                        if (isPodium)
-                        {
-                            Point podium = Def.WinnersCircleTiles[i];
-                            Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
-                            Game1.player.faceDirection(Game1.up);
-                            Horse? horse = competitor.Value;
-                            if (horse != null)
-                            {
-                                horse.Position = TileToPixels(podium) + ceremonyOffset;
-                                horse.faceDirection(Game1.up);
-                            }
-                        }
-                        else
-                        {
-                            Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
-                            Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
-                            Game1.player.faceDirection(Game1.up);
-                            Horse? horse = competitor.Value;
-                            if (horse != null)
-                            {
-                                horse.Position = TileToPixels(spec) + ceremonyOffset;
-                                horse.faceDirection(Game1.up);
-                            }
-                        }
-                    }
-                    if (!isPodium) spectatorSlot++;
+                    Point podium = Def.WinnersCircleTiles[i];
+                    racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
+                    racer.Horse.faceDirection(Game1.up);
                 }
                 else
                 {
-                    // NPC racer — positioned on every screen.
-                    NpcRacer? racer = npcRacers.Find(r => r.FakeId == id);
-                    if (racer == null) { if (!isPodium) spectatorSlot++; continue; }
-                    racer.Horse.controller = null;
-                    racer.Horse.Halt();
-                    if (isPodium)
-                    {
-                        Point podium = Def.WinnersCircleTiles[i];
-                        racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
-                        racer.Horse.faceDirection(Game1.up);
-                    }
-                    else
-                    {
-                        Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
-                        racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
-                        racer.Horse.faceDirection(Game1.up);
-                        spectatorSlot++;
-                    }
-                    if (racer.Rider != null)
-                        SyncRiderToHorse(racer.Rider, racer.Horse);
+                    int spectatorSlot = i - Def.WinnersCircleTiles.Length;
+                    Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
+                    racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
+                    racer.Horse.faceDirection(Game1.up);
                 }
+                if (racer.Rider != null)
+                    SyncRiderToHorse(racer.Rider, racer.Horse);
             }
 
             Game1.player.CanMove = false;
@@ -2654,6 +2656,7 @@ namespace HorseTycoon
             wanderDir.Value = -1;
             wanderTicks.Value = 0;
             readyCheckOpen.Value = false;
+            pendingRaceReadyCheck.Value = false;
             ceremonyOrder.Value.Clear();
             ceremonyStep.Value = 0;
             disqualified.Value = false;

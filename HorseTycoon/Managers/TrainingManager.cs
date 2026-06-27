@@ -33,7 +33,8 @@ namespace HorseTycoon
         /// <param name="HorseId">The backing FarmAnimal's id (FarmAnimal.myID), stable across the network.</param>
         /// <param name="Kind">One of the Kind* tags.</param>
         /// <param name="Amount">Jumps/sprints performed, or pixels travelled, depending on Kind.</param>
-        private record TrainingMessage(long HorseId, string Kind, float Amount);
+        /// <param name="Day">Game1.Date.TotalDays when the message was sent; host discards if the day has advanced.</param>
+        private record TrainingMessage(long HorseId, string Kind, float Amount, int Day);
 
         // Farmhands batch distance and flush it to the host periodically rather than messaging every tick.
         private const float DistanceFlushChunk = 64f * 5f; // 5 tiles
@@ -174,7 +175,7 @@ namespace HorseTycoon
         private static void ReportToHost(long horseId, string kind, float amount)
         {
             Manager.Helper.Multiplayer.SendMessage(
-                new TrainingMessage(horseId, kind, amount),
+                new TrainingMessage(horseId, kind, amount, Game1.Date.TotalDays),
                 MsgTraining,
                 modIDs: new[] { Manager.Helper.ModRegistry.ModID });
         }
@@ -186,6 +187,7 @@ namespace HorseTycoon
             if (e.FromModID != Manager.Helper.ModRegistry.ModID) return;
 
             var msg = e.ReadAs<TrainingMessage>();
+            if (msg.Day != Game1.Date.TotalDays) return;
             FarmAnimal? horse = HorseHelper.GetHiddenHorseById(msg.HorseId);
             if (horse == null) return;
 

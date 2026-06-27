@@ -117,9 +117,7 @@ namespace HorseTycoon
             PerformJump(power);
 
             if (Game1.player.mount != null)
-            {
                 TrainingManager.ProcessJump(Game1.player.mount);
-            }
         }
 
         private static void PerformBlockedJump(int jumpHeight)
@@ -130,9 +128,7 @@ namespace HorseTycoon
             PerformJump(2 + jumpHeight);
 
             if (Game1.player.mount != null)
-            {
                 TrainingManager.ProcessJump(Game1.player.mount);
-            }
         }
 
         private static void PerformJump(float v)
