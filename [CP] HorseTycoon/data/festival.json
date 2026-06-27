@@ -180,7 +180,7 @@
 			"LogName": "Fall Horse Festival - Festival map (beach)",
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_FallBeach",
-			"FromFile": "assets/maps/FallBeach.tmx"
+			"FromFile": "assets/maps/Beach-HorseFestival.tmx"
 		},
 		{
 			"LogName": "Fall Horse Festival - Leah's saddle shop",

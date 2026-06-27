@@ -43,7 +43,8 @@ namespace HorseTycoon
         // Disqualification zone: north of the starting-gate's north fence AND east of the finish-line's
         // east barrier. A racer entering this zone has jumped off the track and is disqualified.
         public int DqZoneNorthOfY;   // player.Tile.Y < this value
-        public int DqZoneEastOfX;    // player.Tile.X > this value
+        public int DqZoneEastOfX;    // player.Tile.X > this value; -1 = disabled
+        public int DqZoneWestOfX = -1; // player.Tile.X < this value; -1 = disabled
         // Where a DQ'd player (and their horse) is teleported — just past the finish in the spectator area.
         public Point DqArrivalTile;
 
@@ -211,11 +212,13 @@ namespace HorseTycoon
             },
             PenHorseTile = new Point(94, 31),
 
-            StartStall = new Point(39, 48),
-            FinishMin = new Point(40, 11),
-            FinishMax = new Point(40, 17),
-            DqZoneNorthOfY = 43,
-            DqZoneEastOfX = 41,
+            // 8 total racers (4 players + 4 NPCs); topmost slot (slot 6, offset -6) lands the gate at (35, 6).
+            StartStall = new Point(34, 12),
+            FinishMin = new Point(91, 7),
+            FinishMax = new Point(91, 14),
+            DqZoneNorthOfY = -1,
+            DqZoneEastOfX = -1,
+            DqZoneWestOfX = 32,
             DqArrivalTile = new Point(44, 14),
 
             WinnersCircleTiles = new[]
@@ -235,8 +238,13 @@ namespace HorseTycoon
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
             NpcRiderSpeeds = new[] { 15, 25, 35, 40 },
             NpcRiderSprints = new[] { 20, 35, 45, 45 },
-            // TODO(beach): author beach routes; placeholder reuses the Forest routes.
-            NpcRaceRoutes = Forest().NpcRaceRoutes,
+            NpcRaceRoutes = new[]
+            {
+                new[] { new Point(61, 13), new Point(91, 12) },
+                new[] { new Point(61, 13), new Point(91, 12) },
+                new[] { new Point(61, 13), new Point(91, 12) },
+                new[] { new Point(61, 13), new Point(91, 12) },
+            },
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },

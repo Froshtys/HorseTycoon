@@ -99,6 +99,7 @@ namespace HorseTycoon
         }
 
         private static readonly bool VerboseLogging = true;
+        private static readonly bool DebugAllStalls = true;
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
@@ -689,6 +690,7 @@ namespace HorseTycoon
             this.SpawnPenNpcHorses();
             this.SpawnDecorativeHorses();
             this.SpawnSpectators(setupSpectators);
+            this.SyncBack2WaterTiles(Game1.currentLocation);
 
 
             Horse? horse = lastRiddenMount.Value;
@@ -799,6 +801,7 @@ namespace HorseTycoon
             horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
             horse.modData[HorseHelper.BorrowedSpeedKey] = "10";
             horse.modData[HorseHelper.BorrowedSprintKey] = "10";
+            horse.modData[HorseHelper.BorrowedJumpKey] = "10";
             borrowedFestivalHorse.Value = horse;
             competitor.Value = horse;
             this.LogVerbose($"Auto-assigned borrowed horse '{horse.Name}' to {Game1.player.Name}.");
@@ -887,6 +890,40 @@ namespace HorseTycoon
                 new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
                 new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
             });
+        }
+
+        // Copies water-tile status from Back2 into waterTiles so that water placed on
+        // Back2 (with a passable sand tile on Back) still animates correctly.
+        private void SyncBack2WaterTiles(GameLocation location)
+        {
+            if (location?.map == null) return;
+            var back2 = location.map.GetLayer("Back2");
+            if (back2 == null) return;
+
+            int w = back2.LayerWidth;
+            int h = back2.LayerHeight;
+
+            location.waterTiles ??= new StardewValley.WaterTiles(w, h);
+
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    var tile = back2.Tiles[x, y];
+                    if (tile == null) continue;
+
+                    tile.TileIndexProperties.TryGetValue("Water", out var v);
+                    if (v == null) tile.Properties.TryGetValue("Water", out v);
+
+                    if (v?.ToString() == "T" &&
+                        x < location.waterTiles.waterTiles.GetLength(0) &&
+                        y < location.waterTiles.waterTiles.GetLength(1))
+                    {
+                        location.waterTiles.waterTiles[x, y].isWater = true;
+                        location.waterTiles.waterTiles[x, y].isVisible = true;
+                    }
+                }
+            }
         }
 
         private void SpawnPenHorse()
@@ -1392,7 +1429,9 @@ namespace HorseTycoon
             if (stallsSpawned.Value || loc == null)
                 return;
 
-            int count = System.Math.Max(1, Game1.getOnlineFarmers().Count()) + Def.NpcRiderNames.Length;
+            int count = DebugAllStalls
+                ? MaxRacers
+                : System.Math.Max(1, Game1.getOnlineFarmers().Count()) + Def.NpcRiderNames.Length;
 
             int minYOffset = 0, maxYOffset = 0;
             for (int i = 0; i < count; i++)
@@ -1517,7 +1556,9 @@ namespace HorseTycoon
                 return;
 
             Vector2 t = Game1.player.Tile;
-            if (!(t.Y < Def.DqZoneNorthOfY && t.X > Def.DqZoneEastOfX))
+            bool offEast = Def.DqZoneEastOfX >= 0 && t.X > Def.DqZoneEastOfX && t.Y < Def.DqZoneNorthOfY;
+            bool offWest = Def.DqZoneWestOfX >= 0 && t.X < Def.DqZoneWestOfX;
+            if (!offEast && !offWest)
                 return;
 
             disqualified.Value = true;

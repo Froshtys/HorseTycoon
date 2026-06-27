@@ -20,6 +20,7 @@ namespace HorseTycoon
         // Fallback stat keys written directly onto a borrowed festival horse (no FarmAnimal backing).
         public const string BorrowedSpeedKey = "Froshty.HorseTycoon/BorrowedSpeed";
         public const string BorrowedSprintKey = "Froshty.HorseTycoon/BorrowedSprint";
+        public const string BorrowedJumpKey = "Froshty.HorseTycoon/BorrowedJump";
 
         // Maps unqualified saddle item ID → "Saddle_X,Bridle_X" overlay string.
         public static readonly IReadOnlyDictionary<string, string> SaddleItemOverlays =
