@@ -18,7 +18,8 @@
     "FertilizerGranulator_DisplayName": "Fertilizer Granulator",
 	"FertilizerGranulator_Description": "Converts livestock manure into fertilizer.",
 
-    "HorseFestival_Name": "Horse Festival",
+    "SpringHorseFestival_Name": "Spring Horse Festival",
+    "FallHorseFestival_Name": "Fall Horse Festival",
 
     "ScarecrowHorse_Name": "Horse Rarecrow",
     "ScarecrowHorse_Description": "A charming horse-shaped scarecrow.",

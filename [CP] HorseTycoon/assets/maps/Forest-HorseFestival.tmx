@@ -7868,22 +7868,22 @@
   </object>
   <object id="41" name="TileData" x="1312" y="288" width="16" height="16">
    <properties>
-    <property name="Action" value="Shop Festival_HorseFestival_Pierre"/>
+    <property name="Action" value="Shop Festival_SpringHorseFestival_Pierre"/>
    </properties>
   </object>
   <object id="42" name="TileData" x="1296" y="288" width="16" height="16">
    <properties>
-    <property name="Action" value="Shop Festival_HorseFestival_Pierre"/>
+    <property name="Action" value="Shop Festival_SpringHorseFestival_Pierre"/>
    </properties>
   </object>
   <object id="43" name="TileData" x="1360" y="496" width="16" height="16">
    <properties>
-    <property name="Action" value="Shop Festival_HorseFestival_Leah"/>
+    <property name="Action" value="Shop Festival_SpringHorseFestival_Leah"/>
    </properties>
   </object>
   <object id="44" name="TileData" x="1376" y="496" width="16" height="16">
    <properties>
-    <property name="Action" value="Shop Festival_HorseFestival_Leah"/>
+    <property name="Action" value="Shop Festival_SpringHorseFestival_Leah"/>
    </properties>
   </object>
  </objectgroup>

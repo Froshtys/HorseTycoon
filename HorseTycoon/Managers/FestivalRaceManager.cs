@@ -27,21 +27,18 @@ namespace HorseTycoon
     /// </summary>
     public class FestivalRaceManager
     {
-        // Festival event id format: "festival_" + the file key from Event.tryToLoadFestival.
-        private const string FestivalEventId = "festival_spring21";
+        // Registered horse festivals. Add a FestivalDefinition factory here to introduce a new festival;
+        // all race/betting/ceremony/sync behavior is shared and reads from the currently active one.
+        private static readonly List<FestivalDefinition> Festivals = new()
+        {
+            FestivalDefinition.Forest(),
+            FestivalDefinition.FallBeach(),
+        };
+
         private const string ReadyCheckName = "Froshty.HorseTycoon.horseRaceStart";
 
         private const float SprintCooldownMs = 10000f;
         private enum SprintPhase { Ready, Sprinting, Exhausted }
-
-        // --- Tunable map coordinates (tiles) for CP.HorseTycoon_ForestFestival. Tune in-game with `ht_race_tile`. ---
-        // Pen slots for player horses + NPC racer horses shown during the pasture phase.
-        // Slots fill in order: players first (by UniqueMultiplayerID), then NPC racers.
-        private static readonly Point[] PenSlots =
-        {
-            new(80, 32), new(73, 34), new(75, 32), new(69, 29),
-            new(69, 32), new(71, 28), new(72, 30), new(75, 29),
-        };
 
         // Biased facing direction pool: left/right first, up/down less common.
         private static readonly int[] HorseFacingPool =
@@ -49,25 +46,6 @@ namespace HorseTycoon
             Game1.left, Game1.right, Game1.left, Game1.right, Game1.up, Game1.down,
         };
 
-        // Decorative generated horses displayed in Marnie's background pasture during the festival.
-        private static readonly Point[] PastureBgSlots =
-        {
-            new(98, 20), new(94, 20), new(98, 16), new(102, 20),
-        };
-        // Stall i's horse tile is (StartStall.X, StartStall.Y + i); horses break east into the course.
-        private static readonly Point StartStall = new(39, 48);
-        // Finish band (inclusive tile rectangle).
-        private static readonly Point FinishMin = new(40, 11);
-        private static readonly Point FinishMax = new(40, 17);
-        // Disqualification zone: area north of the starting-gate's north fence AND east of the finish-line's east barrier.
-        // A player who enters this zone while racing has jumped off the track and is disqualified.
-        // Tune with `ht_race_tile`.
-        private static readonly int DqZoneNorthOfY = 43;  // player.Tile.Y < this value
-        private static readonly int DqZoneEastOfX = 41;   // player.Tile.X > this value
-        // Where a DQ'd player (and their horse) is teleported — just past the finish line in the spectator area.
-        private static readonly Point DqArrivalTile = new(44, 14);
-        // Decorative pony-ride horse in the pen to the left of Leah's house.
-        private static readonly Point PenHorseTile = new(94, 31);
         private static readonly string[] AllSkins = { "Roan", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
         private static readonly string[] MarnieHorseNames = {
             "Clover", "Daisy", "Biscuit", "Big Red", "Rosie", "Pepper",
@@ -77,170 +55,6 @@ namespace HorseTycoon
         private const int WanderRepickMinTicks = 60;
         private const int WanderRepickMaxTicks = 180;
 
-        // NPC racers: Marnie, Leah, Abigail ride in the race as AI opponents.
-        // Speed stat drives tiles/sec via 5 + (speed / 20): 20 → 6 t/s, 40 → 7 t/s, 60 → 8 t/s.
-        private static readonly string[] NpcRiderNames = { "Marnie", "Leah", "Abigail", "Sebastian" };
-        private static readonly int[] NpcRiderSpeeds = { 15, 25, 35, 40 };
-        private static readonly int[] NpcRiderSprints = { 20, 35, 45, 45 };
-
-
-        // Per-NPC race routes. Each NPC is assigned a different route by index.
-        // Add more routes here and each new NPC slot will pick the next one (cycling if needed).
-        private static readonly Point[][] NpcRaceRoutes =
-        {
-            // Route 0 (Marnie)
-            new Point[]
-            {
-                new(49, 49),
-                new(58, 48),
-                new(74, 49),
-                new(85, 51),
-                new(88, 60),
-                new(89, 66),
-                new(91, 70),
-                new(91, 75),
-                new(91, 80),
-                new(87, 85),
-                new(74, 82),
-                new(73, 74),
-                new(72, 70),
-                new(68, 70),
-                new(59, 72),
-                new(52, 74),
-                new(45, 77),
-                new(38, 84),
-                new(37, 89),
-                new(38, 95),
-                new(31, 97),
-                new(23, 94),
-                new(20, 87),
-                new(19, 84),
-                new(19, 78),
-                new(20, 74),
-                new(20, 66),
-                new(19, 62),
-                new(20, 59),
-                new(21, 54),
-                new(24, 47),
-                new(25, 41),
-                new(21, 37),
-                new(18, 33),
-                new(20, 22),
-                new(23, 18),
-                new(27, 16),
-                new(35, 16),
-                new(43, 16), // past the finish
-            },
-            // Route 1 (Leah)
-            new Point[]
-            {
-                new(49, 45),
-                new(58, 45),
-                new(69, 45),
-                new(76, 49),
-                new(87, 51),
-                new(88, 61),
-                new(91, 73),
-                new(88, 81),
-                new(82, 84),
-                new(76, 79),
-                new(69, 70),
-                new(57, 75),
-                new(45, 77),
-                new(38, 84),
-                new(38, 95),
-                new(27, 93),
-                new(28, 88),
-                new(24, 85),
-                new(19, 79),
-                new(18, 62),
-                new(22, 50),
-                new(20, 41),
-                new(18, 36),
-                new(21, 20),
-                new(33, 14),
-                new(44, 13), // past the finish
-            },
-            // Route 2 (Abigail)
-
-            new Point[]
-            {
-                new(54, 49),
-                new(68, 49),
-                new(75, 50),
-                new(85, 50),
-                new(88, 63),
-                new(92, 73),
-                new(87, 80),
-                new(86, 85),
-                new(73, 79),
-                new(69, 72),
-                new(60, 71),
-                new(54, 77),
-                new(46, 79),
-                new(41, 84),
-                new(37, 89),
-                new(40, 93),
-                new(39, 96),
-                new(31, 97),
-                new(22, 92),
-                new(18, 83),
-                new(17, 75),
-                new(17, 63),
-                new(17, 55),
-                new(17, 48),
-                new(16, 44),
-                new(18, 39),
-                new(18, 35),
-                new(19, 25),
-                new(24, 17),
-                new(33, 14),
-                new(37, 14),
-                new(46, 14), // past the finish
-            },
-            // Route 3 (Sebastian)
-            new Point[]
-            {
-                new(52, 47),
-                new(58, 48),
-                new(65, 48),
-                new(72, 48),
-                new(84, 49),
-                new(88, 58),
-                new(89, 63),
-                new(91, 68),
-                new(91, 72),
-                new(90, 76),
-                new(89, 81),
-                new(85, 85),
-                new(79, 84),
-                new(75, 82),
-                new(72, 76),
-                new(70, 72),
-                new(59, 70),
-                new(49, 75),
-                new(41, 78),
-                new(38, 84),
-                new(38, 89),
-                new(38, 96),
-                new(32, 97),
-                new(23, 93),
-                new(19, 85),
-                new(18, 77),
-                new(18, 68),
-                new(17, 59),
-                new(22, 53),
-                new(25, 46),
-                new(21, 42),
-                new(18, 35),
-                new(18, 25),
-                new(22, 20),
-                new(27, 15),
-                new(37, 15),
-                new(47, 13), // past the finish
-            },
-        };
-
         // Pixel offset applied to each rider NPC so they appear seated on the horse.
         // Negative Y moves the sprite visually upward on screen; tune if the rider looks off.
         private static readonly Vector2 RiderOffset = new(-12f, -40f);
@@ -248,25 +62,6 @@ namespace HorseTycoon
         // The game dismounts the player as they warp into the festival, so we capture the mount each tick
         // beforehand and treat them as "arrived mounted" if they were riding within this window.
         private const int EntryMountWindowTicks = 600;
-
-        // Winner's circle tiles (1st, 2nd, 3rd place left-to-right), and Lewis's announcer position.
-        // Tune in-game with `ht_race_tile`.
-        private static readonly Point[] WinnersCircleTiles =
-        {
-            new(58, 12), // 1st place
-            new(56, 12), // 2nd place
-            new(54, 12), // 3rd place
-        };
-        private static readonly Point LewisAnnouncerTile = new(56, 9);
-        // Spectator tiles for players/NPCs who didn't make the podium, spread east-to-west south of the winners circle.
-        private static readonly Point[] SpectatorTiles =
-        {
-            new(56, 15),
-            new(54, 15),
-            new(58, 15),
-            new(52, 15),
-            new(60, 15),
-        };
 
         // Delay between the last player crossing the finish line and the ceremony starting.
         private const float CeremonyDelayMs = 2000f;
@@ -283,7 +78,7 @@ namespace HorseTycoon
             public long FakeId;
             public int TotalSpeed;
             public int TotalSprint;
-            public Point[] Route = NpcRaceRoutes[0];
+            public Point[] Route = System.Array.Empty<Point>();
             public int WaypointIndex;
             public bool Finished;
             public SprintPhase NpcSprintPhase = SprintPhase.Ready;
@@ -313,6 +108,10 @@ namespace HorseTycoon
             if (VerboseLogging)
                 this.Monitor.Log(message, LogLevel.Debug);
         }
+
+        // The definition for the festival the local screen is currently in; set when leaving Phase.None
+        // (EnterPasture) and cleared in Reset. Methods that run only while a festival is active read this.
+        private readonly PerScreen<FestivalDefinition?> activeDef = new(() => null);
 
         private readonly PerScreen<Phase> phase = new(() => Phase.None);
         private readonly PerScreen<Horse?> competitor = new(() => null);
@@ -618,14 +417,36 @@ namespace HorseTycoon
             }
         }
 
-        /// <summary>The active Horse Festival event, or null if we're not in it.</summary>
+        /// <summary>The active Horse Festival event (any registered festival), or null if we're not in one.</summary>
         private static Event? RaceFestival
         {
             get
             {
                 Event? ev = Game1.currentLocation?.currentEvent;
-                return ev != null && ev.isFestival && ev.id == FestivalEventId ? ev : null;
+                return ev != null && ev.isFestival && Festivals.Any(f => f.EventId == ev.id) ? ev : null;
             }
+        }
+
+        /// <summary>The definition for the festival the active screen is currently in. Only valid while a
+        /// festival is running (phase != None); the manager only touches layout/routes in that window.</summary>
+        private static FestivalDefinition Def => Instance!.activeDef.Value!;
+
+        /// <summary>The registered festival definition matching the given event, or null.</summary>
+        private static FestivalDefinition? DefinitionForEvent(Event? ev) =>
+            ev == null ? null : Festivals.FirstOrDefault(f => f.EventId == ev.id);
+
+        /// <summary>The registered festival whose date/time window is open right now, or null.</summary>
+        private static FestivalDefinition? CurrentWindowFestival()
+        {
+            foreach (FestivalDefinition def in Festivals)
+            {
+                if (Game1.currentSeason == def.Season
+                    && Game1.dayOfMonth == def.Day
+                    && Game1.timeOfDay >= def.StartTime
+                    && Game1.timeOfDay < def.EndTime)
+                    return def;
+            }
+            return null;
         }
 
         // ======================== Festival Entry Horse Warning ========================
@@ -640,8 +461,9 @@ namespace HorseTycoon
         private static bool WarpFarmer_Prefix(LocationRequest locationRequest, int tileX, int tileY, int facingDirectionAfterWarp)
         {
             if (SkipHorseWarning) return true;
-            if (locationRequest?.Name != "Forest") return true;
-            if (!IsFestivalTimeWindow()) return true;
+            FestivalDefinition? def = CurrentWindowFestival();
+            if (def == null) return true;
+            if (locationRequest?.Name != def.LocationName) return true;
             if (Game1.player?.mount != null) return true;
             if (!HasAvailableUnmountedHorse()) return true;
 
@@ -664,14 +486,6 @@ namespace HorseTycoon
                 });
 
             return false; // cancel the original warp
-        }
-
-        private static bool IsFestivalTimeWindow()
-        {
-            return Game1.currentSeason == "spring"
-                && Game1.dayOfMonth == 21
-                && Game1.timeOfDay >= 1200
-                && Game1.timeOfDay < 1800;
         }
 
         /// <summary>Returns true if at least one farm horse exists that is not currently mounted by any player.</summary>
@@ -839,7 +653,7 @@ namespace HorseTycoon
                 .IndexOf(farmer));
 
         private static Point PastureSpawnForSlot(int slot) =>
-            slot < PenSlots.Length ? PenSlots[slot] : new Point(PenSlots[^1].X + (slot - PenSlots.Length + 1) * 2, PenSlots[^1].Y);
+            slot < Def.PenSlots.Length ? Def.PenSlots[slot] : new Point(Def.PenSlots[^1].X + (slot - Def.PenSlots.Length + 1) * 2, Def.PenSlots[^1].Y);
 
         private void SetLayerVisible(string layerName, bool visible)
         {
@@ -850,8 +664,10 @@ namespace HorseTycoon
         private void EnterPasture(Event festival)
         {
             phase.Value = Phase.Pasture;
+            activeDef.Value = DefinitionForEvent(festival);
             competitor.Value = null;
-            Game1.changeMusicTrack("CloudCountry", track_interruptable: false, MusicContext.Event);
+            FestivalDefinition def = activeDef.Value!;
+            Game1.changeMusicTrack(def.PastureMusic, track_interruptable: false, MusicContext.Event);
 
             // Hide phase-specific layers regardless of what the TMX file saved.
             this.SetLayerVisible("Racing", false);
@@ -1065,12 +881,12 @@ namespace HorseTycoon
         private void SpawnPenHorse()
         {
             GameLocation loc = Game1.currentLocation;
-            var horse = new Horse(System.Guid.NewGuid(), PenHorseTile.X, PenHorseTile.Y);
+            var horse = new Horse(System.Guid.NewGuid(), Def.PenHorseTile.X, Def.PenHorseTile.Y);
             horse.Name = "PenHorse";
             horse.modData[HorseHelper.HorseSkinKey] = AllSkins[Game1.random.Next(AllSkins.Length)];
             horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
             horse.currentLocation = loc;
-            horse.Position = TileToPixels(PenHorseTile);
+            horse.Position = TileToPixels(Def.PenHorseTile);
             horse.Halt();
             horse.faceDirection(Game1.left);
             horse.EventActor = true;
@@ -1087,13 +903,13 @@ namespace HorseTycoon
             int playerSlotCount = Game1.getOnlineFarmers().Count();
             var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
 
-            for (int i = 0; i < NpcRiderNames.Length; i++)
+            for (int i = 0; i < Def.NpcRiderNames.Length; i++)
             {
                 Point tile = PastureSpawnForSlot(playerSlotCount + i);
                 var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
-                horse.Name = NpcRiderNames[i] + "PenHorse";
+                horse.Name = Def.NpcRiderNames[i] + "PenHorse";
                 horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
-                string saddleId = NpcRiderNames[i] switch
+                string saddleId = Def.NpcRiderNames[i] switch
                 {
                     "Abigail" => "HorseTycoon.SaddleLavender",
                     "Sebastian" => "HorseTycoon.SaddleRed",
@@ -1124,7 +940,7 @@ namespace HorseTycoon
         {
             GameLocation loc = Game1.currentLocation;
             var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays) + 1);
-            foreach (Point tile in PastureBgSlots)
+            foreach (Point tile in Def.PastureBgSlots)
             {
                 var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
                 horse.Name = "DecorativeHorse";
@@ -1293,13 +1109,14 @@ namespace HorseTycoon
                                 {
                                     RecordBet(racerAnswer);
 
-                                    var amountOptions = new List<Response>
+                                    var amountOptions = new List<Response>();
+                                    foreach (int betChoice in Def.BetAmounts)
                                     {
-                                        new("250",  "250g"),
-                                        new("500", "500g"),
-                                    };
-                                    if (Game1.year >= 2)
-                                        amountOptions.Add(new Response("1000", "1000g"));
+                                        // High-stakes bets (1000g+) only open up from year 2 onward.
+                                        if (betChoice >= 1000 && Game1.year < 2)
+                                            continue;
+                                        amountOptions.Add(new Response(betChoice.ToString(), $"{betChoice}g"));
+                                    }
                                     amountOptions.Add(new Response("nevermind", "Nevermind"));
 
                                     Game1.afterDialogues = () =>
@@ -1362,9 +1179,9 @@ namespace HorseTycoon
             }
 
             int playerCount = System.Math.Max(1, Game1.getOnlineFarmers().Count());
-            int npcSlots = System.Math.Min(NpcRiderNames.Length, System.Math.Max(0, MaxRacers - playerCount));
+            int npcSlots = System.Math.Min(Def.NpcRiderNames.Length, System.Math.Max(0, MaxRacers - playerCount));
             for (int i = 0; i < npcSlots; i++)
-                responses.Add(new Response($"npc_{NpcRiderNames[i]}", NpcRiderNames[i]));
+                responses.Add(new Response($"npc_{Def.NpcRiderNames[i]}", Def.NpcRiderNames[i]));
 
             return responses.ToArray();
         }
@@ -1553,7 +1370,7 @@ namespace HorseTycoon
         private static int StallYOffset(int slot) =>
             slot == 0 ? 0 : slot % 2 == 1 ? ((slot + 1) / 2) * 2 : -(slot / 2) * 2;
 
-        private static Point StallHorseTile(int slot) => new(StartStall.X, StartStall.Y + StallYOffset(slot));
+        private static Point StallHorseTile(int slot) => new(Def.StartStall.X, Def.StartStall.Y + StallYOffset(slot));
 
         /// <summary>Build a fenced stall per online player with a gate on the east wall.
         /// The stall fully encloses the rider; they're held by CanMove and input is suppressed until release
@@ -1564,7 +1381,7 @@ namespace HorseTycoon
             if (stallsSpawned.Value || loc == null)
                 return;
 
-            int count = System.Math.Max(1, Game1.getOnlineFarmers().Count()) + NpcRiderNames.Length;
+            int count = System.Math.Max(1, Game1.getOnlineFarmers().Count()) + Def.NpcRiderNames.Length;
 
             int minYOffset = 0, maxYOffset = 0;
             for (int i = 0; i < count; i++)
@@ -1573,22 +1390,22 @@ namespace HorseTycoon
                 if (yo < minYOffset) minYOffset = yo;
                 if (yo > maxYOffset) maxYOffset = yo;
             }
-            int topY = StartStall.Y + minYOffset - 1;
-            int bottomY = StartStall.Y + maxYOffset + 1;
+            int topY = Def.StartStall.Y + minYOffset - 1;
+            int bottomY = Def.StartStall.Y + maxYOffset + 1;
 
             for (int y = topY; y <= bottomY; y++)
-                this.AddStallFence(loc, new Vector2(StartStall.X - 1, y), isGate: false);
+                this.AddStallFence(loc, new Vector2(Def.StartStall.X - 1, y), isGate: false);
 
             // The gate at (X+1, hy) must be flanked above and below by fence so its drawSum == 1500
             // (a vertical line). Without those flanks, Fence.updateWhenCurrentLocation auto-closes it every tick.
             for (int i = 0; i < count; i++)
             {
                 int hy = StallHorseTile(i).Y;
-                this.AddStallFence(loc, new Vector2(StartStall.X, hy - 1), isGate: false);
-                this.AddStallFence(loc, new Vector2(StartStall.X, hy + 1), isGate: false);
-                this.AddStallFence(loc, new Vector2(StartStall.X + 1, hy - 1), isGate: false);
-                this.AddStallFence(loc, new Vector2(StartStall.X + 1, hy + 1), isGate: false);
-                this.AddStallFence(loc, new Vector2(StartStall.X + 1, hy), isGate: true);
+                this.AddStallFence(loc, new Vector2(Def.StartStall.X, hy - 1), isGate: false);
+                this.AddStallFence(loc, new Vector2(Def.StartStall.X, hy + 1), isGate: false);
+                this.AddStallFence(loc, new Vector2(Def.StartStall.X + 1, hy - 1), isGate: false);
+                this.AddStallFence(loc, new Vector2(Def.StartStall.X + 1, hy + 1), isGate: false);
+                this.AddStallFence(loc, new Vector2(Def.StartStall.X + 1, hy), isGate: true);
             }
 
             stallsSpawned.Value = true;
@@ -1620,7 +1437,7 @@ namespace HorseTycoon
                 if (!this.raceMusicStarted.Value && this.startCountdown.Value <= 1000f)
                 {
                     this.raceMusicStarted.Value = true;
-                    Game1.changeMusicTrack("Cowboy_OVERWORLD", track_interruptable: false, MusicContext.Event);
+                    Game1.changeMusicTrack(Def.RaceMusic, track_interruptable: false, MusicContext.Event);
                 }
                 if (this.startCountdown.Value > 0f)
                     return;
@@ -1630,7 +1447,7 @@ namespace HorseTycoon
             Game1.player.CanMove = true;
             raceStartTime.Value = Game1.currentGameTime.TotalGameTime;
             int totalPlayers = System.Math.Max(1, Game1.getOnlineFarmers().Count());
-            int totalSlots = totalPlayers + NpcRiderNames.Length;
+            int totalSlots = totalPlayers + Def.NpcRiderNames.Length;
             for (int i = 0; i < totalSlots; i++)
                 this.OpenStartGate(i);
         }
@@ -1642,7 +1459,7 @@ namespace HorseTycoon
             GameLocation loc = Game1.currentLocation;
             if (loc == null)
                 return;
-            Vector2 gateTile = new(StartStall.X + 1, StallHorseTile(slot).Y);
+            Vector2 gateTile = new(Def.StartStall.X + 1, StallHorseTile(slot).Y);
             if (loc.objects.TryGetValue(gateTile, out var obj) && obj is Fence { isGate.Value: true } gate)
             {
                 gate.toggleGate(true, false, Game1.player);
@@ -1664,8 +1481,8 @@ namespace HorseTycoon
         private void CheckFinish()
         {
             Vector2 t = Game1.player.Tile;
-            bool inBand = t.X >= FinishMin.X && t.X <= FinishMax.X
-                       && t.Y >= FinishMin.Y && t.Y <= FinishMax.Y;
+            bool inBand = t.X >= Def.FinishMin.X && t.X <= Def.FinishMax.X
+                       && t.Y >= Def.FinishMin.Y && t.Y <= Def.FinishMax.Y;
             if (!inBand)
                 return;
 
@@ -1689,7 +1506,7 @@ namespace HorseTycoon
                 return;
 
             Vector2 t = Game1.player.Tile;
-            if (!(t.Y < DqZoneNorthOfY && t.X > DqZoneEastOfX))
+            if (!(t.Y < Def.DqZoneNorthOfY && t.X > Def.DqZoneEastOfX))
                 return;
 
             disqualified.Value = true;
@@ -1698,11 +1515,11 @@ namespace HorseTycoon
 
             // Teleport player and horse to just past the finish line so they wait in the spectator area.
             var arrivalOffset = new Vector2(0f, 64f);
-            Game1.player.Position = TileToPixels(DqArrivalTile) + arrivalOffset;
+            Game1.player.Position = TileToPixels(Def.DqArrivalTile) + arrivalOffset;
             Horse? dqHorse = competitor.Value;
             if (dqHorse != null)
             {
-                dqHorse.Position = TileToPixels(DqArrivalTile) + arrivalOffset;
+                dqHorse.Position = TileToPixels(Def.DqArrivalTile) + arrivalOffset;
                 dqHorse.Halt();
             }
 
@@ -1743,7 +1560,7 @@ namespace HorseTycoon
             FinishOrder.Add(farmerId);
             this.LogVerbose($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}");
 
-            int totalPlayers = Game1.getOnlineFarmers().Count() + NpcRiderNames.Length;
+            int totalPlayers = Game1.getOnlineFarmers().Count() + Def.NpcRiderNames.Length;
             if (FinishOrder.Count >= totalPlayers && HostCeremonyCountdown < 0f)
                 HostCeremonyCountdown = CeremonyDelayMs;
         }
@@ -1765,7 +1582,7 @@ namespace HorseTycoon
         private void StartCeremony(List<long> rankedPlayerIds)
         {
             phase.Value = Phase.Ceremony;
-            Game1.changeMusicTrack("CloudCountry", track_interruptable: false, MusicContext.Event);
+            Game1.changeMusicTrack(Def.PastureMusic, track_interruptable: false, MusicContext.Event);
             ceremonyOrder.Value = new List<long>(rankedPlayerIds);
             ceremonyStep.Value = 0;
 
@@ -1775,9 +1592,9 @@ namespace HorseTycoon
             var ceremonyOffset = new Microsoft.Xna.Framework.Vector2(0f, 64f);
 
             // Move the local rider + horse to their podium or spectator tile.
-            if (placement >= 0 && placement < WinnersCircleTiles.Length)
+            if (placement >= 0 && placement < Def.WinnersCircleTiles.Length)
             {
-                Point podium = WinnersCircleTiles[placement];
+                Point podium = Def.WinnersCircleTiles[placement];
                 Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
                 Game1.player.faceDirection(Game1.up);
 
@@ -1790,8 +1607,8 @@ namespace HorseTycoon
             }
             else
             {
-                int spectatorSlot = System.Math.Max(0, placement - WinnersCircleTiles.Length);
-                Point spec = SpectatorTiles[System.Math.Min(spectatorSlot, SpectatorTiles.Length - 1)];
+                int spectatorSlot = System.Math.Max(0, placement - Def.WinnersCircleTiles.Length);
+                Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
                 Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
                 Game1.player.faceDirection(Game1.up);
 
@@ -1813,15 +1630,15 @@ namespace HorseTycoon
                 if (racer == null) continue;
                 racer.Horse.controller = null;
                 racer.Horse.Halt();
-                if (i < WinnersCircleTiles.Length)
+                if (i < Def.WinnersCircleTiles.Length)
                 {
-                    Point podium = WinnersCircleTiles[i];
+                    Point podium = Def.WinnersCircleTiles[i];
                     racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
                     racer.Horse.faceDirection(Game1.up);
                 }
                 else
                 {
-                    Point spec = SpectatorTiles[System.Math.Min(npcSpectatorSlot, SpectatorTiles.Length - 1)];
+                    Point spec = Def.SpectatorTiles[System.Math.Min(npcSpectatorSlot, Def.SpectatorTiles.Length - 1)];
                     npcSpectatorSlot++;
                     racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
                     racer.Horse.faceDirection(Game1.up);
@@ -1834,7 +1651,7 @@ namespace HorseTycoon
             Game1.player.Halt();
 
             // Freeze camera on the center of the winner's circle.
-            Point center = WinnersCircleTiles[System.Math.Min(1, WinnersCircleTiles.Length - 1)];
+            Point center = Def.WinnersCircleTiles[System.Math.Min(1, Def.WinnersCircleTiles.Length - 1)];
             Game1.viewportFreeze = true;
             Game1.viewport.X = System.Math.Max(0, center.X * 64 - Game1.viewport.Width / 2);
             Game1.viewport.Y = System.Math.Max(0, center.Y * 64 - Game1.viewport.Height / 2);
@@ -1843,7 +1660,7 @@ namespace HorseTycoon
             NPC? lewis = RaceFestival?.getActorByName("Lewis");
             if (lewis != null)
             {
-                lewis.Position = TileToPixels(LewisAnnouncerTile);
+                lewis.Position = TileToPixels(Def.LewisAnnouncerTile);
                 lewis.faceDirection(Game1.down);
             }
 
@@ -1900,7 +1717,7 @@ namespace HorseTycoon
 
                 case 3: // Prize for 3rd
                     if (order.Count >= 3 && order[2] == localId)
-                        AwardPrizes("(O)PrizeTicket");
+                        AwardPrizes(Def.ThirdPlacePrizes);
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -1915,7 +1732,7 @@ namespace HorseTycoon
 
                 case 5: // Prize for 2nd
                     if (order.Count >= 2 && order[1] == localId)
-                        AwardPrizes("(O)PrizeTicket");
+                        AwardPrizes(Def.SecondPlacePrizes);
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -1934,7 +1751,7 @@ namespace HorseTycoon
 
                 case 7: // Prize for 1st
                     if (order.Count >= 1 && order[0] == localId)
-                        AwardPrizes("(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue");
+                        AwardPrizes(Def.FirstPlacePrizes);
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -2010,9 +1827,9 @@ namespace HorseTycoon
 
             GameLocation festLoc = Game1.currentLocation;
 
-            for (int i = 0; i < NpcRiderNames.Length; i++)
+            for (int i = 0; i < Def.NpcRiderNames.Length; i++)
             {
-                string name = NpcRiderNames[i];
+                string name = Def.NpcRiderNames[i];
                 Point holdTile = i < NpcRiderHoldingTiles.Length
                     ? NpcRiderHoldingTiles[i]
                     : new Point(92, 20 + i * 2);
@@ -2211,7 +2028,7 @@ namespace HorseTycoon
 
 
         /// <summary>
-        /// Spawn one Horse + rider pair per NpcRiderNames entry into the stalls immediately after
+        /// Spawn one Horse + rider pair per NPC racer entry into the stalls immediately after
         /// the player slots. Idempotent — guarded by <see cref="npcRacersSpawned"/>.
         /// </summary>
         private void SpawnNpcRacers(GameLocation loc, int playerSlotCount)
@@ -2225,9 +2042,9 @@ namespace HorseTycoon
                 (int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
 
             int npcSlots = System.Math.Max(0, MaxRacers - playerSlotCount);
-            if (npcSlots < NpcRiderNames.Length)
+            if (npcSlots < Def.NpcRiderNames.Length)
                 this.Monitor.Log(
-                    $"Race is full ({playerSlotCount} players, max {MaxRacers}) — dropping {NpcRiderNames.Length - npcSlots} NPC racer(s).",
+                    $"Race is full ({playerSlotCount} players, max {MaxRacers}) — dropping {Def.NpcRiderNames.Length - npcSlots} NPC racer(s).",
                     LogLevel.Info);
 
             bool anyPlayerHorseIsfast = Game1.getAllFarmers()
@@ -2237,9 +2054,9 @@ namespace HorseTycoon
                 .Where(a => a != null)
                 .Any(a => a!.GetHorseStats().TotalSpeed >= 40);
 
-            for (int i = 0; i < System.Math.Min(NpcRiderNames.Length, npcSlots); i++)
+            for (int i = 0; i < System.Math.Min(Def.NpcRiderNames.Length, npcSlots); i++)
             {
-                string riderName = NpcRiderNames[i];
+                string riderName = Def.NpcRiderNames[i];
                 int slot = playerSlotCount + i;
                 Point stallTile = StallHorseTile(slot);
 
@@ -2275,8 +2092,8 @@ namespace HorseTycoon
                 SyncRiderToHorse(rider, horse);
 
                 int yearBonus = anyPlayerHorseIsfast ? 5 : 0;
-                int speedIV = NpcRiderSpeeds[i % NpcRiderSpeeds.Length] + yearBonus;
-                int sprintIV = NpcRiderSprints[i % NpcRiderSprints.Length] + yearBonus;
+                int speedIV = Def.NpcRiderSpeeds[i % Def.NpcRiderSpeeds.Length] + yearBonus;
+                int sprintIV = Def.NpcRiderSprints[i % Def.NpcRiderSprints.Length] + yearBonus;
 
                 var racer = new NpcRacer
                 {
@@ -2285,7 +2102,7 @@ namespace HorseTycoon
                     FakeId = nextNpcFakeId--,
                     TotalSpeed = speedIV,
                     TotalSprint = sprintIV,
-                    Route = NpcRaceRoutes[i == 0 ? 2 : i % NpcRaceRoutes.Length],
+                    Route = Def.NpcRaceRoutes[i == 0 ? 2 : i % Def.NpcRaceRoutes.Length],
                     WaypointIndex = 0,
                     NextSprintCheckMs = (float)(rng.NextDouble() * 5000.0 + 3000.0),
                 };
@@ -2458,8 +2275,8 @@ namespace HorseTycoon
                 if (!r.Finished)
                 {
                     Vector2 t = r.Horse.Tile;
-                    if (t.X >= FinishMin.X && t.X <= FinishMax.X
-                        && t.Y >= FinishMin.Y && t.Y <= FinishMax.Y)
+                    if (t.X >= Def.FinishMin.X && t.X <= Def.FinishMax.X
+                        && t.Y >= Def.FinishMin.Y && t.Y <= Def.FinishMax.Y)
                     {
                         r.Finished = true;
                         if (IsHost)
@@ -2764,6 +2581,7 @@ namespace HorseTycoon
                 borrowedFestivalHorse.Value = null;
             }
             phase.Value = Phase.None;
+            activeDef.Value = null;
             competitor.Value = null;
             this.SetLayerVisible("Racing", false);
             this.SetLayerVisible("AwardsEvent", false);
