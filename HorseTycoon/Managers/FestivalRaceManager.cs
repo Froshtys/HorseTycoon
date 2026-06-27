@@ -10,6 +10,7 @@ using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
 using StardewValley;
 using StardewValley.Audio;
+using StardewValley.Buildings;
 using StardewValley.Characters;
 using StardewValley.GameData;
 using StardewValley.Menus;
@@ -1587,64 +1588,74 @@ namespace HorseTycoon
             ceremonyStep.Value = 0;
 
             long localId = Game1.player.UniqueMultiplayerID;
-            int placement = rankedPlayerIds.IndexOf(localId); // 0-based; -1 if not in top 3+
+            int placement = rankedPlayerIds.IndexOf(localId); // 0-based; -1 if not in list
 
             var ceremonyOffset = new Microsoft.Xna.Framework.Vector2(0f, 64f);
 
-            // Move the local rider + horse to their podium or spectator tile.
-            if (placement >= 0 && placement < Def.WinnersCircleTiles.Length)
-            {
-                Point podium = Def.WinnersCircleTiles[placement];
-                Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
-                Game1.player.faceDirection(Game1.up);
-
-                Horse? horse = competitor.Value;
-                if (horse != null)
-                {
-                    horse.Position = TileToPixels(podium) + ceremonyOffset;
-                    horse.faceDirection(Game1.up);
-                }
-            }
-            else
-            {
-                int spectatorSlot = System.Math.Max(0, placement - Def.WinnersCircleTiles.Length);
-                Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
-                Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
-                Game1.player.faceDirection(Game1.up);
-
-                Horse? horse = competitor.Value;
-                if (horse != null)
-                {
-                    horse.Position = TileToPixels(spec) + ceremonyOffset;
-                    horse.faceDirection(Game1.up);
-                }
-            }
-
-            // Move NPC racers to their podium or spectator tiles.
-            int npcSpectatorSlot = 0;
+            // Single pass over the full ranked list: assigns podium or spectator tiles to everyone.
+            // A shared spectatorSlot counter increments for every non-podium entry (human or NPC),
+            // so no two racers are assigned the same tile regardless of how humans and NPCs are mixed.
+            int spectatorSlot = 0;
             for (int i = 0; i < rankedPlayerIds.Count; i++)
             {
                 long id = rankedPlayerIds[i];
-                if (id >= 0) continue; // human player — handled above
-                NpcRacer? racer = npcRacers.Find(r => r.FakeId == id);
-                if (racer == null) continue;
-                racer.Horse.controller = null;
-                racer.Horse.Halt();
-                if (i < Def.WinnersCircleTiles.Length)
+                bool isPodium = i < Def.WinnersCircleTiles.Length;
+
+                if (id >= 0)
                 {
-                    Point podium = Def.WinnersCircleTiles[i];
-                    racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
-                    racer.Horse.faceDirection(Game1.up);
+                    // Human player — only the local player positions themselves.
+                    if (id == localId)
+                    {
+                        if (isPodium)
+                        {
+                            Point podium = Def.WinnersCircleTiles[i];
+                            Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
+                            Game1.player.faceDirection(Game1.up);
+                            Horse? horse = competitor.Value;
+                            if (horse != null)
+                            {
+                                horse.Position = TileToPixels(podium) + ceremonyOffset;
+                                horse.faceDirection(Game1.up);
+                            }
+                        }
+                        else
+                        {
+                            Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
+                            Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
+                            Game1.player.faceDirection(Game1.up);
+                            Horse? horse = competitor.Value;
+                            if (horse != null)
+                            {
+                                horse.Position = TileToPixels(spec) + ceremonyOffset;
+                                horse.faceDirection(Game1.up);
+                            }
+                        }
+                    }
+                    if (!isPodium) spectatorSlot++;
                 }
                 else
                 {
-                    Point spec = Def.SpectatorTiles[System.Math.Min(npcSpectatorSlot, Def.SpectatorTiles.Length - 1)];
-                    npcSpectatorSlot++;
-                    racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
-                    racer.Horse.faceDirection(Game1.up);
+                    // NPC racer — positioned on every screen.
+                    NpcRacer? racer = npcRacers.Find(r => r.FakeId == id);
+                    if (racer == null) { if (!isPodium) spectatorSlot++; continue; }
+                    racer.Horse.controller = null;
+                    racer.Horse.Halt();
+                    if (isPodium)
+                    {
+                        Point podium = Def.WinnersCircleTiles[i];
+                        racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
+                        racer.Horse.faceDirection(Game1.up);
+                    }
+                    else
+                    {
+                        Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
+                        racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
+                        racer.Horse.faceDirection(Game1.up);
+                        spectatorSlot++;
+                    }
+                    if (racer.Rider != null)
+                        SyncRiderToHorse(racer.Rider, racer.Horse);
                 }
-                if (racer.Rider != null)
-                    SyncRiderToHorse(racer.Rider, racer.Horse);
             }
 
             Game1.player.CanMove = false;
@@ -1805,12 +1816,62 @@ namespace HorseTycoon
             Game1.viewportFreeze = false;
             Game1.player.CanMove = true;
 
+            // Dismount the player before the festival warp so they arrive home on foot.
+            Horse? mount = Game1.player.mount;
+            if (mount != null)
+            {
+                bool isBorrowed = borrowedFestivalHorse.Value == mount;
+
+                mount.rider = null;
+                mount.dismounting.Value = false;
+                mount.mounting.Value = false;
+                mount.controller = null;
+                Game1.player.mount = null;
+
+                if (isBorrowed)
+                {
+                    // Borrowed horse: pull it from the festival location; Reset() clears the ref.
+                    mount.currentLocation?.characters.Remove(mount);
+                    borrowedFestivalHorse.Value = null;
+                }
+                else
+                {
+                    // Player's own horse: return it to its stable on the farm.
+                    ReturnHorseToStable(mount);
+                }
+            }
+
             // Do NOT despawn NPCs here — the temp map is still active during the fade and
             // they must stay visible until the screen is fully black. Reset() clears the
             // lists once the player has warped back to the real Forest.
             Event? festival = RaceFestival;
             if (festival != null)
                 festival.endBehaviors(new[] { "end" }, Game1.currentLocation);
+        }
+
+        private static void ReturnHorseToStable(Horse horse)
+        {
+            Farm farm = Game1.getFarm();
+            Stable? stable = farm.buildings.OfType<Stable>()
+                .FirstOrDefault(s => s.HorseId == horse.HorseId);
+
+            horse.currentLocation?.characters.Remove(horse);
+            horse.rider = null;
+            horse.dismounting.Value = false;
+            horse.mounting.Value = false;
+            horse.controller = null;
+            horse.EventActor = false;
+
+            if (stable != null)
+            {
+                horse.Position = new Vector2((stable.tileX.Value + 1) * 64f, (stable.tileY.Value + 1) * 64f);
+                horse.faceDirection(Game1.down);
+            }
+
+            horse.currentLocation = farm;
+            horse.Halt();
+            if (!farm.characters.Contains(horse))
+                farm.characters.Add(horse);
         }
 
         // ======================== NPC Racer System ========================

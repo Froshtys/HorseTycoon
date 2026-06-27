@@ -179,6 +179,7 @@ namespace HorseTycoon
             if (Context.IsMainPlayer)
             {
                 ConvertUnassignedStableHorses();
+                TrainingManager.ResetDailyCounters();
             }
         }
 
@@ -453,6 +454,9 @@ namespace HorseTycoon
             if (!Context.IsWorldReady || Game1.player.mount == null)
             {
                 WasSprintingLastCheck = false;
+                // Clear the distance anchor while unmounted so the first tick after (re)mounting — possibly
+                // in a new location or the next morning — doesn't credit the gap since the last dismount.
+                lastPosition.Value = Vector2.Zero;
                 return;
             }
 

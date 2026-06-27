@@ -115,7 +115,8 @@ namespace HorseTycoon
             LewisAnnouncerTile = new Point(56, 9),
             SpectatorTiles = new[]
             {
-                new Point(56, 15), new Point(54, 15), new Point(58, 15), new Point(52, 15), new Point(60, 15),
+                new Point(48, 15), new Point(50, 15), new Point(52, 15),
+                new Point(54, 15), new Point(56, 15),
             },
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
@@ -221,7 +222,8 @@ namespace HorseTycoon
             LewisAnnouncerTile = new Point(56, 9),
             SpectatorTiles = new[]
             {
-                new Point(56, 15), new Point(54, 15), new Point(58, 15), new Point(52, 15), new Point(60, 15),
+                new Point(48, 15), new Point(50, 15), new Point(52, 15),
+                new Point(54, 15), new Point(56, 15),
             },
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
