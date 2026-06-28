@@ -1487,7 +1487,7 @@ namespace HorseTycoon
         {
             if (loc.objects.ContainsKey(tile))
                 return;
-            Fence fence = isGate ? new RaceStartGate(tile) : new Fence(tile, Def.StallFenceId, isGate: false);
+            Fence fence = isGate ? new RaceStartGate(tile, Def.StallFenceId) : new Fence(tile, Def.StallFenceId, isGate: false);
             if (isGate)
                 fence.gatePosition.Value = 0;
             loc.objects[tile] = fence;
@@ -2956,7 +2956,7 @@ namespace HorseTycoon
     {
         public RaceStartGate() : base(Vector2.Zero, "325", isGate: true) { }
 
-        public RaceStartGate(Vector2 tile) : base(tile, "325", isGate: true) { }
+        public RaceStartGate(Vector2 tile, string fenceId = "325") : base(tile, fenceId, isGate: true) { }
 
         public override Rectangle GetBoundingBoxAt(int x, int y) =>
             this.gatePosition.Value >= 88 ? Rectangle.Empty : base.GetBoundingBoxAt(x, y);
