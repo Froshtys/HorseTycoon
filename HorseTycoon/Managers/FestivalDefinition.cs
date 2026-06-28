@@ -224,8 +224,8 @@ namespace HorseTycoon
             // TODO(beach): re-author all tiles below for FallBeach.tmx — placeholders from Forest.
             PenSlots = new[]
             {
-                new Point(80, 32), new Point(73, 34), new Point(75, 32), new Point(69, 29),
-                new Point(69, 32), new Point(71, 28), new Point(72, 30), new Point(75, 29),
+                new Point(7, 4), new Point(5, 5), new Point(6, 7), new Point(4, 9),
+                new Point(6, 8), new Point(7, 11), new Point(5, 13), new Point(3, 12),
             },
             PastureBgSlots = Array.Empty<Point>(),
             PenHorseTile = null,
@@ -267,6 +267,69 @@ namespace HorseTycoon
                 new[] { new Point(57, 10), new Point(91, 12) },
                 new[] { new Point(58, 17), new Point(91, 12) },
                 new[] { new Point(56, 20), new Point(91, 12) },
+            },
+
+            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },
+            SecondPlacePrizes = new[] { "(O)PrizeTicket" },
+            ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
+        };
+
+        /// <summary>
+        /// The Summer 19 Horse Festival, reached by buying a bus ticket at the real Bus Stop. Hosted in a
+        /// dedicated CP custom location (Custom_HorseTycoon_SummerFestival) whose map is a copy of the
+        /// vanilla Bus Stop (CP.HorseTycoon_SummerBusFestival, 65x30).
+        /// SCAFFOLD: identity/scheduling/map/entry are final, but every tile coordinate and route below is a
+        /// placeholder sized to fit the 65x30 map and MUST be re-authored in-game with `ht_race_tile`.
+        /// </summary>
+        public static FestivalDefinition SummerBusStop() => new()
+        {
+            EventId = "festival_summer19",
+            Season = "summer",
+            Day = 19,
+            LocationName = "Custom_HorseTycoon_SummerFestival",
+            MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
+
+            // TODO(summer): re-author all tiles/routes below for Summer-HorseFestival.tmx (65x30).
+            PenSlots = new[]
+            {
+                new Point(20, 12), new Point(22, 13), new Point(24, 12), new Point(26, 13),
+                new Point(21, 10), new Point(23, 11), new Point(25, 10), new Point(27, 11),
+            },
+            PastureBgSlots = Array.Empty<Point>(),
+            PenHorseTile = null,
+
+            StartStall = new Point(8, 20),
+            StallFenceId = "322",
+            FinishMin = new Point(55, 8),
+            FinishMax = new Point(55, 14),
+            DqZoneNorthOfY = -1,
+            DqZoneEastOfX = -1,
+            DqZoneWestOfX = -1,
+            DqArrivalTile = new Point(58, 11),
+
+            WinnersCircleTiles = new[]
+            {
+                new Point(40, 11), new Point(38, 11), new Point(36, 11),
+            },
+            LewisStartTile = new Point(30, 8),
+            LewisAnnouncerTile = new Point(38, 8),
+            SpectatorTiles = new[]
+            {
+                new Point(38, 14), new Point(36, 14), new Point(40, 14),
+                new Point(34, 14), new Point(42, 14),
+            },
+
+            NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
+            NpcRiderSpeeds = new[] { 5, 10, 15, 20 },
+            NpcRiderSprints = new[] { 20, 35, 45, 45 },
+            NpcRiderJumps = new[] { 20, 45, 65, 80 },
+            NpcJumpMinSkill = 50,
+            NpcRaceRoutes = new[]
+            {
+                new[] { new Point(15, 21), new Point(55, 11) },
+                new[] { new Point(15, 19), new Point(55, 11) },
+                new[] { new Point(15, 23), new Point(55, 11) },
+                new[] { new Point(15, 17), new Point(55, 11) },
             },
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },

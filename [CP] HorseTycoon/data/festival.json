@@ -235,6 +235,99 @@
 					]
 				}
 			}
+		},
+		{
+			"LogName": "Summer Horse Festival - Festival grounds custom location",
+			"Action": "EditData",
+			"Target": "Data/Locations",
+			"Entries": {
+				"Custom_HorseTycoon_SummerFestival": {
+					"CreateOnLoad": { "MapPath": "Maps/{{ModId}}_SummerBusFestival" },
+					"DisplayName": "{{i18n:SummerHorseFestival_Name}}"
+				}
+			}
+		},
+		{
+			"LogName": "Summer Horse Festival - Register on calendar (summer 19)",
+			"Action": "EditData",
+			"Target": "Data/Festivals/FestivalDates",
+			"Entries": {
+				"summer19": "{{i18n:SummerHorseFestival_Name}}"
+			}
+		},
+		{
+			"LogName": "Summer Horse Festival - Festival data (summer 19)",
+			"Action": "Load",
+			"Target": "Data/Festivals/summer19",
+			"FromFile": "data/summer19.json"
+		},
+		{
+			"LogName": "Summer Horse Festival - Localize festival name (Load can't expand tokens, so override via EditData)",
+			"Action": "EditData",
+			"Target": "Data/Festivals/summer19",
+			"Entries": {
+				"name": "{{i18n:SummerHorseFestival_Name}}"
+			}
+		},
+		{
+			"LogName": "Summer Horse Festival - Festival map (bus stop)",
+			"Action": "Load",
+			"Target": "Maps/{{ModId}}_SummerBusFestival",
+			"FromFile": "assets/maps/Summer-HorseFestival.tmx"
+		},
+		{
+			"LogName": "Summer Horse Festival - Leah's saddle shop",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"Entries": {
+				"Festival_SummerHorseFestival_Leah": {
+					"Currency": 0,
+					"Owners": [
+						{
+							"Id": "Leah",
+							"Name": "Leah",
+							"Dialogues": [],
+							"RandomizeDialogueOnOpen": false,
+							"ClosedMessage": null
+						}
+					],
+					"Items": [
+						{ "Id": "SaddleBlack", "ItemId": "(O)HorseTycoon.SaddleBlack", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleRed", "ItemId": "(O)HorseTycoon.SaddleRed", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleOrange", "ItemId": "(O)HorseTycoon.SaddleOrange", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleTeal", "ItemId": "(O)HorseTycoon.SaddleTeal", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" }
+					]
+				}
+			}
+		},
+		{
+			"LogName": "Summer Horse Festival - Pierre's shop (carrots)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"Entries": {
+				"Festival_SummerHorseFestival_Pierre": {
+					"Currency": 0,
+					"Owners": [
+						{
+							"Id": "Pierre",
+							"Name": "Pierre",
+							"Dialogues": [],
+							"RandomizeDialogueOnOpen": false,
+							"ClosedMessage": null
+						}
+					],
+					"Items": [
+						{ "Id": "Carrot", "ItemId": "(O)Carrot", "Price": 50, "AvailableStock": -1, "AvailableStockLimit": "Player" },
+						{ "Id": "CarrotSeeds", "ItemId": "(O)CarrotSeeds", "Price": 40, "AvailableStock": -1, "AvailableStockLimit": "Player" },
+						{ "Id": "OrnamentalHayBale", "ItemId": "(BC)45", "Price": 100, "AvailableStock": -1, "AvailableStockLimit": "Player" },
+						{ "Id": "AppleSapling", "ItemId": "(O)633", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "ScarecrowHorse", "ItemId": "(BC){{ModId}}_ScarecrowHorse", "Price": 2500, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "StumpSeat", "ItemId": "(F)88", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "CurlyTree", "ItemId": "(F)CurlyTree", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" }
+					]
+				}
+			}
 		}
 	]
 }

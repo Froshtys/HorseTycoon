@@ -34,6 +34,7 @@ namespace HorseTycoon
         {
             FestivalDefinition.Forest(),
             FestivalDefinition.FallBeach(),
+            FestivalDefinition.SummerBusStop(),
         };
 
         private const string ReadyCheckName = "Froshty.HorseTycoon.horseRaceStart";
@@ -129,6 +130,9 @@ namespace HorseTycoon
         // The definition for the festival the local screen is currently in; set when leaving Phase.None
         // (EnterPasture) and cleared in Reset. Methods that run only while a festival is active read this.
         private readonly PerScreen<FestivalDefinition?> activeDef = new(() => null);
+        // PenSlots shuffled once per festival entry with a deterministic per-save-per-day seed.
+        // All clients compute the same shuffle since the seed is derived from shared save state.
+        private readonly PerScreen<Point[]?> shuffledPenSlots = new(() => null);
 
         private readonly PerScreen<Phase> phase = new(() => Phase.None);
         private readonly PerScreen<Horse?> competitor = new(() => null);
@@ -330,6 +334,18 @@ namespace HorseTycoon
                     new[] { typeof(LocationRequest), typeof(int), typeof(int), typeof(int) }),
                 prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(WarpFarmer_Prefix)));
 
+            // On the Summer Horse Festival day, clicking the bus at the real Bus Stop sells a ticket to the
+            // festival grounds (a custom location) instead of running the vanilla desert bus.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(StardewValley.Locations.BusStop), nameof(StardewValley.Locations.BusStop.checkAction)),
+                prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(BusStopCheckAction_Prefix)));
+
+            // After boarding the bus for the Summer festival, redirect the bus's destination from the Desert
+            // to the festival grounds (the private busLeftToDesert runs once the bus animates off-screen).
+            harmony.Patch(
+                original: AccessTools.Method(typeof(StardewValley.Locations.BusStop), "busLeftToDesert"),
+                prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(BusLeftToDesert_Prefix)));
+
             this.Helper.ConsoleCommands.Add(
                 "ht_race_tile",
                 "Logs the player's current tile (for tuning festival race coordinates).",
@@ -452,6 +468,7 @@ namespace HorseTycoon
         /// <summary>The definition for the festival the active screen is currently in. Only valid while a
         /// festival is running (phase != None); the manager only touches layout/routes in that window.</summary>
         private static FestivalDefinition Def => Instance!.activeDef.Value!;
+        private static Point[] ShuffledPenSlots => Instance!.shuffledPenSlots.Value ?? Def.PenSlots;
 
         /// <summary>The registered festival definition matching the given event, or null.</summary>
         private static FestivalDefinition? DefinitionForEvent(Event? ev) =>
@@ -537,6 +554,141 @@ namespace HorseTycoon
         }
 
         // ======================== End Festival Entry Horse Warning ========================
+
+        // ======================== Summer Festival Bus Ticket ========================
+
+        /// <summary>Gold cost of a ticket to the Summer Horse Festival (matches the vanilla desert bus fare).</summary>
+        private const int SummerTicketPrice = 500;
+
+        /// <summary>
+        /// Fires before <see cref="StardewValley.Locations.BusStop.checkAction"/>. On the Summer Horse Festival
+        /// day, clicking the bus door tile (Buildings index 1057) sells a festival ticket and warps the player to
+        /// the festival grounds instead of running the vanilla desert bus. Gated on the bus being repaired
+        /// (<c>ccVault</c> mail). Returns false to cancel the vanilla behavior for that click.
+        /// </summary>
+        private static bool BusStopCheckAction_Prefix(StardewValley.Locations.BusStop __instance, xTile.Dimensions.Location tileLocation, ref bool __result)
+        {
+            FestivalDefinition? def = Festivals.FirstOrDefault(f => f.EventId == "festival_summer19");
+            if (def == null) return true;
+            if (Game1.currentSeason != def.Season || Game1.dayOfMonth != def.Day) return true;
+            if (__instance.getTileIndexAt(tileLocation, "Buildings", "outdoors") != 1057) return true;
+
+            OfferSummerFestivalTicket(__instance, def);
+            __result = true;
+            return false; // cancel vanilla desert bus
+        }
+
+        /// <summary>True between boarding the bus for the Summer festival and the bus leaving the screen, so
+        /// <see cref="BusLeftToDesert_Prefix"/> can redirect the destination from the Desert to the festival.</summary>
+        private static bool BoardingForSummerFestival;
+
+        /// <summary>Shows the gated ticket prompt and, on purchase, boards the bus (with the vanilla drive-off
+        /// animation) bound for the festival grounds.</summary>
+        private static void OfferSummerFestivalTicket(GameLocation bus, FestivalDefinition def)
+        {
+            if (!Game1.MasterPlayer.mailReceived.Contains("ccVault"))
+            {
+                Game1.drawObjectDialogue("The bus isn't running yet. The road to the festival opens once the bus has been repaired.");
+                return;
+            }
+            if (Game1.timeOfDay < def.StartTime)
+            {
+                Game1.drawObjectDialogue("The bus to the Summer Horse Festival leaves at noon.");
+                return;
+            }
+            if (Game1.timeOfDay >= def.EndTime)
+            {
+                Game1.drawObjectDialogue("The bus has made its last trip to the Summer Horse Festival for today.");
+                return;
+            }
+
+            string price = Utility.getNumberWithCommas(SummerTicketPrice);
+            bus.createQuestionDialogue(
+                $"Buy a ticket to the Summer Horse Festival? ({price}g)",
+                bus.createYesNoResponses(),
+                (Farmer _, string answer) =>
+                {
+                    if (answer != "Yes") return;
+                    if (Game1.player.Money < SummerTicketPrice)
+                    {
+                        Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\Locations:BusStop_NotEnoughMoneyForTicket"));
+                        return;
+                    }
+
+                    // Warn (once) before boarding if they're leaving an available horse behind; the actual
+                    // departure warp is suppressed in WarpFarmer_Prefix via SkipHorseWarning.
+                    if (Game1.player.mount == null && HasAvailableUnmountedHorse())
+                    {
+                        bus.createQuestionDialogue(
+                            "Are you sure you'd like to go to the horse festival without your horse?",
+                            bus.createYesNoResponses(),
+                            (Farmer _, string warnAnswer) =>
+                            {
+                                if (warnAnswer == "Yes") BoardBusToSummerFestival(bus);
+                            });
+                        return;
+                    }
+
+                    BoardBusToSummerFestival(bus);
+                });
+        }
+
+        /// <summary>Charges the fare and replicates the vanilla bus boarding sequence (walk to the door, bus
+        /// drives off) so the same departure animation plays, then redirects to the festival via
+        /// <see cref="BusLeftToDesert_Prefix"/>.</summary>
+        private static void BoardBusToSummerFestival(GameLocation busLoc)
+        {
+            if (busLoc is not StardewValley.Locations.BusStop bus)
+                return;
+            if (Game1.player.Money < SummerTicketPrice)
+            {
+                Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\Locations:BusStop_NotEnoughMoneyForTicket"));
+                return;
+            }
+
+            Game1.player.Money -= SummerTicketPrice;
+            Game1.playSound("purchaseClick");
+            BoardingForSummerFestival = true;
+
+            // Mirror BusStop.answerDialogue's "Bus_Yes" branch so the vanilla drive-off animation runs.
+            Game1.freezeControls = true;
+            Game1.viewportFreeze = true;
+            AccessTools.Field(typeof(StardewValley.Locations.BusStop), "forceWarpTimer").SetValue(bus, 8000);
+            var endBehavior = (StardewValley.Pathfinding.PathFindController.endBehavior)System.Delegate.CreateDelegate(
+                typeof(StardewValley.Pathfinding.PathFindController.endBehavior),
+                bus,
+                AccessTools.Method(typeof(StardewValley.Locations.BusStop), "playerReachedBusDoor"));
+            Game1.player.controller = new StardewValley.Pathfinding.PathFindController(
+                Game1.player, bus, new Point(22, 9), 0, endBehavior);
+            Game1.player.setRunning(isRunning: true);
+            if (Game1.player.mount != null)
+                Game1.player.mount.farmerPassesThrough = true;
+        }
+
+        /// <summary>
+        /// Fires before the private <c>BusStop.busLeftToDesert</c>. When the player boarded for the Summer
+        /// festival, redirect the destination from the Desert to the festival grounds (which triggers the
+        /// festival event), keeping the vanilla drive-off animation. Returns false to skip the Desert warp.
+        /// </summary>
+        private static bool BusLeftToDesert_Prefix()
+        {
+            if (!BoardingForSummerFestival)
+                return true;
+            BoardingForSummerFestival = false;
+
+            FestivalDefinition? def = Festivals.FirstOrDefault(f => f.EventId == "festival_summer19");
+            if (def == null)
+                return true;
+
+            Game1.viewportFreeze = true;
+            SkipHorseWarning = true; // already warned at the ticket prompt
+            Game1.warpFarmer(def.LocationName, 34, 23, 0);
+            SkipHorseWarning = false;
+            Game1.globalFade = false;
+            return false;
+        }
+
+        // ======================== End Summer Festival Bus Ticket ========================
 
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
@@ -675,7 +827,7 @@ namespace HorseTycoon
                 .IndexOf(farmer));
 
         private static Point PastureSpawnForSlot(int slot) =>
-            slot < Def.PenSlots.Length ? Def.PenSlots[slot] : new Point(Def.PenSlots[^1].X + (slot - Def.PenSlots.Length + 1) * 2, Def.PenSlots[^1].Y);
+            slot < ShuffledPenSlots.Length ? ShuffledPenSlots[slot] : new Point(ShuffledPenSlots[^1].X + (slot - ShuffledPenSlots.Length + 1) * 2, ShuffledPenSlots[^1].Y);
 
         private void SetLayerVisible(string layerName, bool visible)
         {
@@ -689,6 +841,15 @@ namespace HorseTycoon
             activeDef.Value = DefinitionForEvent(festival);
             competitor.Value = null;
             FestivalDefinition def = activeDef.Value!;
+
+            var penSlotsSeed = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays) + 3);
+            var slots = (Point[])def.PenSlots.Clone();
+            for (int i = slots.Length - 1; i > 0; i--)
+            {
+                int j = penSlotsSeed.Next(i + 1);
+                (slots[i], slots[j]) = (slots[j], slots[i]);
+            }
+            shuffledPenSlots.Value = slots;
             Game1.changeMusicTrack(def.PastureMusic, track_interruptable: false, MusicContext.Event);
 
             // Hide phase-specific layers regardless of what the TMX file saved.
@@ -2902,6 +3063,7 @@ namespace HorseTycoon
             }
             phase.Value = Phase.None;
             activeDef.Value = null;
+            shuffledPenSlots.Value = null;
             competitor.Value = null;
             this.SetLayerVisible("Racing", false);
             this.SetLayerVisible("AwardsEvent", false);
