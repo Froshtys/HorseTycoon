@@ -93,6 +93,13 @@ namespace HorseTycoon
         public string PastureMusic = "CloudCountry";
         public string RaceMusic = "Cowboy_OVERWORLD";
 
+        // --- Bus arrival cinematic (opt-in) ---
+        // When true, the festival opens with the vanilla-style bus driving in from the right before the
+        // pasture phase. Park/drop tiles mirror the vanilla Desert bus (rest 17,24; player drops at 18,27).
+        public bool BusArrival;
+        public Point BusParkTile = new Point(21, 6);
+        public Point BusDropTile = new Point(22, 10);
+
         // ====================================================================================
         // Registered festivals
         // ====================================================================================
@@ -288,6 +295,7 @@ namespace HorseTycoon
             Day = 19,
             LocationName = "Custom_HorseTycoon_SummerFestival",
             MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
+            BusArrival = true,
 
             // TODO(summer): re-author all tiles/routes below for Summer-HorseFestival.tmx (65x30).
             PenSlots = new[]

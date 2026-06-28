@@ -1,5 +1,5 @@
 {
 	"name": "Summer Horse Festival",
 	"conditions": "Custom_HorseTycoon_SummerFestival/1200 1800",
-	"set-up": "event1/34 23/farmer 34 23 0/changeToTemporaryMap CP.HorseTycoon_SummerBusFestival/viewport -1000 -1000/loadActors Set-Up/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear"
+	"set-up": "event1/18 27/farmer 18 27 2/changeToTemporaryMap CP.HorseTycoon_SummerBusFestival/viewport -1000 -1000/loadActors Set-Up/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear"
 }

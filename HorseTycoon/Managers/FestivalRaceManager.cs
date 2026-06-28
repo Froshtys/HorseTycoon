@@ -70,7 +70,7 @@ namespace HorseTycoon
         // Hard cap on total racers (players + NPCs). NPC slots are filled first-come, first-dropped.
         private const int MaxRacers = 8;
 
-        private enum Phase { None, Pasture, Racing, Finished, Ceremony }
+        private enum Phase { None, Arrival, Pasture, Racing, Finished, Ceremony }
         private enum AiMode { Normal, Match }
 
         private class NpcRacer
@@ -158,6 +158,12 @@ namespace HorseTycoon
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
         private readonly PerScreen<System.TimeSpan> raceStartTime = new(() => System.TimeSpan.Zero);
         private readonly PerScreen<bool> disqualified = new(() => false);
+
+        // Bus drive-in cinematic state (Phase.Arrival). busArrivalDoorTimer >= 0 = parked, counting down to the door open.
+        private readonly PerScreen<Vector2> busArrivalPos = new(() => Vector2.Zero);
+        private readonly PerScreen<Vector2> busArrivalMotion = new(() => Vector2.Zero);
+        private readonly PerScreen<TemporaryAnimatedSprite?> busDoorSprite = new(() => null);
+        private readonly PerScreen<float> busArrivalDoorTimer = new(() => -1f);
 
         // Set true while re-invoking warpFarmer from the "Yes" path so our prefix doesn't re-intercept it.
         private static bool SkipHorseWarning = false;
@@ -301,6 +307,7 @@ namespace HorseTycoon
             this.Helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             this.Helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             this.Helper.Events.Display.RenderedHud += this.OnRenderedHud;
+            this.Helper.Events.Display.RenderedWorld += this.OnRenderedWorld;
             this.Helper.Events.Multiplayer.ModMessageReceived += this.OnMessageReceived;
 
             // isRidingHorse() forces false during ANY event, suppressing mount drawing, riding pose, and
@@ -717,7 +724,13 @@ namespace HorseTycoon
             switch (phase.Value)
             {
                 case Phase.None:
-                    this.EnterPasture(festival);
+                    if (DefinitionForEvent(festival)?.BusArrival == true)
+                        this.EnterBusArrival(festival);
+                    else
+                        this.EnterPasture(festival);
+                    break;
+                case Phase.Arrival:
+                    this.UpdateBusArrival(festival);
                     break;
                 case Phase.Pasture:
                     this.UpdatePasture();
@@ -834,6 +847,144 @@ namespace HorseTycoon
             var layer = Game1.currentLocation?.map.GetLayer(layerName);
             if (layer != null) layer.Visible = visible;
         }
+
+        // ======================== Bus Arrival Cinematic ========================
+
+        /// <summary>Bus body source rect on Game1.mouseCursors (matches the vanilla Desert/BusStop bus).</summary>
+        private static readonly Rectangle BusBodySource = new(288, 1247, 128, 64);
+        /// <summary>How far right of the rest tile the bus starts, in pixels (≈ one screen of drive-in).</summary>
+        private static int BusArrivalLeadPixels => System.Math.Max(960, Game1.viewport.Width);
+
+        /// <summary>Starts the bus drive-in: hides the player inside the bus at the right of the screen and lets the
+        /// camera track it as it drives to the rest tile. Mirrors the vanilla Desert arrival, driven from the mod
+        /// because the festival runs as an event (the location's own update/draw don't apply).</summary>
+        private void EnterBusArrival(Event festival)
+        {
+            phase.Value = Phase.Arrival;
+            activeDef.Value = DefinitionForEvent(festival);
+            FestivalDefinition def = activeDef.Value!;
+
+            Game1.changeMusicTrack("silence", track_interruptable: true);
+            Game1.displayFarmer = false;
+            Game1.player.CanMove = false;
+            Game1.player.Halt();
+
+            float restX = def.BusParkTile.X * 64f;
+            busArrivalPos.Value = new Vector2(restX + BusArrivalLeadPixels, def.BusParkTile.Y * 64f);
+            busArrivalMotion.Value = new Vector2(-6f, 0f);
+            busArrivalDoorTimer.Value = -1f;
+
+            busDoorSprite.Value = new TemporaryAnimatedSprite("LooseSprites\\Cursors",
+                new Rectangle(368, 1311, 16, 38), busArrivalPos.Value + new Vector2(16f, 26f) * 4f,
+                flipped: false, 0f, Color.White)
+            {
+                interval = 999999f,
+                animationLength = 1,
+                holdLastFrame = true,
+                layerDepth = 1f,
+                scale = 4f,
+            };
+
+            Game1.player.Position = busDoorSprite.Value.Position;
+            Game1.playSound("busDriveOff");
+        }
+
+        /// <summary>Drives the bus left toward the rest tile each tick (vanilla easing), then opens the door and
+        /// hands off to the pasture phase.</summary>
+        private void UpdateBusArrival(Event festival)
+        {
+            FestivalDefinition def = Def;
+            TemporaryAnimatedSprite? door = busDoorSprite.Value;
+            Game1.player.CanMove = false;
+            Game1.player.freezePause = 100;
+
+            // Parked: short delay while the door opens, then start the pasture phase.
+            if (busArrivalDoorTimer.Value >= 0f)
+            {
+                door?.update(Game1.currentGameTime);
+                busArrivalDoorTimer.Value -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+                if (busArrivalDoorTimer.Value <= 0f)
+                    this.FinishBusArrival(festival);
+                return;
+            }
+
+            float restX = def.BusParkTile.X * 64f;
+            Vector2 pos = busArrivalPos.Value;
+            Vector2 motion = busArrivalMotion.Value;
+
+            // Keep the camera tracking the bus (player rides hidden inside).
+            if (door != null)
+                Game1.player.Position = door.Position;
+
+            // Ease down within 256px of the rest tile (vanilla).
+            if (pos.X - restX < 256f)
+                motion.X = System.Math.Min(-1f, motion.X * 0.98f);
+
+            if (System.Math.Abs(pos.X - restX) <= System.Math.Abs(motion.X * 1.5f))
+            {
+                pos.X = restX;
+                busArrivalPos.Value = pos;
+                busArrivalMotion.Value = Vector2.Zero;
+                if (door != null)
+                {
+                    // Swap to the opening-door animation.
+                    door.sourceRect = new Rectangle(288, 1311, 16, 38);
+                    door.sourceRectStartingPos = new Vector2(288f, 1311f);
+                    door.currentParentTileIndex = 0;
+                    door.animationLength = 6;
+                    door.interval = 70f;
+                    door.holdLastFrame = true;
+                    door.timer = 0f;
+                    door.Position = pos + new Vector2(16f, 26f) * 4f;
+                }
+                Game1.playSound("trashcanlid");
+                busArrivalDoorTimer.Value = 700f;
+                return;
+            }
+
+            pos += motion;
+            busArrivalPos.Value = pos;
+            busArrivalMotion.Value = motion;
+            if (door != null)
+            {
+                door.Position += motion;
+                door.update(Game1.currentGameTime);
+            }
+        }
+
+        /// <summary>Ends the cinematic: drops the player at the bus door and begins the pasture phase.</summary>
+        private void FinishBusArrival(Event festival)
+        {
+            FestivalDefinition def = Def;
+            busDoorSprite.Value = null;
+            busArrivalDoorTimer.Value = -1f;
+            busArrivalMotion.Value = Vector2.Zero;
+
+            Game1.displayFarmer = true;
+            Game1.player.Position = new Vector2(def.BusDropTile.X * 64f, def.BusDropTile.Y * 64f);
+            Game1.player.faceDirection(Game1.down);
+            Game1.player.freezePause = 0;
+
+            // Re-stamp the mount window so EnterPasture still brings the horse after the cinematic delay.
+            if (lastRiddenMount.Value != null)
+                lastMountedTick.Value = Game1.ticks;
+
+            this.EnterPasture(festival);
+        }
+
+        /// <summary>Draws the driving-in bus + door over the world during <see cref="Phase.Arrival"/>.</summary>
+        private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
+        {
+            if (phase.Value != Phase.Arrival)
+                return;
+
+            Vector2 screen = Game1.GlobalToLocal(Game1.viewport, busArrivalPos.Value);
+            e.SpriteBatch.Draw(Game1.mouseCursors, screen, BusBodySource, Color.White, 0f, Vector2.Zero, 4f,
+                SpriteEffects.None, 1f);
+            busDoorSprite.Value?.draw(e.SpriteBatch);
+        }
+
+        // ======================== End Bus Arrival Cinematic ========================
 
         private void EnterPasture(Event festival)
         {
@@ -3062,6 +3213,11 @@ namespace HorseTycoon
                 borrowedFestivalHorse.Value = null;
             }
             phase.Value = Phase.None;
+            // Bus drive-in cinematic cleanup (safety net if the festival ended mid-arrival).
+            busDoorSprite.Value = null;
+            busArrivalDoorTimer.Value = -1f;
+            busArrivalMotion.Value = Vector2.Zero;
+            Game1.displayFarmer = true;
             activeDef.Value = null;
             shuffledPenSlots.Value = null;
             competitor.Value = null;
