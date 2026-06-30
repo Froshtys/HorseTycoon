@@ -47,19 +47,19 @@
 	"Id": "Default",
 	"Condition": "RANDOM 0.2",
 	"MinimumFriendship": 0,
-	"ItemId": "EmsHorse.ShoeCopper"
+	"ItemId": "HorseTycoon.ShoeCopper"
 		},
 		{
 	"Id": "Default",
 	"Condition": "RANDOM 0.2",
 	"MinimumFriendship": 500,
-	"ItemId": "EmsHorse.ShoeIron"
+	"ItemId": "HorseTycoon.ShoeIron"
 		},
 		{
 	"Id": "Default",
 	"Condition": "RANDOM 0.2",
 	"MinimumFriendship": 800,
-	"ItemId": "EmsHorse.ShoeGold"
+	"ItemId": "HorseTycoon.ShoeGold"
                 }
             ],
 	"HarvestType": "DropOvernight",

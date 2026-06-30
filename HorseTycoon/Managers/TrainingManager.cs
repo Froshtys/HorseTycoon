@@ -25,6 +25,10 @@ namespace HorseTycoon
         // their riding contributions to the host, which accumulates everyone's progress for the day.
         private const string MsgTraining = "HorseTycoon.Training";
 
+        // Host -> rider: tells the player who earned the stat gain to show the level-up notification,
+        // since the host applies the mutation but the rider (often a farmhand) needs to see the result.
+        private const string MsgTrainingNotify = "HorseTycoon.TrainingNotify";
+
         // Kind tags carried in the training message.
         private const string KindJump = "Jump";
         private const string KindSprint = "Sprint";
@@ -35,6 +39,10 @@ namespace HorseTycoon
         /// <param name="Amount">Jumps/sprints performed, or pixels travelled, depending on Kind.</param>
         /// <param name="Day">Game1.Date.TotalDays when the message was sent; host discards if the day has advanced.</param>
         private record TrainingMessage(long HorseId, string Kind, float Amount, int Day);
+
+        /// <param name="HorseName">Display name of the horse that improved.</param>
+        /// <param name="StatName">The stat that improved (Jump/Speed/Sprint).</param>
+        private record TrainingNotifyMessage(string HorseName, string StatName);
 
         // Farmhands batch distance and flush it to the host periodically rather than messaging every tick.
         private const float DistanceFlushChunk = 64f * 5f; // 5 tiles
@@ -71,7 +79,7 @@ namespace HorseTycoon
             if (horse == null) return;
 
             if (Context.IsMainPlayer)
-                ApplyJumpProgress(horse, 1);
+                ApplyJumpProgress(horse, 1, Game1.player.UniqueMultiplayerID);
             else
                 ReportToHost(horse.myID.Value, KindJump, 1f);
         }
@@ -82,7 +90,7 @@ namespace HorseTycoon
             if (horse == null) return;
 
             if (Context.IsMainPlayer)
-                ApplySprintProgress(horse, 1);
+                ApplySprintProgress(horse, 1, Game1.player.UniqueMultiplayerID);
             else
                 ReportToHost(horse.myID.Value, KindSprint, 1f);
         }
@@ -94,7 +102,7 @@ namespace HorseTycoon
 
             if (Context.IsMainPlayer)
             {
-                ApplyDistanceProgress(horse, distanceTraveled);
+                ApplyDistanceProgress(horse, distanceTraveled, Game1.player.UniqueMultiplayerID);
                 return;
             }
 
@@ -111,7 +119,7 @@ namespace HorseTycoon
 
         // ----- Host-authoritative progress application -----
 
-        private static void ApplyJumpProgress(FarmAnimal horse, int jumps)
+        private static void ApplyJumpProgress(FarmAnimal horse, int jumps, long riderId)
         {
             var stats = horse.GetHorseStats();
             string today = Game1.Date.TotalDays.ToString();
@@ -123,7 +131,7 @@ namespace HorseTycoon
 
             if (stats.DailyJumps >= Math.Max(5, JumpsPerDayBase * (stats.TotalJump * 0.01)))
             {
-                if (ApplyTraining(horse, "Jump"))
+                if (ApplyTraining(horse, "Jump", riderId))
                 {
                     horse.modData[JumpDateKey] = today;
                     stats.DailyJumps = 0;
@@ -131,7 +139,7 @@ namespace HorseTycoon
             }
         }
 
-        private static void ApplySprintProgress(FarmAnimal horse, int sprints)
+        private static void ApplySprintProgress(FarmAnimal horse, int sprints, long riderId)
         {
             var stats = horse.GetHorseStats();
             string today = Game1.Date.TotalDays.ToString();
@@ -143,7 +151,7 @@ namespace HorseTycoon
 
             if (stats.DailySprints >= Math.Max(2, SprintsPerDayBase * (stats.TotalSprint * 0.01)))
             {
-                if (ApplyTraining(horse, "Sprint"))
+                if (ApplyTraining(horse, "Sprint", riderId))
                 {
                     horse.modData[SprintDateKey] = today;
                     stats.DailySprints = 0;
@@ -151,7 +159,7 @@ namespace HorseTycoon
             }
         }
 
-        private static void ApplyDistanceProgress(FarmAnimal horse, float distanceTraveled)
+        private static void ApplyDistanceProgress(FarmAnimal horse, float distanceTraveled, long riderId)
         {
             var stats = horse.GetHorseStats();
             string today = Game1.Date.TotalDays.ToString();
@@ -164,7 +172,7 @@ namespace HorseTycoon
             // DistanceTilesPerDayNeeded tiles * 64 pixels per tile
             if (stats.DailyDistance >= Math.Max(200, DistanceTilesPerDayBase * (stats.TotalSpeed * 0.01)) * 64)
             {
-                if (ApplyTraining(horse, "Speed"))
+                if (ApplyTraining(horse, "Speed", riderId))
                 {
                     horse.modData[SpeedDateKey] = today;
                     stats.DailyDistance = 0f;
@@ -182,9 +190,18 @@ namespace HorseTycoon
 
         private static void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
         {
+            if (e.FromModID != Manager.Helper.ModRegistry.ModID) return;
+
+            // Host -> rider: a farmhand whose riding earned a stat gain shows the level-up notification.
+            if (e.Type == MsgTrainingNotify)
+            {
+                var notify = e.ReadAs<TrainingNotifyMessage>();
+                ShowTrainingMessage(notify.HorseName, notify.StatName);
+                return;
+            }
+
             // Only the host owns the backing FarmAnimal's data; SendMessage never delivers to the sender.
             if (!Context.IsMainPlayer || e.Type != MsgTraining) return;
-            if (e.FromModID != Manager.Helper.ModRegistry.ModID) return;
 
             var msg = e.ReadAs<TrainingMessage>();
             if (msg.Day != Game1.Date.TotalDays) return;
@@ -193,13 +210,13 @@ namespace HorseTycoon
 
             switch (msg.Kind)
             {
-                case KindJump: ApplyJumpProgress(horse, (int)msg.Amount); break;
-                case KindSprint: ApplySprintProgress(horse, (int)msg.Amount); break;
-                case KindSpeed: ApplyDistanceProgress(horse, msg.Amount); break;
+                case KindJump: ApplyJumpProgress(horse, (int)msg.Amount, e.FromPlayerID); break;
+                case KindSprint: ApplySprintProgress(horse, (int)msg.Amount, e.FromPlayerID); break;
+                case KindSpeed: ApplyDistanceProgress(horse, msg.Amount, e.FromPlayerID); break;
             }
         }
 
-        private static bool ApplyTraining(FarmAnimal horse, string statName)
+        private static bool ApplyTraining(FarmAnimal horse, string statName, long riderId)
         {
             var stats = horse.GetHorseStats();
 
@@ -225,9 +242,27 @@ namespace HorseTycoon
                 default: return false;
             }
 
-            Game1.showGlobalMessage($"{horse.Name} has improved their {statName}!");
-            Game1.playSound("Pickup_Coin15");
+            // Notify the rider who earned the gain. If that's the host, show it locally; otherwise send
+            // a message so the farmhand on the horse — not the host applying the data — sees the result.
+            if (riderId == Game1.player.UniqueMultiplayerID)
+            {
+                ShowTrainingMessage(horse.Name, statName);
+            }
+            else
+            {
+                Manager.Helper.Multiplayer.SendMessage(
+                    new TrainingNotifyMessage(horse.Name, statName),
+                    MsgTrainingNotify,
+                    modIDs: new[] { Manager.Helper.ModRegistry.ModID },
+                    playerIDs: new[] { riderId });
+            }
             return true;
+        }
+
+        private static void ShowTrainingMessage(string horseName, string statName)
+        {
+            Game1.showGlobalMessage($"{horseName} has improved their {statName}!");
+            Game1.playSound("Pickup_Coin15");
         }
 
         public static bool HasTrainedSpeedToday(FarmAnimal horse)

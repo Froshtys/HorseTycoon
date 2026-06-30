@@ -6,13 +6,13 @@
 		"Target": "selph.ExtraAnimalConfig/AnimalExtensionData",
 		"TargetField": [ "Tycoon.Horse", "AnimalProduceExtensionData" ],
 	"Entries": {
-	"(O)EmsHorse.ShoeCopper": {
+	"(O)HorseTycoon.ShoeCopper": {
 	"IgnoreAnimalQuality": true
 	},
-	"(O)EmsHorse.ShoeIron": {
+	"(O)HorseTycoon.ShoeIron": {
 	"IgnoreAnimalQuality": true
 	},
-	"(O)EmsHorse.ShoeGold": {
+	"(O)HorseTycoon.ShoeGold": {
 	"IgnoreAnimalQuality": true
 	}
 		}
