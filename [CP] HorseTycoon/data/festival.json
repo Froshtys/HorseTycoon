@@ -1,23 +1,23 @@
 {
 	"Changes": [
 		{
-			"LogName": "Horse Festival - Register on calendar (spring 21)",
+			"LogName": "Horse Festival - Register on calendar (spring 19)",
 			"Action": "EditData",
 			"Target": "Data/Festivals/FestivalDates",
 			"Entries": {
-				"spring21": "{{i18n:SpringHorseFestival_Name}}"
+				"spring19": "{{i18n:SpringHorseFestival_Name}}"
 			}
 		},
 		{
-			"LogName": "Horse Festival - Festival data (spring 21)",
+			"LogName": "Horse Festival - Festival data (spring 19)",
 			"Action": "Load",
-			"Target": "Data/Festivals/spring21",
-			"FromFile": "data/spring21.json"
+			"Target": "Data/Festivals/spring19",
+			"FromFile": "data/spring19.json"
 		},
 		{
 			"LogName": "Horse Festival - Localize festival name (Load can't expand tokens, so override via EditData)",
 			"Action": "EditData",
-			"Target": "Data/Festivals/spring21",
+			"Target": "Data/Festivals/spring19",
 			"Entries": {
 				"name": "{{i18n:SpringHorseFestival_Name}}"
 			}
@@ -155,23 +155,23 @@
 			}
 		},
 		{
-			"LogName": "Fall Horse Festival - Register on calendar (fall 21)",
+			"LogName": "Fall Horse Festival - Register on calendar (fall 19)",
 			"Action": "EditData",
 			"Target": "Data/Festivals/FestivalDates",
 			"Entries": {
-				"fall21": "{{i18n:FallHorseFestival_Name}}"
+				"fall19": "{{i18n:FallHorseFestival_Name}}"
 			}
 		},
 		{
-			"LogName": "Fall Horse Festival - Festival data (fall 21)",
+			"LogName": "Fall Horse Festival - Festival data (fall 19)",
 			"Action": "Load",
-			"Target": "Data/Festivals/fall21",
-			"FromFile": "data/fall21.json"
+			"Target": "Data/Festivals/fall19",
+			"FromFile": "data/fall19.json"
 		},
 		{
 			"LogName": "Fall Horse Festival - Localize festival name (Load can't expand tokens, so override via EditData)",
 			"Action": "EditData",
-			"Target": "Data/Festivals/fall21",
+			"Target": "Data/Festivals/fall19",
 			"Entries": {
 				"name": "{{i18n:FallHorseFestival_Name}}"
 			}

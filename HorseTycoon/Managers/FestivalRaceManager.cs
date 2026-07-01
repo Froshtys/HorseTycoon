@@ -2128,7 +2128,7 @@ namespace HorseTycoon
                     {
                         Game1.drawObjectDialogue(
                             $"Lewis: And the winner is... {this.GetRacerName(order[0])}! " +
-                            "What a ride! You've earned a Rainbow Tack set and a prize ticket!");
+                            "What a ride! You've earned the champion's trophy and a prize ticket!");
                         Game1.playSound("achievement");
                     }
                     else

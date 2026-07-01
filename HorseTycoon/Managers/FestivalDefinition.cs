@@ -104,12 +104,12 @@ namespace HorseTycoon
         // Registered festivals
         // ====================================================================================
 
-        /// <summary>The original Spring 21 Horse Festival in Cindersap Forest.</summary>
+        /// <summary>The original Spring 19 Horse Festival in Cindersap Forest.</summary>
         public static FestivalDefinition Forest() => new()
         {
-            EventId = "festival_spring21",
+            EventId = "festival_spring19",
             Season = "spring",
-            Day = 21,
+            Day = 19,
             LocationName = "Forest",
             MapAssetKey = "CP.HorseTycoon_ForestFestival",
 
@@ -209,22 +209,22 @@ namespace HorseTycoon
                 },
             },
 
-            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },
+            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
         };
 
         /// <summary>
-        /// The Fall 21 Horse Festival on the beach (CP.HorseTycoon_FallBeach).
+        /// The Fall 19 Horse Festival on the beach (CP.HorseTycoon_FallBeach).
         /// SCAFFOLD: identity/scheduling/map are final, but every tile coordinate and route below is a
         /// placeholder copied from the Forest layout and MUST be re-authored for the smaller beach map
         /// (~104x50) in-game with `ht_race_tile`. Prizes/dialog can also be tuned later.
         /// </summary>
         public static FestivalDefinition FallBeach() => new()
         {
-            EventId = "festival_fall21",
+            EventId = "festival_fall19",
             Season = "fall",
-            Day = 21,
+            Day = 19,
             LocationName = "Beach",
             MapAssetKey = "CP.HorseTycoon_FallBeach",
 
@@ -276,7 +276,7 @@ namespace HorseTycoon
                 new[] { new Point(56, 20), new Point(91, 12) },
             },
 
-            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },
+            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
         };
@@ -340,7 +340,7 @@ namespace HorseTycoon
                 new[] { new Point(15, 17), new Point(55, 11) },
             },
 
-            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleRainbow", "(F)CP.HorseTycoon.HorseStatue" },
+            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
         };
