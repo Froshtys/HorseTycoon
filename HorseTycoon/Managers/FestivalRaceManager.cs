@@ -91,6 +91,11 @@ namespace HorseTycoon
             // A*-computed tile path to the current waypoint; driven by direct position updates.
             public List<Point> ComputedPath = new();
             public int PathIndex;
+            // Throttle + give-up state for failed A* attempts. Without this a waypoint that A*
+            // can't reach (e.g. its internal iteration cap on a long/blocked segment) makes the
+            // NPC recompute a full path every frame, causing severe race-wide lag/freezes.
+            public float PathRetryCooldownMs;
+            public int PathRetryCount;
             public float HoofSoundTimer;
             public bool MovementDone;
             public AiMode AiMode = AiMode.Match;
@@ -2573,6 +2578,12 @@ namespace HorseTycoon
         private const string NpcJumpLandingLayer = "NpcJumpLanding";
         // NPC jump arcs are capped at this many tiles regardless of zone definition or skill.
         private const float MaxNpcJumpTiles = 4f;
+        // When A* fails to reach a waypoint, wait this long before retrying instead of
+        // recomputing a full path every frame (the per-frame recompute caused heavy lag).
+        private const float PathRetryDelayMs = 250f;
+        // After this many failed attempts, skip the unreachable waypoint so the NPC can
+        // never get permanently stranded (restores the pre-jump-code resilient behavior).
+        private const int MaxPathRetries = 8;
 
         /// <summary>
         /// Scans the festival map for NpcJumpApproach and NpcJumpLanding tile layers and
@@ -2584,7 +2595,7 @@ namespace HorseTycoon
             Def.NpcJumpZones.Clear();
 
             var approachLayer = loc.map.GetLayer(NpcJumpApproachLayer);
-            var landingLayer  = loc.map.GetLayer(NpcJumpLandingLayer);
+            var landingLayer = loc.map.GetLayer(NpcJumpLandingLayer);
 
             if (approachLayer == null && landingLayer == null)
                 return; // no jump zones on this map — silent, not an error
@@ -2601,26 +2612,26 @@ namespace HorseTycoon
             int h = approachLayer.LayerHeight;
 
             var approaches = new List<(Point Tile, int MinSkill)>();
-            var landings   = new List<Point>();
+            var landings = new List<Point>();
 
             for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                var approachTile = approachLayer.Tiles[x, y];
-                if (approachTile != null)
+                for (int x = 0; x < w; x++)
                 {
-                    // Read MinSkill from tileset property first, then per-tile override.
-                    string? raw = null;
-                    approachTile.TileIndexProperties.TryGetValue("MinSkill", out var tv);
-                    if (tv != null) raw = tv.ToString();
-                    if (raw == null) { approachTile.Properties.TryGetValue("MinSkill", out var pv); raw = pv?.ToString(); }
-                    int minSkill = int.TryParse(raw, out int parsed) ? parsed : Def.NpcJumpMinSkill;
-                    approaches.Add((new Point(x, y), minSkill));
-                }
+                    var approachTile = approachLayer.Tiles[x, y];
+                    if (approachTile != null)
+                    {
+                        // Read MinSkill from tileset property first, then per-tile override.
+                        string? raw = null;
+                        approachTile.TileIndexProperties.TryGetValue("MinSkill", out var tv);
+                        if (tv != null) raw = tv.ToString();
+                        if (raw == null) { approachTile.Properties.TryGetValue("MinSkill", out var pv); raw = pv?.ToString(); }
+                        int minSkill = int.TryParse(raw, out int parsed) ? parsed : Def.NpcJumpMinSkill;
+                        approaches.Add((new Point(x, y), minSkill));
+                    }
 
-                if (landingLayer.Tiles[x, y] != null)
-                    landings.Add(new Point(x, y));
-            }
+                    if (landingLayer.Tiles[x, y] != null)
+                        landings.Add(new Point(x, y));
+                }
 
             if (approaches.Count != landings.Count)
             {
@@ -2760,12 +2771,38 @@ namespace HorseTycoon
                 this.UpdateNpcSprint(r, deltaMs, npcIdx);
 
                 // Compute A* path to next waypoint when the previous segment is exhausted.
-                // Only advance WaypointIndex on success — a failed A* (e.g. NPC on an isolated
-                // platform between two jump zones) should retry the same destination each tick
-                // rather than silently skipping the waypoint and leaving the NPC stranded.
                 if (r.PathIndex >= r.ComputedPath.Count && r.WaypointIndex < r.Route.Length)
-                    if (TryComputePathToWaypoint(r, loc, r.Route[r.WaypointIndex]))
+                {
+                    if (Def.NpcJumpZones.Count == 0)
+                    {
+                        // Flat race: every waypoint is reachable by walking.
+                        TryComputePathToWaypoint(r, loc, r.Route[r.WaypointIndex]);
                         r.WaypointIndex++;
+                    }
+                    // Jump race: an NPC may legitimately be stranded on a landing platform whose
+                    // next waypoint is only reachable across a jump, so retry rather than skip.
+                    // Retries are throttled and capped so a genuinely unreachable waypoint can
+                    // neither thrash A* every frame (lag) nor jam the NPC permanently.
+                    else if (r.PathRetryCooldownMs > 0f)
+                    {
+                        r.PathRetryCooldownMs -= deltaMs;
+                    }
+                    else if (TryComputePathToWaypoint(r, loc, r.Route[r.WaypointIndex]))
+                    {
+                        r.WaypointIndex++;
+                        r.PathRetryCount = 0;
+                    }
+                    else if (++r.PathRetryCount >= MaxPathRetries)
+                    {
+                        this.LogVerbose($"[Path] {r.Rider?.Name ?? r.Horse.Name} giving up on waypoint {r.WaypointIndex} ({r.Route[r.WaypointIndex]}) after {r.PathRetryCount} failed A* attempts — skipping.");
+                        r.WaypointIndex++;
+                        r.PathRetryCount = 0;
+                    }
+                    else
+                    {
+                        r.PathRetryCooldownMs = PathRetryDelayMs;
+                    }
+                }
 
                 // Drive position directly along the A*-computed tile path.
                 // This bypasses MovePosition (blocked during eventUp) while still respecting
