@@ -358,6 +358,7 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(StardewValley.Locations.BusStop), "busLeftToDesert"),
                 prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(BusLeftToDesert_Prefix)));
 
+
             this.Helper.ConsoleCommands.Add(
                 "ht_race_tile",
                 "Logs the player's current tile (for tuning festival race coordinates).",
@@ -2454,16 +2455,25 @@ namespace HorseTycoon
                     actor.TemporaryDialogue = new System.Collections.Generic.Stack<Dialogue>();
                     actor.TemporaryDialogue.Push(new Dialogue(actor, "HorseTycoon.spectator." + p.Name, text));
                 }
-                festLoc.characters.Add(actor);
+                else if (RaceFestival is Event fest
+                      && fest.TryGetFestivalDialogueForYear(actor, p.Name, out Dialogue festivalDialogue))
+                {
+                    // Named SVE/ES spectators are spawned by us (not the game's loadActors, which the
+                    // 144-tile sheet padding deliberately hides them from), so the game never applies
+                    // their Data/Festivals/<key>:<name> line. Apply it here, isolated to this event
+                    // actor via TemporaryDialogue so the real NPC's shared dialogue cache is untouched.
+                    actor.TemporaryDialogue = new System.Collections.Generic.Stack<Dialogue>();
+                    actor.TemporaryDialogue.Push(festivalDialogue);
+                }
+                RaceFestival?.actors.Add(actor);
                 spawnedSpectators.Add(actor);
             }
         }
 
         private void DespawnSpectators()
         {
-            var festLoc = Game1.currentLocation;
             foreach (NPC actor in spawnedSpectators)
-                festLoc?.characters.Remove(actor);
+                RaceFestival?.actors.Remove(actor);
             spawnedSpectators.Clear();
         }
 
