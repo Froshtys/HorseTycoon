@@ -87,7 +87,7 @@ namespace HorseTycoon.Patches
             ["Chestnut"] = 6,
         };
 
-        private static string SkinNameFromId(string? skinId) => skinId switch
+        internal static string SkinNameFromId(string? skinId) => skinId switch
         {
             "BlueRoan" => "BlueRoan",
             "Dapple" => "Dapple",

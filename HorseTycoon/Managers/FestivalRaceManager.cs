@@ -17,6 +17,7 @@ using StardewValley.Menus;
 using StardewValley.Objects;
 using StardewValley.Quests;
 using HorseTycoon.Models;
+using HorseTycoon.Patches;
 
 namespace HorseTycoon
 {
@@ -138,6 +139,19 @@ namespace HorseTycoon
         private readonly PerScreen<FarmAnimal?> pastureAnimal = new(() => null);
         private readonly PerScreen<Horse?> lastRiddenMount = new(() => null);
         private readonly PerScreen<int> lastMountedTick = new(() => int.MinValue);
+
+        // Horses the local player chose to bring on the Summer festival bus, selected in the
+        // HorseBusLoadMenu at the Bus Stop. IDs are FarmAnimal.myID values; resolved to live stable
+        // horses (moved) or temporary Horse instances (created) once the festival's pasture phase starts.
+        private static bool SummerBusSelectionMade;
+        private static readonly List<long> SummerBusHorseIds = new();
+        // Farm-wide record of which player loaded each horse onto the bus (FarmAnimal ID → player ID),
+        // mirrored on every client via MsgBusClaim so a horse can't board two buses. Claims are released
+        // in Reset when the claimant's festival ends and cleared outright at day start.
+        private static readonly Dictionary<long, long> BusHorseClaims = new();
+        // Every bus-selection horse placed in the pasture on this screen (including remote players'
+        // temporary copies). Temporary horses are despawned — and real stable horses sent home — in Reset.
+        private readonly PerScreen<List<Horse>> busFestivalHorses = new(() => new List<Horse>());
         private readonly PerScreen<Vector2> wanderTarget = new(() => Vector2.Zero);
         private readonly PerScreen<bool> wanderMoving = new(() => false);
         private readonly PerScreen<int> wanderDir = new(() => -1);
@@ -288,6 +302,15 @@ namespace HorseTycoon
         private record PastureHorseMessage(string HorseId, int Slot);
         private const string MsgBorrowedHorse = "BorrowedHorse";
         private record BorrowedHorseMessage(string HorseId, string Skin, int Slot);
+
+        // Announces a temporary bus horse (a barn horse with no live stable Horse entity) so other
+        // clients can spawn their own local copy in the pasture.
+        private const string MsgBusHorse = "BusHorse";
+        private record BusHorseMessage(string HorseId, string Name, string Skin, string Overlays, int Slot);
+
+        // Claims (or releases) horses for a player's bus trip so other players' loading menus hide them.
+        private const string MsgBusClaim = "BusClaim";
+        private record BusClaimMessage(List<long> AnimalIds, long PlayerId, bool Release);
         private const string MsgOpenReadyCheck = "OpenReadyCheck";
         private const string MsgPlayerFinished = "PlayerFinished";
         private const string MsgPlayerDisqualified = "PlayerDisqualified";
@@ -308,6 +331,8 @@ namespace HorseTycoon
             this.Helper.Events.Display.RenderedHud += this.OnRenderedHud;
             this.Helper.Events.Display.RenderedWorld += this.OnRenderedWorld;
             this.Helper.Events.Multiplayer.ModMessageReceived += this.OnMessageReceived;
+            this.Helper.Events.Multiplayer.PeerConnected += this.OnPeerConnected;
+            this.Helper.Events.GameLoop.DayStarted += this.OnDayStarted;
 
             // isRidingHorse() forces false during ANY event, suppressing mount drawing, riding pose, and
             // horse speed. Re-enable it while mounted inside our festival.
@@ -567,6 +592,9 @@ namespace HorseTycoon
         /// <summary>Gold cost of a ticket to the Summer Horse Festival (matches the vanilla desert bus fare).</summary>
         private const int SummerTicketPrice = 500;
 
+        /// <summary>How many horses fit on the bus to the Summer Horse Festival.</summary>
+        private const int BusHorseCapacity = 2;
+
         /// <summary>
         /// Fires before <see cref="StardewValley.Locations.BusStop.checkAction"/>. On the Summer Horse Festival
         /// day, clicking the bus door tile (Buildings index 1057) sells a festival ticket and warps the player to
@@ -588,6 +616,13 @@ namespace HorseTycoon
         /// <summary>True between boarding the bus for the Summer festival and the bus leaving the screen, so
         /// <see cref="BusLeftToDesert_Prefix"/> can redirect the destination from the Desert to the festival.</summary>
         private static bool BoardingForSummerFestival;
+
+        /// <summary>True when Pam offered the local player a free ride because they couldn't afford the
+        /// ticket; skips the fare charge in <see cref="BoardBusToSummerFestival"/>.</summary>
+        private static bool SummerFareWaived;
+
+        /// <summary>Ready-check id for the bus departure: everyone must buy a ticket before it leaves.</summary>
+        private const string BusReadyCheckName = "Froshty.HorseTycoon.summerBusDeparture";
 
         /// <summary>Shows the gated ticket prompt and, on purchase, boards the bus (with the vanilla drive-off
         /// animation) bound for the festival grounds.</summary>
@@ -616,28 +651,174 @@ namespace HorseTycoon
                 (Farmer _, string answer) =>
                 {
                     if (answer != "Yes") return;
+
+                    // Can't afford it? Pam waves them aboard for free.
                     if (Game1.player.Money < SummerTicketPrice)
                     {
-                        Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\Locations:BusStop_NotEnoughMoneyForTicket"));
+                        SummerFareWaived = true;
+                        string pamLine = "Short on cash, hon? Don't sweat it... I'm driving out there anyway. Hop on, this one's on me.$h";
+                        NPC? pam = Game1.getCharacterFromName("Pam");
+                        if (pam != null)
+                            Game1.DrawDialogue(new Dialogue(pam, null, pamLine));
+                        else
+                            Game1.drawObjectDialogue("Pam waves you aboard: \"Don't sweat the fare, hon. This one's on me.\"");
+                        Game1.afterDialogues = () => OpenBusHorseSelection(bus);
                         return;
                     }
 
-                    // Warn (once) before boarding if they're leaving an available horse behind; the actual
-                    // departure warp is suppressed in WarpFarmer_Prefix via SkipHorseWarning.
-                    if (Game1.player.mount == null && HasAvailableUnmountedHorse())
-                    {
-                        bus.createQuestionDialogue(
-                            "Are you sure you'd like to go to the horse festival without your horse?",
-                            bus.createYesNoResponses(),
-                            (Farmer _, string warnAnswer) =>
-                            {
-                                if (warnAnswer == "Yes") BoardBusToSummerFestival(bus);
-                            });
-                        return;
-                    }
-
-                    BoardBusToSummerFestival(bus);
+                    SummerFareWaived = false;
+                    // Pick which horses (up to the bus capacity) come along before boarding; closing
+                    // the menu without departing aborts the trip with no charge.
+                    OpenBusHorseSelection(bus);
                 });
+        }
+
+        /// <summary>Opens the horse-loading menu listing every rideable horse the player could bring
+        /// (barn horses plus stable horses not ridden by someone else). Confirming stores the selection
+        /// for <see cref="PlaceBusSelectionInPasture"/> and boards the bus; closing the menu cancels.</summary>
+        private static void OpenBusHorseSelection(GameLocation bus)
+        {
+            FarmAnimal? mountAnimal = Game1.player.mount != null
+                ? HorseHelper.GetFarmAnimalForHorse(Game1.player.mount)
+                : null;
+
+            List<FarmAnimal> horses = HorseHelper.GetAllBarnHorses()
+                .Where(a => !IsClaimedByOtherPlayer(a.myID.Value))
+                .Where(a => !HorseHelper.IsHidden(a)
+                    || (mountAnimal != null && a.myID.Value == mountAnimal.myID.Value)
+                    || IsStableAnimalAvailable(a))
+                .OrderByDescending(a => mountAnimal != null && a.myID.Value == mountAnimal.myID.Value)
+                .ThenBy(a => a.Name)
+                .ToList();
+
+            SummerBusHorseIds.Clear();
+            SummerBusSelectionMade = false;
+
+            if (horses.Count == 0)
+            {
+                BeginBusDepartureWait(bus);
+                return;
+            }
+
+            var preselected = new List<long>();
+            if (mountAnimal != null)
+                preselected.Add(mountAnimal.myID.Value);
+
+            Game1.activeClickableMenu = new HorseBusLoadMenu(horses, preselected, BusHorseCapacity, selected =>
+            {
+                // Another player may have claimed a horse while this menu was open — abort (no charge)
+                // so the player can re-pick from the refreshed list.
+                FarmAnimal? taken = selected.FirstOrDefault(a => IsClaimedByOtherPlayer(a.myID.Value));
+                if (taken != null)
+                {
+                    Game1.showRedMessage($"{taken.Name} has already been taken to the festival");
+                    return;
+                }
+
+                SummerBusHorseIds.Clear();
+                foreach (FarmAnimal animal in selected)
+                    SummerBusHorseIds.Add(animal.myID.Value);
+                SummerBusSelectionMade = true;
+                ClaimBusHorses();
+
+                // Leaving the ridden horse behind: dismount so it stays at the Bus Stop.
+                if (mountAnimal != null && !SummerBusHorseIds.Contains(mountAnimal.myID.Value))
+                    Game1.player.mount?.dismount();
+
+                BeginBusDepartureWait(bus);
+            });
+        }
+
+        /// <summary>In multiplayer the bus doesn't leave until every online player has bought their
+        /// ticket (mirrors the walk-in festivals' entry wait): a ready check holds each player after
+        /// their purchase and boards everyone simultaneously once the last one confirms. Cancelling
+        /// unreadies the player; their ticket isn't charged until boarding actually starts.</summary>
+        private static void BeginBusDepartureWait(GameLocation bus)
+        {
+            if (!Game1.IsMultiplayer)
+            {
+                BoardBusToSummerFestival(bus);
+                return;
+            }
+
+            Game1.activeClickableMenu = new ReadyCheckDialog(
+                BusReadyCheckName,
+                allowCancel: true,
+                onConfirm: (_) =>
+                {
+                    Game1.exitActiveMenu();
+                    BoardBusToSummerFestival(bus);
+                },
+                onCancel: (_) =>
+                {
+                    Game1.netReady.SetLocalReady(BusReadyCheckName, ready: false);
+                });
+        }
+
+        /// <summary>True when another player has already loaded this horse onto their bus today.</summary>
+        private static bool IsClaimedByOtherPlayer(long animalId) =>
+            BusHorseClaims.TryGetValue(animalId, out long playerId)
+            && playerId != Game1.player.UniqueMultiplayerID;
+
+        /// <summary>Records the local player's bus selection in the claim table and broadcasts it so the
+        /// horses disappear from every other player's loading menu.</summary>
+        private static void ClaimBusHorses()
+        {
+            if (Instance == null)
+                return;
+            long playerId = Game1.player.UniqueMultiplayerID;
+
+            // Drop claims from an earlier selection this player abandoned (e.g. cancelled the departure
+            // wait and re-picked) so deselected horses free up for everyone else.
+            List<long> stale = BusHorseClaims
+                .Where(kv => kv.Value == playerId && !SummerBusHorseIds.Contains(kv.Key))
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (long animalId in stale)
+                BusHorseClaims.Remove(animalId);
+
+            foreach (long animalId in SummerBusHorseIds)
+                BusHorseClaims[animalId] = playerId;
+
+            if (Game1.IsMultiplayer)
+            {
+                if (stale.Count > 0)
+                {
+                    Instance.Helper.Multiplayer.SendMessage(
+                        new BusClaimMessage(stale, playerId, Release: true),
+                        MsgBusClaim,
+                        modIDs: new[] { Instance.Helper.ModRegistry.ModID });
+                }
+                if (SummerBusHorseIds.Count > 0)
+                {
+                    Instance.Helper.Multiplayer.SendMessage(
+                        new BusClaimMessage(new List<long>(SummerBusHorseIds), playerId, Release: false),
+                        MsgBusClaim,
+                        modIDs: new[] { Instance.Helper.ModRegistry.ModID });
+                }
+            }
+        }
+
+        /// <summary>True for a hidden (stable-assigned) FarmAnimal whose live Horse exists and isn't
+        /// currently being ridden by another farmer, so it can be loaded onto the bus.</summary>
+        private static bool IsStableAnimalAvailable(FarmAnimal animal)
+        {
+            if (!HorseHelper.IsHidden(animal)) return false;
+            Horse? horse = FindStableHorseForAnimal(animal.myID.Value);
+            return horse != null
+                && !Game1.getOnlineFarmers().Any(f => f != Game1.player && f.mount?.HorseId == horse.HorseId);
+        }
+
+        /// <summary>Finds the live stable Horse entity backing a hidden FarmAnimal, if any.</summary>
+        private static Horse? FindStableHorseForAnimal(long animalId)
+        {
+            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
+            {
+                if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string idStr)
+                    && long.TryParse(idStr, out long id) && id == animalId)
+                    return stable.getStableHorse();
+            }
+            return null;
         }
 
         /// <summary>Charges the fare and replicates the vanilla bus boarding sequence (walk to the door, bus
@@ -647,14 +828,19 @@ namespace HorseTycoon
         {
             if (busLoc is not StardewValley.Locations.BusStop bus)
                 return;
-            if (Game1.player.Money < SummerTicketPrice)
-            {
-                Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\Locations:BusStop_NotEnoughMoneyForTicket"));
-                return;
-            }
 
-            Game1.player.Money -= SummerTicketPrice;
-            Game1.playSound("purchaseClick");
+            // Pam waives the fare for players who couldn't afford the ticket.
+            if (!SummerFareWaived)
+            {
+                if (Game1.player.Money < SummerTicketPrice)
+                {
+                    Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\Locations:BusStop_NotEnoughMoneyForTicket"));
+                    return;
+                }
+                Game1.player.Money -= SummerTicketPrice;
+                Game1.playSound("purchaseClick");
+            }
+            SummerFareWaived = false;
             BoardingForSummerFestival = true;
 
             // Mirror BusStop.answerDialogue's "Bus_Yes" branch so the vanilla drive-off animation runs.
@@ -688,7 +874,7 @@ namespace HorseTycoon
                 return true;
 
             Game1.viewportFreeze = true;
-            SkipHorseWarning = true; // already warned at the ticket prompt
+            SkipHorseWarning = true; // horse choice was already made in the bus loading menu
             Game1.warpFarmer(def.LocationName, 34, 23, 0);
             SkipHorseWarning = false;
             Game1.globalFade = false;
@@ -1025,6 +1211,13 @@ namespace HorseTycoon
             this.SyncBack2WaterTiles(Game1.currentLocation);
 
 
+            // Bus festival: the horses picked in the HorseBusLoadMenu ride along instead of the mount.
+            if (def.BusArrival && SummerBusSelectionMade)
+            {
+                this.PlaceBusSelectionInPasture();
+                return;
+            }
+
             Horse? horse = lastRiddenMount.Value;
             bool arrivedMounted = horse != null && (Game1.ticks - lastMountedTick.Value) <= EntryMountWindowTicks;
             if (!arrivedMounted || horse == null)
@@ -1042,8 +1235,96 @@ namespace HorseTycoon
             Logger.LogVerbose($"Brought '{horse.Name}' into the festival pasture (slot {slot}).");
         }
 
+        /// <summary>Unloads the horses chosen at the Bus Stop into the pasture. Stable horses with a live
+        /// Horse entity are moved (net-synced, announced via MsgPastureHorse); barn-only horses get a
+        /// temporary Horse built from their FarmAnimal data (announced via MsgBusHorse). The first horse
+        /// becomes the competitor; mounting the other switches it (see <see cref="UpdatePasture"/>).</summary>
+        private void PlaceBusSelectionInPasture()
+        {
+            int slot = PastureSlotFor(Game1.player);
+            // Extra horses use slots past the per-farmer and NPC pen-horse ranges so every client
+            // resolves them to the same unoccupied spots.
+            int extraSlotBase = Game1.getOnlineFarmers().Count() + Def.NpcRiderNames.Length;
+            int index = 0;
+
+            foreach (long animalId in SummerBusHorseIds)
+            {
+                if (index >= BusHorseCapacity) break;
+                FarmAnimal? animal = HorseHelper.GetAllBarnHorses().FirstOrDefault(a => a.myID.Value == animalId);
+                if (animal == null) continue;
+
+                int horseSlot = index == 0 ? slot : extraSlotBase + slot;
+                Horse? horse = FindStableHorseForAnimal(animalId);
+                if (horse != null)
+                {
+                    PlaceHorseInPasture(horse, horseSlot);
+                    this.Helper.Multiplayer.SendMessage(
+                        new PastureHorseMessage(horse.HorseId.ToString(), horseSlot),
+                        MsgPastureHorse,
+                        modIDs: new[] { this.Helper.ModRegistry.ModID });
+                }
+                else
+                {
+                    horse = CreateBusHorse(animal);
+                    PlaceHorseInPasture(horse, horseSlot);
+                    this.Helper.Multiplayer.SendMessage(
+                        new BusHorseMessage(
+                            horse.HorseId.ToString(),
+                            horse.Name,
+                            horse.modData[HorseHelper.HorseSkinKey],
+                            horse.modData[HorseHelper.OverlaysKey],
+                            horseSlot),
+                        MsgBusHorse,
+                        modIDs: new[] { this.Helper.ModRegistry.ModID });
+                }
+
+                busFestivalHorses.Value.Add(horse);
+                if (competitor.Value == null)
+                    competitor.Value = horse;
+                Logger.LogVerbose($"Unloaded '{animal.Name}' from the bus into pasture slot {horseSlot}.");
+                index++;
+            }
+        }
+
+        /// <summary>Builds a temporary festival Horse from a barn horse's FarmAnimal data. Race stats ride
+        /// along via the borrowed-stat modData keys, which GetRaceStats falls back to when the horse has
+        /// no stable backing.</summary>
+        private static Horse CreateBusHorse(FarmAnimal animal)
+        {
+            var horse = new Horse(System.Guid.NewGuid(), 0, 0);
+            horse.Name = animal.Name;
+            horse.displayName = animal.displayName;
+            horse.modData[HorseHelper.HorseSkinKey] = HorseTexturePatches.SkinNameFromId(animal.skinID.Value);
+            horse.modData[HorseHelper.OverlaysKey] = HorseHelper.GetOverlaysRaw(animal) ?? "Saddle,Bridle";
+            var stats = animal.GetHorseStats();
+            horse.modData[HorseHelper.BorrowedSpeedKey] = stats.TotalSpeed.ToString();
+            horse.modData[HorseHelper.BorrowedSprintKey] = stats.TotalSprint.ToString();
+            horse.modData[HorseHelper.BorrowedJumpKey] = stats.TotalJump.ToString();
+            return horse;
+        }
+
         private void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
         {
+            // Bus claims apply everywhere (the receiver may still be standing at the Bus Stop).
+            if (e.Type == MsgBusClaim)
+            {
+                var claimMsg = e.ReadAs<BusClaimMessage>();
+                foreach (long animalId in claimMsg.AnimalIds)
+                {
+                    if (claimMsg.Release)
+                    {
+                        if (BusHorseClaims.TryGetValue(animalId, out long owner) && owner == claimMsg.PlayerId)
+                            BusHorseClaims.Remove(animalId);
+                    }
+                    else
+                    {
+                        BusHorseClaims[animalId] = claimMsg.PlayerId;
+                    }
+                }
+                Logger.LogVerbose($"Bus claim update from player {claimMsg.PlayerId}: {(claimMsg.Release ? "released" : "claimed")} {claimMsg.AnimalIds.Count} horse(s).");
+                return;
+            }
+
             if (e.Type == MsgOpenReadyCheck)
             {
                 if (RaceFestival != null && phase.Value == Phase.Pasture)
@@ -1084,6 +1365,22 @@ namespace HorseTycoon
                 RaceFestival.showWorldCharacters = true;
                 PlaceHorseInPasture(borrowedHorse, bmsg.Slot);
                 Logger.LogVerbose($"Placed remote borrowed horse in pasture slot {bmsg.Slot}.");
+                return;
+            }
+
+            if (e.Type == MsgBusHorse && RaceFestival != null)
+            {
+                var busMsg = e.ReadAs<BusHorseMessage>();
+                if (!System.Guid.TryParse(busMsg.HorseId, out System.Guid busHorseId))
+                    return;
+                var busHorse = new Horse(busHorseId, 0, 0);
+                busHorse.Name = busMsg.Name;
+                busHorse.modData[HorseHelper.HorseSkinKey] = busMsg.Skin;
+                busHorse.modData[HorseHelper.OverlaysKey] = busMsg.Overlays;
+                RaceFestival.showWorldCharacters = true;
+                PlaceHorseInPasture(busHorse, busMsg.Slot);
+                busFestivalHorses.Value.Add(busHorse);
+                Logger.LogVerbose($"Placed remote bus horse '{busMsg.Name}' in pasture slot {busMsg.Slot}.");
                 return;
             }
 
@@ -1139,6 +1436,31 @@ namespace HorseTycoon
             Logger.LogVerbose($"Auto-assigned borrowed horse '{horse.Name}' to {Game1.player.Name}.");
         }
 
+        /// <summary>Brings a late joiner's claim table up to date; without this a farmhand connecting
+        /// after another player boarded could load already-taken horses onto a second bus.</summary>
+        private void OnPeerConnected(object? sender, PeerConnectedEventArgs e)
+        {
+            if (!IsHost || BusHorseClaims.Count == 0)
+                return;
+
+            foreach (var claimsByPlayer in BusHorseClaims.GroupBy(kv => kv.Value))
+            {
+                this.Helper.Multiplayer.SendMessage(
+                    new BusClaimMessage(claimsByPlayer.Select(kv => kv.Key).ToList(), claimsByPlayer.Key, Release: false),
+                    MsgBusClaim,
+                    modIDs: new[] { this.Helper.ModRegistry.ModID },
+                    playerIDs: new[] { e.Peer.PlayerID });
+            }
+        }
+
+        private void OnDayStarted(object? sender, DayStartedEventArgs e)
+        {
+            BusHorseClaims.Clear();
+            SummerBusHorseIds.Clear();
+            SummerBusSelectionMade = false;
+            SummerFareWaived = false;
+        }
+
         private void AssignBorrowedHorse()
         {
             if (Game1.currentLocation == null) return;
@@ -1182,6 +1504,11 @@ namespace HorseTycoon
                 pendingRaceReadyCheck.Value = false;
                 this.OpenRaceReadyCheck();
             }
+
+            // With two bus horses in the pasture, whichever one the player mounts races.
+            if (Game1.player.mount is Horse mounted && mounted != competitor.Value
+                && busFestivalHorses.Value.Contains(mounted))
+                competitor.Value = mounted;
 
             Horse? horse = competitor.Value;
             if (horse == null)
@@ -3256,6 +3583,41 @@ namespace HorseTycoon
                 borrowedFestivalHorse.Value.currentLocation?.characters.Remove(borrowedFestivalHorse.Value);
                 borrowedFestivalHorse.Value = null;
             }
+            // Bus horses: despawn temporary ones; send unridden stable horses home so they aren't
+            // stranded when the festival's temporary map is discarded.
+            foreach (Horse busHorse in busFestivalHorses.Value)
+            {
+                if (HorseHelper.IsManagedStableHorse(busHorse))
+                {
+                    if (busHorse.rider == null)
+                        Game1.getFarm().buildings.OfType<Stable>()
+                            .FirstOrDefault(s => s.HorseId == busHorse.HorseId)?.grabHorse();
+                }
+                else
+                {
+                    busHorse.currentLocation?.characters.Remove(busHorse);
+                }
+            }
+            busFestivalHorses.Value.Clear();
+            // Release this player's bus claims (locally and on every client) so the horses can board
+            // a later bus today now that they're back home.
+            if (SummerBusHorseIds.Count > 0)
+            {
+                foreach (long animalId in SummerBusHorseIds)
+                {
+                    if (BusHorseClaims.TryGetValue(animalId, out long owner) && owner == Game1.player.UniqueMultiplayerID)
+                        BusHorseClaims.Remove(animalId);
+                }
+                if (Game1.IsMultiplayer)
+                {
+                    this.Helper.Multiplayer.SendMessage(
+                        new BusClaimMessage(new List<long>(SummerBusHorseIds), Game1.player.UniqueMultiplayerID, Release: true),
+                        MsgBusClaim,
+                        modIDs: new[] { this.Helper.ModRegistry.ModID });
+                }
+            }
+            SummerBusSelectionMade = false;
+            SummerBusHorseIds.Clear();
             phase.Value = Phase.None;
             // Bus drive-in cinematic cleanup (safety net if the festival ended mid-arrival).
             busDoorSprite.Value = null;
