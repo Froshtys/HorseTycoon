@@ -16,6 +16,7 @@ using StardewValley.GameData;
 using StardewValley.Menus;
 using StardewValley.Objects;
 using StardewValley.Quests;
+using HorseTycoon.Models;
 
 namespace HorseTycoon
 {
@@ -119,18 +120,11 @@ namespace HorseTycoon
             public Point? LastJumpApproachTile;
         }
 
-        private static readonly bool VerboseLogging = true;
-        private static readonly bool DebugAllStalls = true;
+        private static readonly bool DebugAllStalls = false;
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
         private Texture2D? sprintBuffIcon;
-
-        private void LogVerbose(string message)
-        {
-            if (VerboseLogging)
-                this.Monitor.Log(message, LogLevel.Debug);
-        }
 
         // The definition for the festival the local screen is currently in; set when leaving Phase.None
         // (EnterPasture) and cleared in Reset. Methods that run only while a festival is active read this.
@@ -813,7 +807,8 @@ namespace HorseTycoon
                 return;
 
             var (_, totalSprint) = HorseHelper.GetRaceStats(Game1.player.mount);
-            float durationMs = System.Math.Clamp(totalSprint / 10f * 1000f, 1000f, 10000f);
+            float durationMs = HorseStats.SprintDurationMs(totalSprint);
+            Logger.LogVerbose($"Sprint (festival): sprint={totalSprint}, duration={durationMs}ms, speed=+{HorseStats.SprintSpeedBonus(totalSprint)}");
 
             sprintPhase.Value = SprintPhase.Sprinting;
             sprintTimer.Value = durationMs;
@@ -1044,7 +1039,7 @@ namespace HorseTycoon
                 MsgPastureHorse,
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
 
-            this.LogVerbose($"Brought '{horse.Name}' into the festival pasture (slot {slot}).");
+            Logger.LogVerbose($"Brought '{horse.Name}' into the festival pasture (slot {slot}).");
         }
 
         private void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
@@ -1088,7 +1083,7 @@ namespace HorseTycoon
                 borrowedHorse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
                 RaceFestival.showWorldCharacters = true;
                 PlaceHorseInPasture(borrowedHorse, bmsg.Slot);
-                this.LogVerbose($"Placed remote borrowed horse in pasture slot {bmsg.Slot}.");
+                Logger.LogVerbose($"Placed remote borrowed horse in pasture slot {bmsg.Slot}.");
                 return;
             }
 
@@ -1121,7 +1116,7 @@ namespace HorseTycoon
 
             RaceFestival.showWorldCharacters = true;
             PlaceHorseInPasture(horse, msg.Slot);
-            this.LogVerbose($"Placed remote horse '{horse.Name}' in pasture slot {msg.Slot}.");
+            Logger.LogVerbose($"Placed remote horse '{horse.Name}' in pasture slot {msg.Slot}.");
         }
 
         /// <summary>Creates a borrowed horse and sets competitor/borrowedFestivalHorse. No pasture
@@ -1141,7 +1136,7 @@ namespace HorseTycoon
             horse.modData[HorseHelper.BorrowedJumpKey] = "10";
             borrowedFestivalHorse.Value = horse;
             competitor.Value = horse;
-            this.LogVerbose($"Auto-assigned borrowed horse '{horse.Name}' to {Game1.player.Name}.");
+            Logger.LogVerbose($"Auto-assigned borrowed horse '{horse.Name}' to {Game1.player.Name}.");
         }
 
         private void AssignBorrowedHorse()
@@ -1159,7 +1154,7 @@ namespace HorseTycoon
                 MsgBorrowedHorse,
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
 
-            this.LogVerbose($"Placed borrowed horse '{horse.Name}' in pasture slot {slot}.");
+            Logger.LogVerbose($"Placed borrowed horse '{horse.Name}' in pasture slot {slot}.");
         }
 
         private static void PlaceHorseInPasture(Horse horse, int slot)
@@ -1877,7 +1872,7 @@ namespace HorseTycoon
             phase.Value = Phase.Finished;
             Game1.addHUDMessage(new HUDMessage("Finished!", HUDMessage.achievement_type));
             var elapsed = Game1.currentGameTime.TotalGameTime - raceStartTime.Value;
-            this.LogVerbose($"Race time for {Game1.player.Name}: {(int)elapsed.TotalMinutes}:{elapsed.Seconds:D2}.{elapsed.Milliseconds:D3}");
+            Logger.LogVerbose($"Race time for {Game1.player.Name}: {(int)elapsed.TotalMinutes}:{elapsed.Seconds:D2}.{elapsed.Milliseconds:D3}");
 
             if (IsHost)
                 this.RecordFinish(Game1.player.UniqueMultiplayerID);
@@ -1939,7 +1934,7 @@ namespace HorseTycoon
         private void RecordDisqualification(long farmerId)
         {
             DisqualifiedFarmers.Add(farmerId);
-            this.LogVerbose($"Farmer {farmerId} disqualified — recording as last-place finish.");
+            Logger.LogVerbose($"Farmer {farmerId} disqualified — recording as last-place finish.");
             this.RecordFinish(farmerId);
         }
 
@@ -1948,7 +1943,7 @@ namespace HorseTycoon
             if (FinishOrder.Contains(farmerId))
                 return;
             FinishOrder.Add(farmerId);
-            this.LogVerbose($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}");
+            Logger.LogVerbose($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}");
 
             int totalPlayers = Game1.getOnlineFarmers().Count() + Def.NpcRiderNames.Length;
             if (FinishOrder.Count >= totalPlayers && HostCeremonyCountdown < 0f)
@@ -2061,7 +2056,7 @@ namespace HorseTycoon
             this.DespawnSpectators();
             this.SpawnSpectators(ceremonySpectators);
 
-            this.LogVerbose($"Ceremony started. Local placement (0-based): {placement}");
+            Logger.LogVerbose($"Ceremony started. Local placement (0-based): {placement}");
         }
 
         private bool prizeMenuWasOpen = false;
@@ -2283,7 +2278,7 @@ namespace HorseTycoon
                 actor.EventActor = true;
                 festLoc.characters.Add(actor);
                 spawnedRiders.Add(actor);
-                this.LogVerbose($"Spawned rider actor '{name}' at holding tile {holdTile}.");
+                Logger.LogVerbose($"Spawned rider actor '{name}' at holding tile {holdTile}.");
             }
         }
 
@@ -2333,7 +2328,7 @@ namespace HorseTycoon
                         int sveIdx = (tile.TileIndex - SveCharacterSheetPadding) / 4;
                         string name = SveCharacterTileNames[sveIdx];
                         if (Game1.characterData?.ContainsKey(name) != true)
-                            this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (SVE not installed?).");
+                            Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (SVE not installed?).");
                         else
                             results.Add(new NpcSpectatorPlacement(name, new Point(x, y), dir));
                     }
@@ -2344,7 +2339,7 @@ namespace HorseTycoon
                         int esIdx = (tile.TileIndex - EsCharacterSheetPadding) / 4;
                         string name = EsCharacterTileNames[esIdx];
                         if (Game1.characterData?.ContainsKey(name) != true)
-                            this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (East Scarp not installed?).");
+                            Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{name}' — not in characterData (East Scarp not installed?).");
                         else
                             results.Add(new NpcSpectatorPlacement(name, new Point(x, y), dir));
                     }
@@ -2356,7 +2351,7 @@ namespace HorseTycoon
             {
                 if (!MetRequiredNpcNames.Contains(p.Name)) return false;
                 if (farmers.Any(f => f.friendshipData.ContainsKey(p.Name))) return false;
-                this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{p.Name}' — not met by any attending farmer.");
+                Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{p.Name}' — not met by any attending farmer.");
                 return true;
             });
 
@@ -2365,7 +2360,7 @@ namespace HorseTycoon
             {
                 int removed = results.RemoveAll(p => p.Name == "Leo");
                 if (removed > 0)
-                    this.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping 'Leo' — not yet moved to Pelican Town.");
+                    Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping 'Leo' — not yet moved to Pelican Town.");
             }
 
             if (placeholderSlots.Count > 0)
@@ -2376,13 +2371,13 @@ namespace HorseTycoon
                     if (i >= modNpcs.Count) break;
                     var (tile, dir) = placeholderSlots[i];
                     results.Add(new NpcSpectatorPlacement(modNpcs[i], tile, dir, IsAutoFilled: true));
-                    this.LogVerbose($"ReadNpcPlacements('{layerName}'): assigned mod NPC '{modNpcs[i]}' to placeholder at {tile}.");
+                    Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): assigned mod NPC '{modNpcs[i]}' to placeholder at {tile}.");
                 }
                 if (modNpcs.Count < placeholderSlots.Count)
-                    this.LogVerbose($"ReadNpcPlacements('{layerName}'): {placeholderSlots.Count - modNpcs.Count} placeholder slot(s) left unfilled (not enough met mod NPCs).");
+                    Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): {placeholderSlots.Count - modNpcs.Count} placeholder slot(s) left unfilled (not enough met mod NPCs).");
             }
 
-            this.LogVerbose($"ReadNpcPlacements('{layerName}'): {results.Count} entries ({placeholderSlots.Count} placeholder slot(s)).");
+            Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): {results.Count} entries ({placeholderSlots.Count} placeholder slot(s)).");
             return results;
         }
 
@@ -2416,7 +2411,7 @@ namespace HorseTycoon
                 (met[i], met[j]) = (met[j], met[i]);
             }
 
-            this.LogVerbose($"GetMetModNpcNames: found {met.Count} met mod NPC(s): {string.Join(", ", met)}");
+            Logger.LogVerbose($"GetMetModNpcNames: found {met.Count} met mod NPC(s): {string.Join(", ", met)}");
             return met;
         }
 
@@ -2570,7 +2565,7 @@ namespace HorseTycoon
                 };
                 npcRacers.Add(racer);
 
-                this.LogVerbose($"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}, Jump={jumpIV} ({(useJumpRoute ? "jump route" : "detour route")})");
+                Logger.LogVerbose($"NPC racer '{riderName}' in slot {slot} — Speed={speedIV}, Sprint={sprintIV}, Jump={jumpIV} ({(useJumpRoute ? "jump route" : "detour route")})");
             }
 
             // The two fastest NPCs track the race leader; the rest track the nearest farmer.
@@ -2655,7 +2650,7 @@ namespace HorseTycoon
             {
                 var (tile, minSkill) = approaches[i];
                 Def.NpcJumpZones[tile] = new NpcJumpZone { LandingTile = landings[i], MinSkill = minSkill };
-                this.LogVerbose($"[Jump] Zone {i}: approach {tile} → landing {landings[i]} (MinSkill={minSkill})");
+                Logger.LogVerbose($"[Jump] Zone {i}: approach {tile} → landing {landings[i]} (MinSkill={minSkill})");
             }
 
             this.Monitor.Log($"Loaded {Def.NpcJumpZones.Count} NPC jump zone(s) from map.", LogLevel.Info);
@@ -2765,14 +2760,14 @@ namespace HorseTycoon
                             float jumpDist = Vector2.Distance(r.JumpStart, r.JumpEnd);
                             float speedPxPerMs = ComputeNpcSpeedPixelsPerMs(r);
                             r.JumpDuration = jumpDist / System.Math.Max(speedPxPerMs, 0.001f);
-                            this.LogVerbose($"[Jump] {r.Rider?.Name ?? r.Horse.Name} clears obstacle at {currentTile} (skill {r.TotalJump} >= {zone.MinSkill}, dist {tileDist:F1} tiles)");
+                            Logger.LogVerbose($"[Jump] {r.Rider?.Name ?? r.Horse.Name} clears obstacle at {currentTile} (skill {r.TotalJump} >= {zone.MinSkill}, dist {tileDist:F1} tiles)");
                         }
                         else
                         {
                             // Skill too low or obstacle too wide: blocked hop — arc in place, no forward progress.
                             r.JumpEnd = r.JumpStart;
                             r.JumpDuration = 600f; // fixed penalty duration in ms
-                            this.LogVerbose($"[Jump] {r.Rider?.Name ?? r.Horse.Name} blocked hop at {currentTile} (skill {r.TotalJump}, dist {tileDist:F1} tiles, minSkill {zone.MinSkill}, max {MaxNpcJumpTiles})");
+                            Logger.LogVerbose($"[Jump] {r.Rider?.Name ?? r.Horse.Name} blocked hop at {currentTile} (skill {r.TotalJump}, dist {tileDist:F1} tiles, minSkill {zone.MinSkill}, max {MaxNpcJumpTiles})");
                         }
                         continue; // skip A* and movement this tick — WaypointIndex must not advance here
                     }
@@ -2804,7 +2799,7 @@ namespace HorseTycoon
                     }
                     else if (++r.PathRetryCount >= MaxPathRetries)
                     {
-                        this.LogVerbose($"[Path] {r.Rider?.Name ?? r.Horse.Name} giving up on waypoint {r.WaypointIndex} ({r.Route[r.WaypointIndex]}) after {r.PathRetryCount} failed A* attempts — skipping.");
+                        Logger.LogVerbose($"[Path] {r.Rider?.Name ?? r.Horse.Name} giving up on waypoint {r.WaypointIndex} ({r.Route[r.WaypointIndex]}) after {r.PathRetryCount} failed A* attempts — skipping.");
                         r.WaypointIndex++;
                         r.PathRetryCount = 0;
                     }
@@ -2826,7 +2821,7 @@ namespace HorseTycoon
                 bool allPlayersFinished = racingFarmers.Count == 0 || racingFarmers.All(f => FinishOrder.Contains(f.UniqueMultiplayerID));
                 if (r.AiMode == AiMode.Match && allPlayersFinished && r.LastMatchMultiplier != 1f)
                 {
-                    this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: all players finished — resuming normal speed");
+                    Logger.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: all players finished — resuming normal speed");
                     r.LastMatchMultiplier = 1f;
                 }
                 if (r.AiMode == AiMode.Match && !allPlayersFinished)
@@ -2872,7 +2867,7 @@ namespace HorseTycoon
                         {
                             string direction = matchMultiplier < 1f ? "slowing down" : "speeding up";
                             string trackMode = r.MatchLeader ? "leader" : "nearest player";
-                            this.LogVerbose(
+                            Logger.LogVerbose(
                                 $"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: {direction} to {roundedMultiplier:F2}x " +
                                 $"(NPC waypoint {r.WaypointIndex}, player nearest waypoint {playerWpIdx}/{r.Route.Length - 1}, " +
                                 $"tracking {trackMode} {targetFarmer.Name} {targetTileDist:F1} tiles away)");
@@ -2881,7 +2876,7 @@ namespace HorseTycoon
                     }
                     else if (r.LastMatchMultiplier != 1f)
                     {
-                        this.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: back to normal speed (target player {targetTileDist:F1} tiles away)");
+                        Logger.LogVerbose($"[Match AI] {r.Rider?.Name ?? r.Horse.Name}: back to normal speed (target player {targetTileDist:F1} tiles away)");
                         r.LastMatchMultiplier = 1f;
                     }
                 }
@@ -2997,8 +2992,9 @@ namespace HorseTycoon
         private static float ComputeNpcSpeedPixelsPerMs(NpcRacer r)
         {
             float tilesPerSec = 5f + (r.TotalSpeed / 20);
+            // Same additive bonus the player gets, so NPCs speed up equally. See HorseStats.SprintSpeedBonus.
             if (r.NpcSprintPhase == SprintPhase.Sprinting)
-                tilesPerSec *= 1f + (r.TotalSprint * 0.005f);
+                tilesPerSec += HorseStats.SprintSpeedBonus(r.TotalSprint);
             return tilesPerSec * 64f / 1000f;
         }
 
@@ -3037,7 +3033,8 @@ namespace HorseTycoon
 
             if (Game1.random.NextDouble() < 0.5)
             {
-                float durationMs = System.Math.Clamp((r.TotalSprint / 4f) * 1000f, 1000f, 25000f);
+                float durationMs = HorseStats.SprintDurationMs(r.TotalSprint);
+                Logger.LogVerbose($"Sprint (NPC {r.Rider?.Name ?? "?"}): sprint={r.TotalSprint}, duration={durationMs}ms, speed=+{HorseStats.SprintSpeedBonus(r.TotalSprint)}");
                 r.NpcSprintPhase = SprintPhase.Sprinting;
                 r.NpcSprintTimer = durationMs;
                 if (Game1.IsMultiplayer)
@@ -3118,7 +3115,7 @@ namespace HorseTycoon
 
             if (!won)
             {
-                this.LogVerbose($"Bet lost for {Game1.player.Name}: picked {betName}, winner was {winnerName}.");
+                Logger.LogVerbose($"Bet lost for {Game1.player.Name}: picked {betName}, winner was {winnerName}.");
                 return;
             }
 
@@ -3135,7 +3132,7 @@ namespace HorseTycoon
             quest.showNew.Value = true;
             Game1.player.questLog.Add(quest);
 
-            this.LogVerbose($"Bet won for {Game1.player.Name}: {winnings}g quest added to quest log.");
+            Logger.LogVerbose($"Bet won for {Game1.player.Name}: {winnings}g quest added to quest log.");
         }
 
         private bool CheckBetWon()

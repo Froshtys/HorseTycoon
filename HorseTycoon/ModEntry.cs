@@ -23,8 +23,10 @@ namespace HorseTycoon
         private JumpManager? jumpManager;
         private FestivalRaceManager? festivalRaceManager;
         private Texture2D? sprintBuffIcon;
+
         public override void Entry(IModHelper helper)
         {
+            Logger.Init(this.Monitor);
             sprintBuffIcon = helper.ModContent.Load<Texture2D>("assets/HorseRunningBuff.png");
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
@@ -425,15 +427,17 @@ namespace HorseTycoon
                 return;
             }
 
-            // 4. Calculate Duration (Total Sprint / 4) in milliseconds
-            int durationMs = Math.Clamp((stats.TotalSprint / 10) * 1000, 1000, 10000);
+            // 4. Shared HorseStats formula so this buff matches the festival sprint.
+            int durationMs = HorseStats.SprintDurationMs(stats.TotalSprint);
+            float speedBonus = HorseStats.SprintSpeedBonus(stats.TotalSprint);
+            Logger.LogVerbose($"Sprint (world): sprint={stats.TotalSprint}, duration={durationMs}ms, speed=+{speedBonus}");
 
             // 5. Apply Sprint Buff
             Buff sprintBuff = new Buff(
                 id: "Froshty.HorseTycoon.Sprint",
                 displayName: "Horse Sprint",
                 duration: durationMs,
-                effects: new BuffEffects { Speed = { 1f } }
+                effects: new BuffEffects { Speed = { speedBonus } }
             )
             {
                 iconTexture = sprintBuffIcon,

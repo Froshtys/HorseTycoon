@@ -56,6 +56,19 @@ namespace HorseTycoon.Models
         public int SprintEV { get => GetStat(nameof(SprintEV)); set => SetStat(nameof(SprintEV), value); }
         public int TotalSprint => Math.Min(STAT_MAX, SprintIV + SprintEV);
 
+        // --- Sprint formula (shared by ModEntry buff, festival player, and NPC racers) ---
+        // Static + raw int so NPC racers (no HorseStats) can call it too. Tune here, changes everywhere.
+        public const int SprintMinDurationMs = 1000;
+        public const int SprintMaxDurationMs = 10000;
+
+        /// <summary>Sprint length in ms for a total Sprint stat.</summary>
+        public static int SprintDurationMs(int totalSprint) =>
+            Math.Clamp(SprintMinDurationMs + (totalSprint * 50), SprintMinDurationMs, SprintMaxDurationMs);
+
+        /// <summary>Additive sprint speed bonus in getMovementSpeed units (~1 tile/sec per point).</summary>
+        public static float SprintSpeedBonus(int totalSprint) =>
+            1f + (totalSprint / 10 * 0.1f);
+
         // --- Jump Distance (Total Max 100) ---
         public int JumpIV { get => GetStat(nameof(JumpIV)); set => SetStat(nameof(JumpIV), value); }
         public int JumpEV { get => GetStat(nameof(JumpEV)); set => SetStat(nameof(JumpEV), value); }

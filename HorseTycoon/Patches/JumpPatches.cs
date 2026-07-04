@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 using StardewValley.Characters;
+using HorseTycoon.Models;
 
 namespace HorseTycoon
 {
@@ -90,10 +91,9 @@ namespace HorseTycoon
                 var (speedBoost, totalSprint) = HorseHelper.GetRaceStats(__instance.mount);
                 __result += speedBoost;
 
-                // The race uses a custom sprint (the vanilla sprint buff's timer is frozen during the
-                // festival), so add its speed bonus here. Base matches a +1 Speed buff. 
+                // Festival freezes the vanilla sprint buff, so apply its bonus here via the shared formula.
                 if (FestivalRaceManager.IsSprinting)
-                    __result += 1f;
+                    __result += HorseStats.SprintSpeedBonus(totalSprint);
             }
         }
     }
