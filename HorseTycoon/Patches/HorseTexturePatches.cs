@@ -205,8 +205,13 @@ namespace HorseTycoon.Patches
 
             __instance.modData.TryGetValue(HorseHelper.OverlaysKey, out string? overlaysValue);
 
+            // Proxy horses flagged NoTack render bare (breeding pen); an empty overlay string
+            // resolves to the base skin with no saddle/bridle composited on.
+            bool noTack = __instance.modData.TryGetValue(HorseHelper.NoTackKey, out string? noTackVal) && noTackVal == "true";
+            if (noTack)
+                overlaysValue = "";
             // Horses from saves before the saddle system lack OverlaysKey — default to brown.
-            if (string.IsNullOrEmpty(overlaysValue))
+            else if (string.IsNullOrEmpty(overlaysValue))
                 overlaysValue = "Saddle_Brown,Bridle_Brown";
 
             Texture2D? texture = GetSkinTexture(skinName, overlaysValue);

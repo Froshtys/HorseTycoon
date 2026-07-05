@@ -15,6 +15,9 @@ namespace HorseTycoon
         public const string HorseSkinKey = "Froshty.HorseTycoon/HorseSkin";
         // Comma-separated overlay names. Absent or empty = no overlays.
         public const string OverlaysKey = "Froshty.HorseTycoon/Overlays";
+        // Marks a proxy Horse that should render with NO saddle/bridle (e.g. breeding-pen horses).
+        // Without this, an empty OverlaysKey defaults to brown tack (see HorseTexturePatches).
+        public const string NoTackKey = "Froshty.HorseTycoon/NoTack";
         // Unqualified item ID of the currently equipped saddle (e.g. "HorseTycoon.SaddleBrown").
         public const string EquippedSaddleKey = "Froshty.HorseTycoon/EquippedSaddle";
         // Days remaining until a pregnant mare gives birth. Absent = not pregnant.
@@ -430,6 +433,17 @@ namespace HorseTycoon
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Copies a barn horse's coat onto a proxy <see cref="Horse"/> character and marks it to
+        /// render without any saddle/bridle (used by the breeding pen). The proxy is purely visual.
+        /// </summary>
+        public static void ApplyProxyAppearance(Horse proxy, FarmAnimal source)
+        {
+            proxy.modData[HorseSkinKey] = SkinIdToName(source.skinID.Value ?? "");
+            proxy.modData.Remove(OverlaysKey);
+            proxy.modData[NoTackKey] = "true";
         }
 
         private static void SetHorseSkin(Horse horse, string skinId, FarmAnimal? sourceAnimal, IMonitor monitor)

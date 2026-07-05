@@ -1,0 +1,165 @@
+{
+	/*
+	  Gold Carrot — the feed item for the horse breeding pen.
+
+	  When Stardew Valley Expanded is installed, SVE already defines the Gold Carrot,
+	  its seed, the crop, textures, and the Desert Trader stock, so we leave all of that
+	  to SVE (every change below that would collide is gated on SVE being ABSENT). We reuse
+	  SVE's exact item IDs so a save is interchangeable whether or not SVE is present.
+
+	  The Pierre horse-festival shop seed listing at the bottom is UNGATED: the seed item ID
+	  exists either way (from SVE or from our fallback), so it is safe to sell in both cases.
+	*/
+	"Changes": [
+		/* ---- Fallback item art (only loaded when SVE is not installed) ---- */
+		{
+			"LogName": "Gold Carrot texture (no SVE)",
+			"Action": "Load",
+			"Target": "Mods/FlashShifter.StardewValleyExpandedCP/Gold Carrot",
+			"FromFile": "assets/GoldCarrot/GoldCarrot.png",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false }
+		},
+		{
+			"LogName": "Gold Carrot Seed texture (no SVE)",
+			"Action": "Load",
+			"Target": "Mods/FlashShifter.StardewValleyExpandedCP/Gold Carrot Seed",
+			"FromFile": "assets/GoldCarrot/GoldCarrotSeed.png",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false }
+		},
+		{
+			"LogName": "Gold Carrot Crop texture (no SVE)",
+			"Action": "Load",
+			"Target": "Mods/FlashShifter.StardewValleyExpandedCP/Gold Carrot Crop",
+			"FromFile": "assets/GoldCarrot/GoldCarrotCrop.png",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false }
+		},
+
+		/* ---- Fallback item + seed data (only when SVE is not installed) ---- */
+		{
+			"LogName": "Gold Carrot objects (no SVE)",
+			"Action": "EditData",
+			"Target": "Data/Objects",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false },
+			"Entries": {
+				"FlashShifter.StardewValleyExpandedCP_Gold_Carrot": {
+					"Name": "Gold Carrot",
+					"DisplayName": "Gold Carrot",
+					"Description": "An enchanted carrot glowing with an ethereal light.",
+					"Type": "Basic",
+					"Category": -75,
+					"Price": 1000,
+					"Texture": "Mods\\FlashShifter.StardewValleyExpandedCP\\Gold Carrot",
+					"SpriteIndex": 0,
+					"Edibility": 115,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": false,
+					"ExcludeFromRandomSale": false,
+					"ContextTags": [ "color_gold", "dye_strong", "seedmaker_banned" ]
+				},
+				"FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed": {
+					"Name": "Gold Carrot Seed",
+					"DisplayName": "Gold Carrot Seeds",
+					"Description": "Plant these in the spring, summer, or fall. Takes 6 days to mature.",
+					"Type": "Seeds",
+					"Category": -74,
+					"Price": 300,
+					"Texture": "Mods\\FlashShifter.StardewValleyExpandedCP\\Gold Carrot Seed",
+					"SpriteIndex": 0,
+					"Edibility": -300,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": false,
+					"ExcludeFromRandomSale": true
+				}
+			}
+		},
+		{
+			"LogName": "Gold Carrot crop (no SVE)",
+			"Action": "EditData",
+			"Target": "Data/Crops",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false },
+			"Entries": {
+				"FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed": {
+					"Seasons": [ "Spring", "Summer", "Fall" ],
+					"DaysInPhase": [ 1, 1, 2, 2 ],
+					"RegrowDays": -1,
+					"IsRaised": false,
+					"HarvestItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot",
+					"HarvestMinStack": 0,
+					"HarvestMaxStack": 0,
+					"HarvestMaxIncreasePerFarmingLevel": 0,
+					"ExtraHarvestChance": 0,
+					"HarvestMethod": "Grab",
+					"TintColors": [],
+					"Texture": "Mods\\FlashShifter.StardewValleyExpandedCP\\Gold Carrot Crop",
+					"SpriteIndex": 0,
+					"CustomFields": {}
+				}
+			}
+		},
+		{
+			"LogName": "Gold Carrot Seed at Desert Trader (no SVE)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"TargetField": [ "DesertTrade", "Items" ],
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false },
+			"Entries": {
+				"FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed": {
+					"Id": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
+					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
+					"TradeItemId": "(O)336",
+					"TradeItemAmount": 3,
+					"AvailableStock": 2
+				}
+			}
+		},
+
+		/* ---- Pierre's horse-festival shop: 2 seeds per festival (works with or without SVE) ---- */
+		{
+			"LogName": "Gold Carrot Seed at Spring Horse Festival (Pierre)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"TargetField": [ "Festival_SpringHorseFestival_Pierre", "Items" ],
+			"Entries": {
+				"GoldCarrotSeed": {
+					"Id": "GoldCarrotSeed",
+					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
+					"Price": 1000,
+					"AvailableStock": 2,
+					"AvailableStockLimit": "Player"
+				}
+			}
+		},
+		{
+			"LogName": "Gold Carrot Seed at Summer Horse Festival (Pierre)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"TargetField": [ "Festival_SummerHorseFestival_Pierre", "Items" ],
+			"Entries": {
+				"GoldCarrotSeed": {
+					"Id": "GoldCarrotSeed",
+					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
+					"Price": 1000,
+					"AvailableStock": 2,
+					"AvailableStockLimit": "Player"
+				}
+			}
+		},
+		{
+			"LogName": "Gold Carrot Seed at Fall Horse Festival (Pierre)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"TargetField": [ "Festival_FallHorseFestival_Pierre", "Items" ],
+			"Entries": {
+				"GoldCarrotSeed": {
+					"Id": "GoldCarrotSeed",
+					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
+					"Price": 1000,
+					"AvailableStock": 2,
+					"AvailableStockLimit": "Player"
+				}
+			}
+		}
+	]
+}

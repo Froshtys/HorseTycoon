@@ -53,6 +53,12 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(Horse), nameof(Horse.checkAction)),
                 prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Horse_checkAction_Prefix))
             );
+
+            // --- IV potions: give a held potion to a barn horse instead of petting ---
+            harmony.Patch(
+                original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.pet)),
+                prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Pet_Prefix))
+            );
         }
 
         // --- Patch Implementations ---
@@ -127,6 +133,10 @@ namespace HorseTycoon
 
         public static bool Horse_checkAction_Prefix(Horse __instance)
         {
+            // Breeding-pen proxy horses are decorative only — never mountable/interactable.
+            if (__instance.modData.TryGetValue(HorseHelper.NoTackKey, out string? noTack) && noTack == "true")
+                return false;
+
             Stable? stable = Game1.getFarm().buildings
                 .OfType<Stable>()
                 .FirstOrDefault(s => s.HorseId == __instance.HorseId);
@@ -154,6 +164,14 @@ namespace HorseTycoon
                 return false;
             }
 
+            // IV potion: player holds a potion while not mounted — give it to the linked barn animal.
+            if (Game1.player.mount != __instance && IVPotionManager.IsIVPotion(Game1.player.CurrentItem))
+            {
+                FarmAnimal? potionTarget = HorseHelper.GetFarmAnimalForHorse(__instance);
+                if (potionTarget != null && IVPotionManager.TryApplyPotion(potionTarget, Game1.player))
+                    return false;
+            }
+
             // Prevent the vanilla per-player naming dialog by ensuring horseName is never empty
             // for a stable already managed by this mod.
             if (string.IsNullOrEmpty(Game1.player.horseName.Value))
@@ -176,8 +194,25 @@ namespace HorseTycoon
             return true;
         }
 
+        /// <summary>Clicking a barn horse while holding an IV potion gives it the potion instead of petting.</summary>
+        public static bool Pet_Prefix(FarmAnimal __instance, Farmer who, bool is_auto_pet)
+        {
+            if (is_auto_pet)
+                return true;
+            if (IVPotionManager.IsIVPotion(who?.CurrentItem) && IVPotionManager.TryApplyPotion(__instance, who!))
+                return false;
+            return true;
+        }
+
         public static void Building_BeforeDemolish_Prefix(Building __instance)
         {
+            // Free any horses penned in a breeding pen before it's demolished.
+            if (BreedingPenManager.IsBreedingPen(__instance))
+            {
+                BreedingPenManager.ReleasePennedHorses(__instance);
+                return;
+            }
+
             if (__instance is Stable stable)
             {
                 if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string linkedIdString) &&
