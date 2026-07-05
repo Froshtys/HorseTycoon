@@ -48,7 +48,7 @@ public class HorseBusLoadMenu : IClickableMenu
         foreach (long id in preselectedIds)
         {
             if (this.SelectedIds.Count >= this.Capacity) break;
-            if (animals.Any(a => a.myID.Value == id && !a.isBaby()))
+            if (animals.Any(a => a.myID.Value == id && !a.isBaby() && !HorseHelper.IsPregnant(a)))
                 this.SelectedIds.Add(id);
         }
 
@@ -161,7 +161,7 @@ public class HorseBusLoadMenu : IClickableMenu
                 if (actualIndex < Animals.Count)
                 {
                     var animal = Animals[actualIndex];
-                    if (!animal.isBaby())
+                    if (!animal.isBaby() && !HorseHelper.IsPregnant(animal))
                     {
                         this.hoverText = this.SelectedIds.Contains(animal.myID.Value)
                             ? "Leave " + animal.Name + " home"
@@ -227,6 +227,14 @@ public class HorseBusLoadMenu : IClickableMenu
                 {
                     Game1.playSound("cancel");
                     Game1.showRedMessage("Too young to travel");
+                    return;
+                }
+
+                // Pregnant mares stay home to rest
+                if (HorseHelper.IsPregnant(animal))
+                {
+                    Game1.playSound("cancel");
+                    Game1.showRedMessage("Pregnant and resting in the barn");
                     return;
                 }
 
@@ -301,6 +309,7 @@ public class HorseBusLoadMenu : IClickableMenu
             // Name and Tag Layout Engine
             string name = animal.Name;
             bool isBabyHorseRow = animal.isBaby();
+            bool isPregnantHorseRow = !isBabyHorseRow && HorseHelper.IsPregnant(animal);
 
             if (isSelected)
             {
@@ -323,6 +332,17 @@ public class HorseBusLoadMenu : IClickableMenu
                 Vector2 tagSize = Game1.smallFont.MeasureString(babyTag);
                 Vector2 tagPos = new Vector2(relativeX + 110 + (240 - tagSize.X) / 2, relativeY + 58);
                 Utility.drawTextWithShadow(b, babyTag, Game1.smallFont, tagPos, Color.Gray);
+            }
+            else if (isPregnantHorseRow)
+            {
+                Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
+                Vector2 namePos = new Vector2(relativeX + 110 + (240 - nameSize.X) / 2, relativeY + 16);
+                Utility.drawTextWithShadow(b, name, Game1.dialogueFont, namePos, Game1.textColor);
+
+                string pregnantTag = "(pregnant)";
+                Vector2 tagSize = Game1.smallFont.MeasureString(pregnantTag);
+                Vector2 tagPos = new Vector2(relativeX + 110 + (240 - tagSize.X) / 2, relativeY + 58);
+                Utility.drawTextWithShadow(b, pregnantTag, Game1.smallFont, tagPos, Color.MediumVioletRed);
             }
             else
             {
@@ -353,8 +373,8 @@ public class HorseBusLoadMenu : IClickableMenu
                 Utility.drawTextWithShadow(b, "Jump", Game1.smallFont, new Vector2(labelX, bar3Y - 2), Game1.textColor, 1f);
             }
 
-            // Boarding checkbox at the right edge of the row (babies can't board).
-            if (!isBabyHorseRow)
+            // Boarding checkbox at the right edge of the row (babies and pregnant mares can't board).
+            if (!isBabyHorseRow && !isPregnantHorseRow)
             {
                 float checkboxScale = 3.4f;
                 int checkboxX = panelX + panelWidth - 52;

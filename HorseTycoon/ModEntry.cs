@@ -40,8 +40,13 @@ namespace HorseTycoon
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
             this.HandleSetStat);
 
+            helper.ConsoleCommands.Add("horse_pregnancy",
+            "Starts or fast-forwards a horse pregnancy for testing.\n\nUsage: horse_pregnancy <horse name> [daysLeft]\n- Omit daysLeft to start a fresh 7-day pregnancy.\n- Example: horse_pregnancy Thunder 1 (gives birth tomorrow)",
+            this.HandlePregnancyCommand);
+
             var harmony = new Harmony(this.ModManifest.UniqueID);
             FarmAnimalPatches.Apply(harmony);
+            PregnancyPatches.Apply(harmony);
 
             MenuPatches.Initialize(helper, this.Monitor);
             MenuPatches.Apply(harmony);
@@ -59,6 +64,9 @@ namespace HorseTycoon
             // Spring 21 Horse Festival race logic
             this.festivalRaceManager = new FestivalRaceManager(helper, this.Monitor);
             this.festivalRaceManager.Initialize();
+
+            // Robin-built bus horse trailer (required for away festivals)
+            BusTrailerManager.Initialize(helper);
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
@@ -182,6 +190,7 @@ namespace HorseTycoon
             {
                 ConvertUnassignedStableHorses();
                 TrainingManager.ResetDailyCounters();
+                BreedingManager.OnDayStarted();
             }
         }
 
@@ -528,6 +537,41 @@ namespace HorseTycoon
                 description = "Your horse needs a break before another sprint!"
             };
             Game1.player.applyBuff(tiredBuff);
+        }
+
+        private void HandlePregnancyCommand(string command, string[] args)
+        {
+            if (!Context.IsWorldReady)
+            {
+                this.Monitor.Log("Load a save first.", LogLevel.Error);
+                return;
+            }
+
+            if (args.Length < 1)
+            {
+                this.Monitor.Log("Usage: horse_pregnancy <horse name> [daysLeft]", LogLevel.Error);
+                return;
+            }
+
+            FarmAnimal? mare = HorseHelper.GetAllBarnHorses()
+                .FirstOrDefault(h => h.Name.Equals(args[0], StringComparison.OrdinalIgnoreCase));
+            if (mare == null)
+            {
+                this.Monitor.Log($"No barn horse named '{args[0]}' found.", LogLevel.Error);
+                return;
+            }
+
+            if (args.Length >= 2 && int.TryParse(args[1], out int daysLeft))
+            {
+                mare.modData[HorseHelper.PregnancyDaysLeftKey] = Math.Max(1, daysLeft).ToString();
+                BreedingManager.SendToBirthingArea(mare);
+                this.Monitor.Log($"{mare.Name} is now pregnant with {Math.Max(1, daysLeft)} day(s) left.", LogLevel.Info);
+            }
+            else
+            {
+                BreedingManager.MakePregnant(mare);
+                this.Monitor.Log($"{mare.Name} is now pregnant ({BreedingManager.GestationDays} days).", LogLevel.Info);
+            }
         }
 
         private void HandleSetStat(string command, string[] args)

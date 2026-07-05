@@ -633,6 +633,11 @@ namespace HorseTycoon
                 Game1.drawObjectDialogue("The bus isn't running yet. The road to the festival opens once the bus has been repaired.");
                 return;
             }
+            if (!BusTrailerManager.IsBuilt)
+            {
+                Game1.drawObjectDialogue("The bus can't haul horses without a trailer. Maybe Robin could build one...");
+                return;
+            }
             if (Game1.timeOfDay < def.StartTime)
             {
                 Game1.drawObjectDialogue("The bus to the Summer Horse Festival leaves at noon.");
