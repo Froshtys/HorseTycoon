@@ -38,6 +38,11 @@ namespace HorseTycoon.Patches
         internal static IReadOnlyCollection<string> AvailableOverlayNames => _overlayDict.Keys;
 
 
+        /// <summary>Base skin texture (no overlays) for a Data/FarmAnimals skin id — used by shop
+        /// menus that display horses which don't exist as FarmAnimals yet.</summary>
+        internal static Texture2D? GetTextureForSkinId(string? skinId) =>
+            GetSkinTexture(SkinNameFromId(skinId), "");
+
         internal static Texture2D? GetTextureForAnimal(FarmAnimal? animal)
         {
             if (animal == null) return null;

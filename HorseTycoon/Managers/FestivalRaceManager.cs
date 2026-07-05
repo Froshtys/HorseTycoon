@@ -28,7 +28,7 @@ namespace HorseTycoon
     /// and when it finishes the gates open. Horses run east to the finish band, which ends the race.
     /// Local state is PerScreen; multiplayer sync uses Game1.netReady and explicit mod messages.
     /// </summary>
-    public class FestivalRaceManager
+    public partial class FestivalRaceManager
     {
         // Registered horse festivals. Add a FestivalDefinition factory here to introduce a new festival;
         // all race/betting/ceremony/sync behavior is shared and reads from the currently active one.
@@ -1213,6 +1213,7 @@ namespace HorseTycoon
             this.SpawnPenNpcHorses();
             this.SpawnDecorativeHorses();
             this.SpawnSpectators(setupSpectators);
+            this.SpawnShopNpcs();
             this.SyncBack2WaterTiles(Game1.currentLocation);
 
 
@@ -1777,14 +1778,30 @@ namespace HorseTycoon
             Event? festival = RaceFestival;
             NPC? pam = festival?.getActorByName("Pam");
             NPC? lewis = festival?.getActorByName("Lewis");
+            NPC? horseSeller = festival?.getActorByName(HorseSellerActorName);
+            NPC? studKeeper = festival?.getActorByName(StudShopActorName);
 
             bool nearPam = pam != null && IsPlayerFacing(pam);
             bool nearLewis = lewis != null && IsPlayerFacing(lewis);
+            bool nearSeller = horseSeller != null && IsPlayerFacing(horseSeller);
+            bool nearStud = studKeeper != null && IsPlayerFacing(studKeeper);
 
-            if (!nearPam && !nearLewis)
+            if (!nearPam && !nearLewis && !nearSeller && !nearStud)
                 return;
 
             this.Helper.Input.Suppress(e.Button);
+
+            // Festival market stalls (summer away festival).
+            if (nearSeller)
+            {
+                this.OpenHorseSellerShop(horseSeller!);
+                return;
+            }
+            if (nearStud)
+            {
+                this.OpenStudShop(studKeeper!);
+                return;
+            }
 
             // Pam handles betting.
             if (nearPam && !pamGreeted.Value)

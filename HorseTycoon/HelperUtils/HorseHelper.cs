@@ -19,6 +19,9 @@ namespace HorseTycoon
         public const string EquippedSaddleKey = "Froshty.HorseTycoon/EquippedSaddle";
         // Days remaining until a pregnant mare gives birth. Absent = not pregnant.
         public const string PregnancyDaysLeftKey = "Froshty.HorseTycoon/PregnancyDaysLeft";
+        // "speed,sprint,jump" IVs of the stud that sired the current pregnancy (festival stud shop).
+        // Absent = no known sire; the foal rolls random Starter stats instead of inheriting.
+        public const string SireIVsKey = "Froshty.HorseTycoon/PregnancySireIVs";
         // Fallback stat keys written directly onto a borrowed festival horse (no FarmAnimal backing).
         public const string BorrowedSpeedKey = "Froshty.HorseTycoon/BorrowedSpeed";
         public const string BorrowedSprintKey = "Froshty.HorseTycoon/BorrowedSprint";

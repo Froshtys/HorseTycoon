@@ -93,6 +93,19 @@ namespace HorseTycoon
         public string PastureMusic = "CloudCountry";
         public string RaceMusic = "Cowboy_OVERWORLD";
 
+        // --- Festival shop NPCs (opt-in) ---
+        // Tile the Horse Seller stands on during the pasture phase; null = no horse seller.
+        // Talking to them opens the daily sale list (Special horses at HorseMarket.SaleGoldPerIvPoint).
+        public Point? HorseSellerTile;
+        public int HorseSellerFacing = 2;
+        // Character sprite sheet used for the seller's event actor (placeholder art).
+        public string HorseSellerSprite = "Marnie";
+        // Tile the Stud Shop keeper stands on; null = no stud shop. Talking to them offers stud
+        // services: pay the fee, then pick one of the horses you brought to breed.
+        public Point? StudShopTile;
+        public int StudShopFacing = 2;
+        public string StudShopSprite = "Gus";
+
         // --- Bus arrival cinematic (opt-in) ---
         // When true, the festival opens with the vanilla-style bus driving in from the right before the
         // pasture phase. Park/drop tiles mirror the vanilla Desert bus (rest 17,24; player drops at 18,27).
@@ -326,6 +339,12 @@ namespace HorseTycoon
                 new Point(38, 14), new Point(36, 14), new Point(40, 14),
                 new Point(34, 14), new Point(42, 14),
             },
+
+            // Away-festival market stalls: horse seller + stud shop (summer festival only).
+            HorseSellerTile = new Point(30, 13),
+            HorseSellerFacing = 2,
+            StudShopTile = new Point(33, 13),
+            StudShopFacing = 2,
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
             NpcRiderSpeeds = new[] { 5, 10, 15, 20 },
