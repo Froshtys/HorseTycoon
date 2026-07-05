@@ -248,14 +248,14 @@
 			}
 		},
 		{
-			"LogName": "Summer Horse Festival - Register on calendar (summer 19)",
-			"Action": "EditData",
-			"Target": "Data/Festivals/FestivalDates",
-			"Entries": {
-				"summer19": "{{i18n:SummerHorseFestival_Name}}"
-			}
-		},
-		{
+			// NOTE: Summer 19 is deliberately NOT registered in Data/Festivals/FestivalDates.
+			// That entry is what makes vanilla treat the day as a town-closing festival day
+			// (isFestivalDay -> shops shut, NPCs pulled from town, calendar marker). The away
+			// race is an opt-in bus trip triggered by our own C# flow, and the festival event
+			// still loads via GameLocation.checkForEvents -> Event.tryToLoadFestival("summer19"),
+			// which only needs the Data/Festivals/summer19 asset (Load'd below) + being at the
+			// festival location in the time window. So the town at home stays open, like the
+			// Desert Festival.
 			"LogName": "Summer Horse Festival - Festival data (summer 19)",
 			"Action": "Load",
 			"Target": "Data/Festivals/summer19",

@@ -20,12 +20,19 @@ namespace HorseTycoon
         // player + exactly one of the three IV potions (synced daily pick), quantity 1 per player.
         private const string ItemShopId = "CP.HorseTycoon_IsaacFestivalShop";
 
+        // Keeper intro lines are shown once per festival; later clicks go straight to the shop.
+        private bool horseSellerIntroSeen;
+        private bool studShopIntroSeen;
+
         /// <summary>Spawns the shop keeper event actors for the pasture phase. They're added to
         /// <see cref="spawnedSpectators"/> so the shops close (despawn) when the race starts.
         /// The sprite name is also the keeper's display name (Alesia/Isaac/Jadu); the character
-        /// sheets always exist because the CP pack bundles them when SVE is absent.</summary>
+        /// sheets and portraits always exist because the CP pack bundles them when SVE is absent.</summary>
         private void SpawnShopNpcs()
         {
+            this.horseSellerIntroSeen = false;
+            this.studShopIntroSeen = false;
+
             FestivalDefinition def = Def;
             this.SpawnShopNpc(def.HorseSellerTile, def.HorseSellerFacing, def.HorseSellerSprite, HorseSellerActorName, def.HorseSellerSprite);
             this.SpawnShopNpc(def.StudShopTile, def.StudShopFacing, def.StudShopSprite, StudShopActorName, def.StudShopSprite);
@@ -45,9 +52,31 @@ namespace HorseTycoon
             actor.faceDirection(facing);
             actor.Sprite.StopAnimation();
             actor.EventActor = true;
+
+            // Portrait for the keeper's intro dialogue lines (vanilla dialogue box).
+            try
+            {
+                actor.Portrait = Game1.content.Load<Microsoft.Xna.Framework.Graphics.Texture2D>("Portraits\\" + spriteName);
+            }
+            catch
+            {
+                Logger.LogVerbose($"No portrait sheet found for festival shop NPC '{spriteName}'.");
+            }
+
             RaceFestival.actors.Add(actor);
             spawnedSpectators.Add(actor);
             Logger.LogVerbose($"Spawned festival shop NPC '{actorName}' ({spriteName}) at {tile.Value}.");
+        }
+
+        /// <summary>Shows a normal NPC dialogue line (with portrait) for a stall keeper, optionally
+        /// continuing into a follow-up action (e.g. opening the shop menu) when the box closes.</summary>
+        private void Speak(NPC keeper, string text, Action? then = null)
+        {
+            keeper.CurrentDialogue.Clear();
+            keeper.CurrentDialogue.Push(new Dialogue(keeper, null, text));
+            Game1.drawDialogue(keeper);
+            if (then != null)
+                Game1.afterDialogues = () => then();
         }
 
         // ====================================================================================
@@ -56,20 +85,21 @@ namespace HorseTycoon
 
         private void OpenHorseSellerShop(NPC seller)
         {
-            Response[] options =
+            if (HorseMarket.GetSaleOffers().All(o => o.Purchased))
             {
-                new("Browse", "Show me the horses"),
-                new("No", "Not right now"),
-            };
-            Game1.currentLocation.createQuestionDialogue(
-                "Welcome! Finest horses this side of the valley — festival-grade, every one of 'em. Care to take a look?",
-                options,
-                (_, answer) =>
-                {
-                    if (answer != "Browse")
-                        return;
-                    Game1.afterDialogues = this.ShowHorseSaleMenu;
-                }, seller);
+                this.Speak(seller, "Sold out! Come back at the next festival.");
+                return;
+            }
+
+            if (!this.horseSellerIntroSeen)
+            {
+                this.horseSellerIntroSeen = true;
+                this.Speak(seller,
+                    "Welcome! Finest horses this side of the valley — festival-grade, every one of 'em. Take a look!",
+                    this.ShowHorseSaleMenu);
+                return;
+            }
+            this.ShowHorseSaleMenu();
         }
 
         private void ShowHorseSaleMenu()
@@ -81,7 +111,7 @@ namespace HorseTycoon
                 return;
             }
             Game1.activeClickableMenu = new HorseShopMenu("Horses for sale", offers, this.ConfirmHorsePurchase,
-                Def.HorseSellerSprite, "Every one of these beauties is festival-grade. Buy one and I'll have it delivered straight to your farm!");
+                Def.HorseSellerSprite, "Buy one of these beauties and I'll have it delivered straight to your farm!");
         }
 
         private void ConfirmHorsePurchase(HorseOffer offer)
@@ -136,24 +166,10 @@ namespace HorseTycoon
 
         private void OpenItemShop(NPC keeper)
         {
-            Response[] options =
-            {
-                new("Browse", "Let's see what you've got"),
-                new("No", "Not right now"),
-            };
-            Game1.currentLocation.createQuestionDialogue(
-                "Hey there. I picked up some rare supplies on the road — seeds, tonics... things a horse trainer might want. Interested?",
-                options,
-                (_, answer) =>
-                {
-                    if (answer != "Browse")
-                        return;
-                    Game1.afterDialogues = () =>
-                    {
-                        if (!Utility.TryOpenShopMenu(ItemShopId, ownerName: null))
-                            Logger.LogVerbose($"Failed to open festival item shop '{ItemShopId}' — missing Data/Shops entry?");
-                    };
-                }, keeper);
+            // No intro — straight to shopping. The shop's Data/Shops Owners entry provides
+            // Jadu's portrait and greeting inside the menu itself.
+            if (!Utility.TryOpenShopMenu(ItemShopId, ownerName: null))
+                Logger.LogVerbose($"Failed to open festival item shop '{ItemShopId}' — missing Data/Shops entry?");
         }
 
         // ====================================================================================
@@ -162,32 +178,27 @@ namespace HorseTycoon
 
         private void OpenStudShop(NPC studKeeper)
         {
-            Response[] options =
+            if (this.GetBroughtBreedableHorses().Count == 0)
             {
-                new("Browse", "Show me the studs"),
-                new("No", "Not right now"),
-            };
-            Game1.currentLocation.createQuestionDialogue(
-                "Looking to breed a champion? My stallions' fees are based on their pedigree — pick one and I'll introduce him to one of the horses you brought.",
-                options,
-                (_, answer) =>
-                {
-                    if (answer != "Browse")
-                        return;
+                this.Speak(studKeeper, "My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today. Bring one along next time!");
+                return;
+            }
 
-                    if (this.GetBroughtBreedableHorses().Count == 0)
-                    {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today. Bring one along next time!");
-                        return;
-                    }
-                    Game1.afterDialogues = this.ShowStudMenu;
-                }, studKeeper);
+            if (!this.studShopIntroSeen)
+            {
+                this.studShopIntroSeen = true;
+                this.Speak(studKeeper,
+                    "Looking to breed a champion? My stallions' fees are based on their pedigree — pick one and I'll introduce him to one of the horses you brought.",
+                    this.ShowStudMenu);
+                return;
+            }
+            this.ShowStudMenu();
         }
 
         private void ShowStudMenu()
         {
             Game1.activeClickableMenu = new HorseShopMenu("Stud services", HorseMarket.GetStudOffers(), this.ConfirmStudService,
-                Def.StudShopSprite, "My stallions' fees follow their pedigree. Pick one and he'll meet a mare you brought.");
+                Def.StudShopSprite, "Take your pick — every one of my stallions is a proven runner.");
         }
 
         private void ConfirmStudService(HorseOffer stud)

@@ -123,6 +123,13 @@ namespace HorseTycoon
         public Point BusParkTile = new Point(21, 6);
         public Point BusDropTile = new Point(22, 10);
 
+        // --- Optional start-of-festival heads-up (opt-in) ---
+        // For "away" festivals that are NOT registered in Data/Festivals/FestivalDates (so they don't close
+        // the town), vanilla's town-wide "The X Festival is starting at Y" noon message never fires. Set this
+        // to show our own global message at StartTime instead. Null = no heads-up (walk-in festivals rely on
+        // the vanilla one). Shown only to players who can actually attend (bus repaired + trailer built).
+        public string? HeadsUpMessage;
+
         // ====================================================================================
         // Registered festivals
         // ====================================================================================
@@ -319,6 +326,7 @@ namespace HorseTycoon
             LocationName = "Custom_HorseTycoon_SummerFestival",
             MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
             BusArrival = true,
+            HeadsUpMessage = "The bus to the Summer Horse Festival is now boarding at the Bus Stop! Ride your horse there to compete.",
 
             // Layout authored for Summer-HorseRace.tmx (65x85): a festival plaza (rows 30-49)
             // holding the market shops + for-sale paddock and the horse pens, above a large

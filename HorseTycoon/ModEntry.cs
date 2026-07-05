@@ -68,6 +68,9 @@ namespace HorseTycoon
             HorseTexturePatches.Initialize(helper, this.Monitor);
             HorseTexturePatches.Apply(harmony);
 
+            // Horse-face markers on the Billboard calendar for all three horse festivals
+            CalendarPatches.Apply(harmony);
+
             // Create and start the jump logic
             this.jumpManager = new JumpManager(helper, this.Monitor, this.ModManifest);
             this.jumpManager.Initialize();

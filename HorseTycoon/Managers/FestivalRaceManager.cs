@@ -39,6 +39,13 @@ namespace HorseTycoon
             FestivalDefinition.SummerBusStop(),
         };
 
+        /// <summary>The calendar slots (season + day + Data/Festivals asset key) for every registered horse
+        /// festival. Lets the calendar patch mark these days with a horse icon without depending on
+        /// Data/Festivals/FestivalDates (the away race is deliberately not registered there so it doesn't
+        /// close the town). Asset key is <c>Season + Day</c>, e.g. "summer19".</summary>
+        public static IReadOnlyList<(string Season, int Day, string AssetKey)> CalendarFestivals =>
+            Festivals.Select(f => (f.Season, f.Day, f.Season + f.Day)).ToList();
+
         private const string ReadyCheckName = "Froshty.HorseTycoon.horseRaceStart";
 
         private const float SprintCooldownMs = 10000f;
@@ -333,6 +340,7 @@ namespace HorseTycoon
             this.Helper.Events.Multiplayer.ModMessageReceived += this.OnMessageReceived;
             this.Helper.Events.Multiplayer.PeerConnected += this.OnPeerConnected;
             this.Helper.Events.GameLoop.DayStarted += this.OnDayStarted;
+            this.Helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
 
             // isRidingHorse() forces false during ANY event, suppressing mount drawing, riding pose, and
             // horse speed. Re-enable it while mounted inside our festival.
@@ -592,8 +600,8 @@ namespace HorseTycoon
         /// <summary>Gold cost of a ticket to the Summer Horse Festival (matches the vanilla desert bus fare).</summary>
         private const int SummerTicketPrice = 500;
 
-        /// <summary>How many horses fit on the bus to the Summer Horse Festival.</summary>
-        private const int BusHorseCapacity = 2;
+        /// <summary>How many horses fit on the bus to the Summer Horse Festival (2/4/8 by trailer tier).</summary>
+        private static int BusHorseCapacity => BusTrailerManager.HorseCapacity;
 
         /// <summary>
         /// Fires before <see cref="StardewValley.Locations.BusStop.checkAction"/>. On the Summer Horse Festival
@@ -1259,7 +1267,8 @@ namespace HorseTycoon
                 FarmAnimal? animal = HorseHelper.GetAllBarnHorses().FirstOrDefault(a => a.myID.Value == animalId);
                 if (animal == null) continue;
 
-                int horseSlot = index == 0 ? slot : extraSlotBase + slot;
+                // Extras interleave by farmer count so every player's extra horses land on distinct slots.
+                int horseSlot = index == 0 ? slot : extraSlotBase + (index - 1) * Game1.getOnlineFarmers().Count() + slot;
                 Horse? horse = FindStableHorseForAnimal(animalId);
                 if (horse != null)
                 {
@@ -1465,6 +1474,34 @@ namespace HorseTycoon
             SummerBusHorseIds.Clear();
             SummerBusSelectionMade = false;
             SummerFareWaived = false;
+        }
+
+        /// <summary>
+        /// Shows the start-of-festival heads-up for "away" festivals that aren't registered in
+        /// Data/Festivals/FestivalDates (and so get no vanilla "The X Festival is starting" message). Fires
+        /// once, when the clock reaches the festival's StartTime on its day, only for players who can actually
+        /// attend (bus repaired + trailer built). TimeChanged fires per-client on the synced clock, so every
+        /// player sees it locally without any broadcast.
+        /// </summary>
+        private void OnTimeChanged(object? sender, TimeChangedEventArgs e)
+        {
+            if (!Context.IsWorldReady)
+                return;
+
+            foreach (FestivalDefinition def in Festivals)
+            {
+                if (def.HeadsUpMessage == null
+                    || Game1.currentSeason != def.Season
+                    || Game1.dayOfMonth != def.Day
+                    || e.NewTime != def.StartTime)
+                    continue;
+
+                if (!Game1.MasterPlayer.mailReceived.Contains("ccVault") || !BusTrailerManager.IsBuilt)
+                    return;
+
+                Game1.showGlobalMessage(def.HeadsUpMessage);
+                return;
+            }
         }
 
         private void AssignBorrowedHorse()
