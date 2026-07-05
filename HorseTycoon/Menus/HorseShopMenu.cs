@@ -181,6 +181,15 @@ public class HorseShopMenu : IClickableMenu
             {
                 var offer = Offers[actualIndex];
 
+                // The row list is snapshotted when the menu opens; another player may have bought
+                // this offer since (marked Purchased via the MarketOfferSold broadcast).
+                if (offer.Purchased)
+                {
+                    Game1.playSound("cancel");
+                    Game1.showRedMessage("Just sold to someone else!");
+                    return;
+                }
+
                 if (Game1.player.Money < offer.Price)
                 {
                     Game1.playSound("cancel");

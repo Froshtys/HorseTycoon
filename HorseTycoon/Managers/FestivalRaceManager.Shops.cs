@@ -94,6 +94,13 @@ namespace HorseTycoon
                         return;
                     }
 
+                    // Another player may have bought this offer while the confirm dialogue was open.
+                    if (offer.Purchased)
+                    {
+                        Game1.afterDialogues = () => Game1.drawObjectDialogue("Sorry — that horse was just sold to someone else!");
+                        return;
+                    }
+
                     if (Game1.player.Money < offer.Price)
                     {
                         Game1.afterDialogues = () => Game1.drawObjectDialogue("You don't have enough gold.");
@@ -104,9 +111,14 @@ namespace HorseTycoon
                         Game1.afterDialogues = () => Game1.drawObjectDialogue("You'll need a barn on your farm before I can deliver a horse.");
                         return;
                     }
+                    if (HorseHelper.GetBarnWithHorseSpace() == null)
+                    {
+                        Game1.afterDialogues = () => Game1.drawObjectDialogue("Your barn is full! Make some room — or build another stable — and come see me again.");
+                        return;
+                    }
 
                     HorseMarket.PurchaseHorse(offer);
-                    Game1.afterDialogues = () => Game1.drawObjectDialogue($"{offer.Name} will be waiting in your barn when you get home!");
+                    Game1.afterDialogues = () => Game1.drawObjectDialogue($"{offer.Name} has been delivered to your barn, ready and waiting for you at home!");
                 });
         }
 
@@ -131,7 +143,7 @@ namespace HorseTycoon
 
                     if (this.GetBroughtBreedableHorses().Count == 0)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("Looks like none of the horses you brought today can be bred. Bring one along next time!");
+                        Game1.afterDialogues = () => Game1.drawObjectDialogue("My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today. Bring one along next time!");
                         return;
                     }
                     Game1.afterDialogues = this.ShowStudMenu;
@@ -164,7 +176,7 @@ namespace HorseTycoon
                     var mares = this.GetBroughtBreedableHorses();
                     if (mares.Count == 0)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("Looks like none of the horses you brought today can be bred.");
+                        Game1.afterDialogues = () => Game1.drawObjectDialogue("My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today.");
                         return;
                     }
 
@@ -188,8 +200,9 @@ namespace HorseTycoon
                 });
         }
 
-        /// <summary>The local player's horses at this festival that can be bred: the ones loaded onto
-        /// the bus, minus babies and already-pregnant mares.</summary>
+        /// <summary>The local player's horses at this festival that can be bred with a stud: the mares
+        /// loaded onto the bus — stallions, babies, and already-pregnant mares are excluded (same sex
+        /// rules as barn breeding, see <see cref="BreedingManager.GetEligibleSires"/>).</summary>
         private List<FarmAnimal> GetBroughtBreedableHorses()
         {
             var result = new List<FarmAnimal>();
@@ -197,7 +210,7 @@ namespace HorseTycoon
             foreach (long animalId in SummerBusHorseIds)
             {
                 FarmAnimal? animal = barnHorses.FirstOrDefault(a => a.myID.Value == animalId);
-                if (animal != null && !animal.isBaby() && !HorseHelper.IsPregnant(animal))
+                if (animal != null && !animal.isMale() && !animal.isBaby() && !HorseHelper.IsPregnant(animal))
                     result.Add(animal);
             }
             return result;

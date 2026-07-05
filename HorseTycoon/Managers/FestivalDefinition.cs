@@ -310,40 +310,51 @@ namespace HorseTycoon
             MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
             BusArrival = true,
 
-            // TODO(summer): re-author all tiles/routes below for Summer-HorseFestival.tmx (65x30).
+            // Layout authored for Summer-HorseRace.tmx (65x85): a festival plaza (rows 30-49)
+            // holding the market shops + for-sale paddock and the horse pens, above a large
+            // fenced oval track (rows 50-82). The race runs along the top "home straight"
+            // (lane rows 51-59) west->east. Fine-tune tiles in-game with ht_race_tile.
             PenSlots = new[]
             {
-                new Point(20, 12), new Point(22, 13), new Point(24, 12), new Point(26, 13),
-                new Point(21, 10), new Point(23, 11), new Point(25, 10), new Point(27, 11),
+                new Point(8, 40), new Point(11, 40), new Point(14, 40), new Point(17, 40),
+                new Point(8, 44), new Point(11, 44), new Point(14, 44), new Point(17, 44),
             },
-            PastureBgSlots = Array.Empty<Point>(),
+            // Decorative "horses for sale" shown in the fenced paddock beside the shops.
+            PastureBgSlots = new[]
+            {
+                new Point(47, 40), new Point(50, 40), new Point(53, 40),
+                new Point(48, 44), new Point(51, 44), new Point(54, 44),
+            },
             PenHorseTile = null,
 
-            StartStall = new Point(8, 20),
+            // Starting stalls at the west end of the home straight; horses break east.
+            StartStall = new Point(6, 52),
             StallFenceId = "322",
-            FinishMin = new Point(55, 8),
-            FinishMax = new Point(55, 14),
+            // Finish band at the east end of the home straight.
+            FinishMin = new Point(56, 51),
+            FinishMax = new Point(56, 59),
             DqZoneNorthOfY = -1,
             DqZoneEastOfX = -1,
             DqZoneWestOfX = -1,
-            DqArrivalTile = new Point(58, 11),
+            DqArrivalTile = new Point(50, 55),
 
             WinnersCircleTiles = new[]
             {
-                new Point(40, 11), new Point(38, 11), new Point(36, 11),
+                new Point(30, 54), new Point(32, 54), new Point(34, 54),
             },
-            LewisStartTile = new Point(30, 8),
-            LewisAnnouncerTile = new Point(38, 8),
+            LewisStartTile = new Point(32, 48),
+            LewisAnnouncerTile = new Point(28, 54),
             SpectatorTiles = new[]
             {
-                new Point(38, 14), new Point(36, 14), new Point(40, 14),
-                new Point(34, 14), new Point(42, 14),
+                new Point(30, 57), new Point(32, 57), new Point(34, 57),
+                new Point(28, 57), new Point(36, 57),
             },
 
-            // Away-festival market stalls: horse seller + stud shop (summer festival only).
-            HorseSellerTile = new Point(30, 13),
+            // Away-festival market stalls: horse seller + stud shop, in the plaza beside the
+            // for-sale paddock (summer festival only).
+            HorseSellerTile = new Point(40, 42),
             HorseSellerFacing = 2,
-            StudShopTile = new Point(33, 13),
+            StudShopTile = new Point(43, 42),
             StudShopFacing = 2,
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
@@ -353,10 +364,10 @@ namespace HorseTycoon
             NpcJumpMinSkill = 50,
             NpcRaceRoutes = new[]
             {
-                new[] { new Point(15, 21), new Point(55, 11) },
-                new[] { new Point(15, 19), new Point(55, 11) },
-                new[] { new Point(15, 23), new Point(55, 11) },
-                new[] { new Point(15, 17), new Point(55, 11) },
+                new[] { new Point(12, 52), new Point(56, 52) },
+                new[] { new Point(12, 54), new Point(56, 54) },
+                new[] { new Point(12, 56), new Point(56, 56) },
+                new[] { new Point(12, 58), new Point(56, 58) },
             },
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },

@@ -395,6 +395,43 @@ namespace HorseTycoon
             return barns.First();
         }
 
+        /// <summary>Horse housing capacity bonus: +1 barn slot per stable owned. A stable-active
+        /// horse is hidden but still occupies its home barn's animal list, so each stable
+        /// effectively frees up one barn slot. Tractor garages don't count.</summary>
+        public static int GetStableCapacityBonus() =>
+            Game1.getFarm().buildings.OfType<Stable>().Count(s => !s.IsTractorGarage());
+
+        /// <summary>
+        /// Finds a barn with room for another horse, or null if the farm's horse housing is full.
+        /// Unlike <see cref="GetAvailableBarn"/> this never falls back to a full barn: a barn with a
+        /// vanilla free slot is preferred; otherwise overflow is allowed as long as the total animals
+        /// across all barns stay under the combined barn capacity plus the stable bonus (counted once
+        /// farm-wide, not per barn).
+        /// </summary>
+        public static Building? GetBarnWithHorseSpace()
+        {
+            var barns = Game1.getFarm().buildings
+                .Where(b => b.buildingType.Value.Contains("Barn") && b.GetIndoors() is AnimalHouse)
+                .ToList();
+            if (!barns.Any()) return null;
+
+            foreach (var b in barns)
+            {
+                if (b.GetIndoors() is AnimalHouse house && house.animals.Count() < b.maxOccupants.Value)
+                    return b;
+            }
+
+            int totalAnimals = barns.Sum(b => ((AnimalHouse)b.GetIndoors()).animals.Count());
+            int totalCapacity = barns.Sum(b => b.maxOccupants.Value) + GetStableCapacityBonus();
+            if (totalAnimals < totalCapacity)
+            {
+                // Least-overfull barn takes the overflow slot.
+                return barns.OrderBy(b => ((AnimalHouse)b.GetIndoors()).animals.Count() - b.maxOccupants.Value).First();
+            }
+
+            return null;
+        }
+
         private static void SetHorseSkin(Horse horse, string skinId, FarmAnimal? sourceAnimal, IMonitor monitor)
         {
             horse.modData[HorseSkinKey] = SkinIdToName(skinId);

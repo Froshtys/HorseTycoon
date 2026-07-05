@@ -37,8 +37,12 @@ namespace HorseTycoon
 
         private const string MsgBuyHorse = "MarketBuyHorse";
         private const string MsgStudService = "MarketStudService";
+        private const string MsgOfferSold = "MarketOfferSold";
         private record BuyHorseMessage(string Name, string SkinId, int SpeedIV, int SprintIV, int JumpIV, long OwnerId);
         private record StudServiceMessage(long MareId, int SpeedIV, int SprintIV, int JumpIV);
+        // Sale offers are generated deterministically on every client, so an index (plus the day, to
+        // ignore stale messages across a day rollover) identifies the same offer everywhere.
+        private record OfferSoldMessage(int Day, int Index);
 
         private static IModHelper _helper = null!;
         private static IMonitor _monitor = null!;
@@ -142,6 +146,16 @@ namespace HorseTycoon
             Game1.playSound("purchase");
             Game1.dayTimeMoneyBox.moneyShakeTimer = 800;
 
+            // Tell every other client this offer is off the market so their sale menus drop it too.
+            int offerIndex = _saleOffers?.IndexOf(offer) ?? -1;
+            if (offerIndex >= 0)
+            {
+                _helper.Multiplayer.SendMessage(
+                    new OfferSoldMessage(_offersDay, offerIndex),
+                    MsgOfferSold,
+                    modIDs: new[] { _helper.ModRegistry.ModID });
+            }
+
             if (IsHost)
             {
                 DeliverPurchasedHorse(offer.Name, offer.SkinId, offer.SpeedIV, offer.SprintIV, offer.JumpIV, Game1.player.UniqueMultiplayerID);
@@ -181,7 +195,24 @@ namespace HorseTycoon
 
         private static void OnMessageReceived(object? sender, ModMessageReceivedEventArgs e)
         {
-            if (e.FromModID != _helper.ModRegistry.ModID || !IsHost)
+            if (e.FromModID != _helper.ModRegistry.ModID)
+                return;
+
+            // Every client (host and farmhands) marks sold offers so no one is shown a stale listing.
+            if (e.Type == MsgOfferSold)
+            {
+                var soldMsg = e.ReadAs<OfferSoldMessage>();
+                EnsureOffers();
+                if (soldMsg.Day == _offersDay && soldMsg.Index >= 0 && soldMsg.Index < _saleOffers!.Count)
+                {
+                    _saleOffers[soldMsg.Index].Purchased = true;
+                    Logger.LogVerbose($"HorseMarket: sale offer #{soldMsg.Index} ('{_saleOffers[soldMsg.Index].Name}') sold by another player.");
+                }
+                return;
+            }
+
+            // The remaining messages are delivery requests from farmhands — host only.
+            if (!IsHost)
                 return;
 
             if (e.Type == MsgBuyHorse)
@@ -204,10 +235,12 @@ namespace HorseTycoon
         /// HorseHelper.ConvertStableHorseToFarmAnimal's adult-horse setup).</summary>
         private static void DeliverPurchasedHorse(string name, string skinId, int speedIV, int sprintIV, int jumpIV, long ownerId)
         {
-            Building? barn = HorseHelper.GetAvailableBarn();
+            Building? barn = HorseHelper.GetBarnWithHorseSpace();
             if (barn?.GetIndoors() is not AnimalHouse interior)
             {
-                _monitor.Log($"Cannot deliver purchased horse '{name}': no barn on the farm.", LogLevel.Warn);
+                // The buyer checked space before paying; this only happens if the housing filled up
+                // in the instant between their check and the host processing the delivery.
+                _monitor.Log($"Cannot deliver purchased horse '{name}': no barn with horse space on the farm.", LogLevel.Warn);
                 return;
             }
 

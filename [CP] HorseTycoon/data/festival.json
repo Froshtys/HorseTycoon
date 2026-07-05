@@ -273,7 +273,7 @@
 			"LogName": "Summer Horse Festival - Festival map (bus stop)",
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_SummerBusFestival",
-			"FromFile": "assets/maps/Summer-HorseFestival.tmx"
+			"FromFile": "assets/maps/Summer-HorseRace.tmx"
 		},
 		{
 			"LogName": "Summer Horse Festival - Leah's saddle shop",
