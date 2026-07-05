@@ -48,11 +48,13 @@ namespace HorseTycoon.Patches
                 return;
 
             FarmAnimal mare = __instance.animal;
-            BreedingManager.MakePregnant(mare);
+            FarmAnimal? sire = BreedingManager.MakePregnant(mare);
 
             // Replace the vanilla "gave birth" dialogue with a pregnancy announcement.
             Game1.activeClickableMenu = null;
-            Game1.drawObjectDialogue($"{mare.displayName} is pregnant! The foal will arrive in {BreedingManager.GestationDays} days.");
+            Game1.drawObjectDialogue(sire != null
+                ? $"{mare.displayName} is pregnant with {sire.displayName}'s foal! It will arrive in {BreedingManager.GestationDays} days."
+                : $"{mare.displayName} is pregnant! The foal will arrive in {BreedingManager.GestationDays} days.");
 
             SuppressedBirthEvents.Add(__instance);
         }
@@ -69,12 +71,20 @@ namespace HorseTycoon.Patches
             return false;
         }
 
-        /// <summary>Already-pregnant mares and horses hidden in a stable can't be picked for a new pregnancy.</summary>
+        /// <summary>
+        /// Horse pregnancies require a male/female pair: only females can get pregnant, and only
+        /// when an adult male horse lives on the farm. Already-pregnant mares and horses hidden
+        /// in a stable can't be picked either.
+        /// </summary>
         private static void CanHavePregnancy_Postfix(FarmAnimal __instance, ref bool __result)
         {
-            if (__result &&
-                __instance.type.Value.Contains("Horse") &&
-                (HorseHelper.IsPregnant(__instance) || HorseHelper.IsHidden(__instance)))
+            if (!__result || !__instance.type.Value.Contains("Horse"))
+                return;
+
+            if (__instance.isMale() ||
+                HorseHelper.IsPregnant(__instance) ||
+                HorseHelper.IsHidden(__instance) ||
+                !BreedingManager.HasEligibleSire(__instance))
             {
                 __result = false;
             }

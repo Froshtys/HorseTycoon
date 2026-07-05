@@ -67,6 +67,9 @@ namespace HorseTycoon
 
             // Robin-built bus horse trailer (required for away festivals)
             BusTrailerManager.Initialize(helper);
+
+            // Festival horse market (Horse Seller + Stud Shop NPCs)
+            HorseMarket.Initialize(helper, this.Monitor);
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
@@ -382,12 +385,27 @@ namespace HorseTycoon
             // 1. Only draw if the AnimalQueryMenu is open
             if (Game1.activeClickableMenu is AnimalQueryMenu menu)
             {
-                // 2. Access the static button from your patch class
-                var statsButton = MenuPatches.StatsButton;
-                if (statsButton == null) return;
-
-                // 3. Hide if menu is busy (Vanilla or AHM)
+                // 2. Hide if menu is busy (Vanilla or AHM)
                 if (menu.movingAnimal || menu.confirmingSell) return;
+
+                // 3. Gender marker to the right of the name box (horses only) — vanilla
+                // male/female symbols from the character-creation menu.
+                if (menu.animal != null && menu.animal.type.Value.Contains("Horse"))
+                {
+                    Rectangle genderSource = menu.animal.isMale()
+                        ? new Rectangle(128, 192, 16, 16)
+                        : new Rectangle(144, 192, 16, 16);
+                    Vector2 genderPos = new Vector2(menu.textBox.X + menu.textBox.Width + 12, menu.textBox.Y + 12);
+                    e.SpriteBatch.Draw(Game1.mouseCursors, genderPos, genderSource, Color.White, 0f, Vector2.Zero, 2.5f, SpriteEffects.None, 0.9f);
+                }
+
+                // 4. Access the static button from your patch class
+                var statsButton = MenuPatches.StatsButton;
+                if (statsButton == null)
+                {
+                    menu.drawMouse(e.SpriteBatch);
+                    return;
+                }
 
                 // 4. Manual Hover Logic
                 int mouseX = Game1.getOldMouseX();

@@ -14,12 +14,53 @@ namespace HorseTycoon
     {
         public const int GestationDays = 7;
 
-        /// <summary>Marks a mare as pregnant and sends her to the birthing area.</summary>
-        public static void MakePregnant(FarmAnimal mare)
+        /// <summary>
+        /// Adult male horses sharing the mare's home barn — only these can sire a barn pregnancy.
+        /// Stable-hidden males count (hiding doesn't change their home barn).
+        /// </summary>
+        public static List<FarmAnimal> GetEligibleSires(FarmAnimal mare)
         {
+            if (mare.home == null)
+                return new List<FarmAnimal>();
+
+            return HorseHelper.GetAllBarnHorses()
+                .Where(h => h.myID.Value != mare.myID.Value &&
+                            h.isMale() &&
+                            !h.isBaby() &&
+                            h.home == mare.home)
+                .ToList();
+        }
+
+        public static bool HasEligibleSire(FarmAnimal mare)
+        {
+            return GetEligibleSires(mare).Count > 0;
+        }
+
+        /// <summary>
+        /// Marks a mare as pregnant and sends her to the birthing area. Unless a sire is already
+        /// recorded (festival Stud Shop path), a specific stallion is chosen from her home barn
+        /// and his IVs are saved on the mare for inheritance at birth.
+        /// </summary>
+        /// <returns>The barn stallion chosen as sire, or null (stud-shop sire or none available).</returns>
+        public static FarmAnimal? MakePregnant(FarmAnimal mare)
+        {
+            FarmAnimal? sire = null;
+            if (!mare.modData.ContainsKey(HorseHelper.SireIVsKey))
+            {
+                List<FarmAnimal> candidates = GetEligibleSires(mare);
+                if (candidates.Count > 0)
+                {
+                    sire = candidates[Game1.random.Next(candidates.Count)];
+                    HorseStats sireStats = sire.GetHorseStats();
+                    mare.modData[HorseHelper.SireIVsKey] = $"{sireStats.SpeedIV},{sireStats.SprintIV},{sireStats.JumpIV}";
+                }
+            }
+
             mare.modData[HorseHelper.PregnancyDaysLeftKey] = GestationDays.ToString();
             SendToBirthingArea(mare);
-            Logger.LogVerbose($"{mare.Name} ({mare.myID.Value}) is now pregnant, due in {GestationDays} days.");
+            Logger.LogVerbose($"{mare.Name} ({mare.myID.Value}) is now pregnant, due in {GestationDays} days." +
+                (sire != null ? $" Sired by {sire.Name} ({sire.myID.Value})." : " No barn sire recorded."));
+            return sire;
         }
 
         /// <summary>Host-only daily tick: advance every pregnancy, delivering foals that are due.</summary>
@@ -87,6 +128,8 @@ namespace HorseTycoon
             }
 
             mare.modData.Remove(HorseHelper.PregnancyDaysLeftKey);
+            string? sireIVsRaw = mare.modData.TryGetValue(HorseHelper.SireIVsKey, out string sireVal) ? sireVal : null;
+            mare.modData.Remove(HorseHelper.SireIVsKey);
 
             Game1.activeClickableMenu = new NamingMenu(
                 name =>
@@ -95,7 +138,8 @@ namespace HorseTycoon
                     foal.Name = name;
                     foal.displayName = name;
                     foal.parentId.Value = mare.myID.Value;
-                    foal.GetHorseStats().RandomizeStats(HorseStats.HorseSourceQuality.Starter);
+                    if (!TryApplyInheritedStats(foal, mare, sireIVsRaw))
+                        foal.GetHorseStats().RandomizeStats(HorseStats.HorseSourceQuality.Starter);
                     interior.adoptAnimal(foal);
                     foal.Position = mare.Position + new Vector2(64f, 0f);
 
@@ -105,6 +149,49 @@ namespace HorseTycoon
                 },
                 title: $"{mare.displayName} gave birth! Name the foal:"
             );
+        }
+
+        /// <summary>
+        /// The foal inherits each IV from its parents (festival Stud Shop or barn stallion alike):
+        /// the average of the mare's and sire's IV (rounded to the 10-step grid) shifted by one
+        /// random step (-10/0/+10). Returns false when no sire data is recorded, so the caller
+        /// falls back to random Starter stats.
+        /// </summary>
+        private static bool TryApplyInheritedStats(FarmAnimal foal, FarmAnimal mare, string? sireIVsRaw)
+        {
+            if (sireIVsRaw == null)
+                return false;
+
+            string[] parts = sireIVsRaw.Split(',');
+            if (parts.Length != 3
+                || !int.TryParse(parts[0], out int sireSpeed)
+                || !int.TryParse(parts[1], out int sireSprint)
+                || !int.TryParse(parts[2], out int sireJump))
+            {
+                Logger.LogVerbose($"Ignoring malformed sire IV data '{sireIVsRaw}' on {mare.Name}.");
+                return false;
+            }
+
+            Random rand = new Random();
+            HorseStats mareStats = mare.GetHorseStats();
+            HorseStats foalStats = foal.GetHorseStats();
+            foalStats.SpeedIV = InheritIV(mareStats.SpeedIV, sireSpeed, rand);
+            foalStats.SprintIV = InheritIV(mareStats.SprintIV, sireSprint, rand);
+            foalStats.JumpIV = InheritIV(mareStats.JumpIV, sireJump, rand);
+            foalStats.SpeedEV = 0;
+            foalStats.SprintEV = 0;
+            foalStats.JumpEV = 0;
+
+            Logger.LogVerbose($"Foal inherited IVs {foalStats.SpeedIV}/{foalStats.SprintIV}/{foalStats.JumpIV} " +
+                $"(mare {mareStats.SpeedIV}/{mareStats.SprintIV}/{mareStats.JumpIV}, sire {sireSpeed}/{sireSprint}/{sireJump}).");
+            return true;
+        }
+
+        private static int InheritIV(int mareIV, int sireIV, Random rand)
+        {
+            int average = (int)Math.Round((mareIV + sireIV) / 2.0 / 10.0) * 10;
+            int mutation = (rand.Next(3) - 1) * 10; // -10, 0, or +10
+            return Math.Clamp(average + mutation, 0, HorseStats.IV_MAX);
         }
     }
 }
