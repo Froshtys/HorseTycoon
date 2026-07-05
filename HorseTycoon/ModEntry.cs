@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using HorseOverhaul.HorseTycoon;
+using HorseTycoon.Menus;
 using HorseTycoon.Models;
 using HorseTycoon.Patches;
 using Microsoft.Xna.Framework;
@@ -35,6 +36,7 @@ namespace HorseTycoon
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
             helper.Events.Display.MenuChanged += this.OnMenuChanged;
+            helper.Events.Multiplayer.ModMessageReceived += this.OnModMessageReceived;
 
             helper.ConsoleCommands.Add("set_horse_stat",
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
@@ -91,39 +93,14 @@ namespace HorseTycoon
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
         {
-            if (e.OldMenu is PurchaseAnimalsMenu)
-            {
+            if (e.OldMenu is PurchaseAnimalsMenu or NamingMenu)
                 ConvertUnassignedStableHorses();
-            }
-            else if (e.OldMenu is NamingMenu)
-            {
-                ConvertUnassignedStableHorses();
-            }
         }
         private void ConvertUnassignedStableHorses()
         {
-            Utility.ForEachLocation(location =>
-            {
-                foreach (FarmAnimal animal in location.animals.Values)
-                {
-                    // Only target horses
-                    if (animal.type.Value.Contains("Horse"))
-                    {
-                        var stats = animal.GetHorseStats();
+            this.InitializeNewHorseStats();
 
-                        // Check if the horse is "New" (no SpeedIV set yet)
-                        if (!animal.modData.ContainsKey(HorseStats.SpeedIVKey))
-                        {
-                            this.Monitor.Log($"Initializing stats for new horse: {animal.Name}", LogLevel.Debug);
-                            // Initialize with Starter quality
-                            stats.RandomizeStats(HorseSourceQuality.Starter);
-                            HorseHelper.LogHorseData(animal, this.Monitor);
-                        }
-                    }
-                }
-                return true; // Continue to next location
-            });
-
+            // Stable conversion mutates host-owned building/animal data — host only.
             if (!Context.IsMainPlayer) return;
 
             foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
@@ -157,51 +134,91 @@ namespace HorseTycoon
                     continue;
                 }
 
-                // Convert a horse from a new stable
-                if (stable.daysOfConstructionLeft.Value == 0)
-                {
-                    Horse horse = stable.getStableHorse();
-                    if (horse == null) continue;
+                // Convert the stable horse (the isUnderConstruction() guard above means the stable is finished).
+                Horse horse = stable.getStableHorse();
+                if (horse == null) continue;
 
-                    // Initialize immediately with a default name so farmhands can ride the horse
-                    // before the main player finishes naming it
-                    string[] defaultNames = { "Ginger", "Thunder", "Lightning", "Blizzard", "Maple", "Amber", "Chocolate", "Applesauce", "Dancer", "Snowy" };
-                    string defaultName = defaultNames[Game1.random.Next(defaultNames.Length)];
-                    horse.Name = defaultName;
-                    horse.displayName = defaultName;
-                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
+                // Initialize immediately with a default name so farmhands can ride the horse
+                // before the main player finishes naming it
+                string[] defaultNames = { "Ginger", "Thunder", "Lightning", "Blizzard", "Maple", "Amber", "Chocolate", "Applesauce", "Dancer", "Snowy" };
+                string defaultName = defaultNames[Game1.random.Next(defaultNames.Length)];
+                horse.Name = defaultName;
+                horse.displayName = defaultName;
+                HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
 
-                    Game1.showGlobalMessage($"Your new Stable is ready.");
-                    Game1.activeClickableMenu = new NamingMenu(
-                        processedName =>
+                Game1.showGlobalMessage($"Your new Stable is ready.");
+                Game1.activeClickableMenu = new NamingMenu(
+                    processedName =>
+                    {
+                        horse.Name = processedName;
+                        horse.displayName = processedName;
+
+                        FarmAnimal? farmAnimal = HorseHelper.GetFarmAnimalForHorse(horse);
+                        if (farmAnimal != null)
                         {
-                            horse.Name = processedName;
-                            horse.displayName = processedName;
+                            farmAnimal.Name = processedName;
+                            farmAnimal.displayName = processedName;
+                        }
 
-                            FarmAnimal? farmAnimal = HorseHelper.GetFarmAnimalForHorse(horse);
-                            if (farmAnimal != null)
-                            {
-                                farmAnimal.Name = processedName;
-                                farmAnimal.displayName = processedName;
-                            }
-
-                            this.Monitor.Log($"Named new horse '{processedName}'", LogLevel.Info);
-                            Game1.exitActiveMenu();
-                        },
-                        defaultName: defaultName,
-                        title: "Name your new horse:"
-                    );
-                }
-                else
-                {
-                    //Convert an existing stable horse
-                    Horse horse = stable.getStableHorse();
-                    if (horse == null) continue;
-                    HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
-                    this.Monitor.Log($"Successfully converted old horse '{horse.Name}' and converted it into a barn animal", LogLevel.Info);
-
-                }
+                        this.Monitor.Log($"Named new horse '{processedName}'", LogLevel.Info);
+                        Game1.exitActiveMenu();
+                    },
+                    defaultName: defaultName,
+                    title: "Name your new horse:"
+                );
             }
+        }
+
+        // Farmhand -> host: roll Starter stats for a freshly purchased horse. The host is the only
+        // writer (so two clients can never race to roll different IVs), but the farmhand triggers it
+        // immediately on buying so the stats appear as soon as the modData syncs back.
+        private const string MsgInitHorseStats = "HorseTycoon.InitHorseStats";
+        private record InitHorseStatsMessage(long HorseId);
+
+        /// <summary>Rolls Starter stats for any horse that has none yet. The host rolls directly;
+        /// farmhands ask the host via <see cref="MsgInitHorseStats"/> (idempotent on the host, so
+        /// duplicate requests are harmless).</summary>
+        private void InitializeNewHorseStats()
+        {
+            Utility.ForEachLocation(location =>
+            {
+                foreach (FarmAnimal animal in location.animals.Values)
+                {
+                    // Only horses that are "new" (no SpeedIV set yet).
+                    if (!animal.type.Value.Contains("Horse") || animal.modData.ContainsKey(HorseStats.SpeedIVKey))
+                        continue;
+
+                    if (Context.IsMainPlayer)
+                    {
+                        this.Monitor.Log($"Initializing stats for new horse: {animal.Name}", LogLevel.Debug);
+                        animal.GetHorseStats().RandomizeStats(HorseSourceQuality.Starter);
+                        HorseHelper.LogHorseData(animal, this.Monitor);
+                    }
+                    else
+                    {
+                        this.Helper.Multiplayer.SendMessage(
+                            new InitHorseStatsMessage(animal.myID.Value),
+                            MsgInitHorseStats,
+                            modIDs: new[] { this.Helper.ModRegistry.ModID });
+                    }
+                }
+                return true; // Continue to next location
+            });
+        }
+
+        private void OnModMessageReceived(object? sender, ModMessageReceivedEventArgs e)
+        {
+            if (e.FromModID != this.Helper.ModRegistry.ModID || e.Type != MsgInitHorseStats || !Context.IsMainPlayer)
+                return;
+
+            long horseId = e.ReadAs<InitHorseStatsMessage>().HorseId;
+            FarmAnimal? horse = HorseHelper.GetAllBarnHorses().FirstOrDefault(a => a.myID.Value == horseId);
+            if (horse == null || horse.modData.ContainsKey(HorseStats.SpeedIVKey))
+                return;
+
+            this.Monitor.Log($"Initializing stats for farmhand-purchased horse: {horse.Name}", LogLevel.Debug);
+            horse.GetHorseStats().RandomizeStats(HorseSourceQuality.Starter);
+            HorseHelper.LogHorseData(horse, this.Monitor);
         }
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
@@ -545,14 +562,10 @@ namespace HorseTycoon
 
         private readonly PerScreen<Vector2> lastPosition = new(() => Vector2.Zero);
 
+        /// <summary>Only called from <see cref="OnUpdateTicked"/> while the player is mounted (the
+        /// unmounted path clears <see cref="lastPosition"/> and returns before reaching this).</summary>
         private void OnUpdateTickedProcessDistance(object? sender, UpdateTickedEventArgs e)
         {
-            if (!Context.IsWorldReady || Game1.player.mount == null)
-            {
-                lastPosition.Value = Vector2.Zero;
-                return;
-            }
-
             // Calculate distance moved since last tick
             if (lastPosition.Value != Vector2.Zero)
             {

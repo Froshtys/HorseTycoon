@@ -29,8 +29,8 @@ namespace HorseTycoon.Models
         public HorseStats(FarmAnimal animal) => this.Animal = animal;
 
         // --- Speed (Total Max 100) ---
-        public int SpeedIV { get => GetStat(nameof(SpeedIV)); set => SetStat(nameof(SpeedIV), value); }
-        public int SpeedEV { get => GetStat(nameof(SpeedEV)); set => SetStat(nameof(SpeedEV), value); }
+        public int SpeedIV { get => GetStat(SpeedIVKey, isIV: true); set => SetStat(SpeedIVKey, value, isIV: true); }
+        public int SpeedEV { get => GetStat(SpeedEVKey, isIV: false); set => SetStat(SpeedEVKey, value, isIV: false); }
         public int TotalSpeed => Math.Min(STAT_MAX, SpeedIV + SpeedEV);
 
         public int JumpDistance
@@ -52,8 +52,8 @@ namespace HorseTycoon.Models
         public float SpeedBoost { get { return this.TotalSpeed / 40f; } }
 
         // --- Sprint (Total Max 100) ---
-        public int SprintIV { get => GetStat(nameof(SprintIV)); set => SetStat(nameof(SprintIV), value); }
-        public int SprintEV { get => GetStat(nameof(SprintEV)); set => SetStat(nameof(SprintEV), value); }
+        public int SprintIV { get => GetStat(SprintIVKey, isIV: true); set => SetStat(SprintIVKey, value, isIV: true); }
+        public int SprintEV { get => GetStat(SprintEVKey, isIV: false); set => SetStat(SprintEVKey, value, isIV: false); }
         public int TotalSprint => Math.Min(STAT_MAX, SprintIV + SprintEV);
 
         // --- Sprint formula (shared by ModEntry buff, festival player, and NPC racers) ---
@@ -70,8 +70,8 @@ namespace HorseTycoon.Models
             1f + (totalSprint / 10 * 0.1f);
 
         // --- Jump Distance (Total Max 100) ---
-        public int JumpIV { get => GetStat(nameof(JumpIV)); set => SetStat(nameof(JumpIV), value); }
-        public int JumpEV { get => GetStat(nameof(JumpEV)); set => SetStat(nameof(JumpEV), value); }
+        public int JumpIV { get => GetStat(JumpIVKey, isIV: true); set => SetStat(JumpIVKey, value, isIV: true); }
+        public int JumpEV { get => GetStat(JumpEVKey, isIV: false); set => SetStat(JumpEVKey, value, isIV: false); }
         public int TotalJump => Math.Min(STAT_MAX, JumpIV + JumpEV);
 
         // ModData Keys
@@ -84,44 +84,30 @@ namespace HorseTycoon.Models
         public int DailySprints { get => Animal.modData.TryGetValue(DailySprintsKey, out string val) && int.TryParse(val, out int result) ? result : 0; set => Animal.modData[DailySprintsKey] = value.ToString(); }
         public float DailyDistance { get => Animal.modData.TryGetValue(DailyDistanceKey, out string val) && float.TryParse(val, out float result) ? result : 0f; set => Animal.modData[DailyDistanceKey] = value.ToString(); }
 
-        private int GetStat(string propertyName)
+        private int GetStat(string key, bool isIV)
         {
-            string key = MapPropertyToKey(propertyName);
             if (Animal.modData.TryGetValue(key, out string val) && int.TryParse(val, out int result))
             {
                 // IVs are only in 10 increments
-                if (propertyName.EndsWith("IV"))
-                {
+                if (isIV)
                     result = (int)Math.Round(result / 10.0) * 10;
-                }
-                return Math.Clamp(result, 0, 50);
+                return Math.Clamp(result, 0, isIV ? IV_MAX : EV_MAX);
             }
             return 0;
         }
 
-        private void SetStat(string propertyName, int value)
+        private void SetStat(string key, int value, bool isIV)
         {
-            string key = MapPropertyToKey(propertyName);
-
             // IVs are only in 10 increments
-            if (propertyName.EndsWith("IV"))
-            {
+            if (isIV)
                 value = (int)Math.Round(value / 10.0) * 10;
-            }
 
-            Animal.modData[key] = Math.Clamp(value, 0, 50).ToString();
-        }
-
-        private string MapPropertyToKey(string propertyName)
-        {
-            string type = propertyName.EndsWith("IV") ? IV_Suffix : EV_Suffix;
-            string stat = propertyName.Replace("IV", "").Replace("EV", "");
-            return $"{Prefix}{stat}{type}";
+            Animal.modData[key] = Math.Clamp(value, 0, isIV ? IV_MAX : EV_MAX).ToString();
         }
 
         public void RandomizeStats(HorseSourceQuality quality)
         {
-            Random rand = new Random();
+            Random rand = Game1.random;
 
             // Maps out specific tiered multiplier step boundaries (MinMultiplier, MaxMultiplier)
             var range = quality switch

@@ -16,6 +16,7 @@ using StardewValley.GameData;
 using StardewValley.Menus;
 using StardewValley.Objects;
 using StardewValley.Quests;
+using HorseTycoon.Menus;
 using HorseTycoon.Models;
 using HorseTycoon.Patches;
 
@@ -47,6 +48,10 @@ namespace HorseTycoon
             Festivals.Select(f => (f.Season, f.Day, f.Season + f.Day)).ToList();
 
         private const string ReadyCheckName = "Froshty.HorseTycoon.horseRaceStart";
+
+        /// <summary>Event id of the Summer bus-away festival (see FestivalDefinition.SummerBusStop),
+        /// which the bus-ticket patches need to look up outside any active festival.</summary>
+        private const string SummerFestivalEventId = "festival_summer19";
 
         private const float SprintCooldownMs = 10000f;
         private enum SprintPhase { Ready, Sprinting, Exhausted }
@@ -611,7 +616,7 @@ namespace HorseTycoon
         /// </summary>
         private static bool BusStopCheckAction_Prefix(StardewValley.Locations.BusStop __instance, xTile.Dimensions.Location tileLocation, ref bool __result)
         {
-            FestivalDefinition? def = Festivals.FirstOrDefault(f => f.EventId == "festival_summer19");
+            FestivalDefinition? def = Festivals.FirstOrDefault(f => f.EventId == SummerFestivalEventId);
             if (def == null) return true;
             if (Game1.currentSeason != def.Season || Game1.dayOfMonth != def.Day) return true;
             if (__instance.getTileIndexAt(tileLocation, "Buildings", "outdoors") != 1057) return true;
@@ -882,7 +887,7 @@ namespace HorseTycoon
                 return true;
             BoardingForSummerFestival = false;
 
-            FestivalDefinition? def = Festivals.FirstOrDefault(f => f.EventId == "festival_summer19");
+            FestivalDefinition? def = Festivals.FirstOrDefault(f => f.EventId == SummerFestivalEventId);
             if (def == null)
                 return true;
 
@@ -1537,7 +1542,7 @@ namespace HorseTycoon
             horse.faceDirection(Game1.right);
             if (!loc.characters.Contains(horse))
                 loc.characters.Add(horse);
-            SetGrazingAnimation(horse);
+            HorseAnimations.SetGrazing(horse);
         }
 
         private void UpdatePasture()
@@ -1557,41 +1562,7 @@ namespace HorseTycoon
             if (horse == null)
                 return;
             if (horse.Sprite?.CurrentAnimation == null)
-                SetGrazingAnimation(horse);
-        }
-
-        private static void SetIdleAnimation(Horse horse)
-        {
-            if (horse.Sprite == null) return;
-            bool flip = horse.FacingDirection == Game1.left;
-            horse.Sprite.loop = true;
-            horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
-            {
-                new FarmerSprite.AnimationFrame(7, 1000, secondaryArm: false, flip: flip),
-            });
-        }
-
-        private static void SetGrazingAnimation(Horse horse)
-        {
-            if (horse.Sprite == null)
-                return;
-            bool flip = horse.FacingDirection == Game1.left;
-            horse.Sprite.loop = true;
-            horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
-            {
-                new FarmerSprite.AnimationFrame(7, Game1.random.Next(1000, 3200), secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
-            });
+                HorseAnimations.SetGrazing(horse);
         }
 
         // Copies water-tile status from Back2 into waterTiles so that water placed on
@@ -1643,7 +1614,7 @@ namespace HorseTycoon
             horse.EventActor = true;
             if (!loc.characters.Contains(horse))
                 loc.characters.Add(horse);
-            SetGrazingAnimation(horse);
+            HorseAnimations.SetGrazing(horse);
             penHorse.Value = horse;
             this.LockJasOnHorse(loc);
         }
@@ -1674,7 +1645,7 @@ namespace HorseTycoon
                 horse.EventActor = true;
                 if (!loc.characters.Contains(horse))
                     loc.characters.Add(horse);
-                SetGrazingAnimation(horse);
+                HorseAnimations.SetGrazing(horse);
                 penNpcHorses.Add(horse);
             }
         }
@@ -1703,7 +1674,7 @@ namespace HorseTycoon
                 horse.EventActor = true;
                 if (!loc.characters.Contains(horse))
                     loc.characters.Add(horse);
-                SetGrazingAnimation(horse);
+                HorseAnimations.SetGrazing(horse);
                 decorativeHorses.Add(horse);
             }
         }
@@ -1780,14 +1751,6 @@ namespace HorseTycoon
         {
             if (!Context.IsWorldReady)
                 return;
-
-            if (e.Button == SButton.Z)
-            {
-                this.Monitor.Log(
-                    $"Player tile: {Game1.player.Tile} | mounted: {Game1.player.isRidingHorse()} | location: {Game1.currentLocation?.Name}",
-                    LogLevel.Info);
-                return;
-            }
 
             // During the start countdown swallow action/tool presses. Without this, Fence.checkForAction
             // detects the fully-enclosed rider as "trapped" and smashes an adjacent fence to free them.
@@ -2338,8 +2301,10 @@ namespace HorseTycoon
             FinishOrder.Add(farmerId);
             Logger.LogVerbose($"Finish order recorded: position {FinishOrder.Count} = farmer {farmerId}");
 
-            int totalPlayers = Game1.getOnlineFarmers().Count() + Def.NpcRiderNames.Length;
-            if (FinishOrder.Count >= totalPlayers && HostCeremonyCountdown < 0f)
+            // Count the NPC racers actually spawned, not the roster size — with 5+ players some
+            // NPC slots are dropped (MaxRacers cap) and those racers can never record a finish.
+            int totalRacers = Game1.getOnlineFarmers().Count() + npcRacers.Count;
+            if (FinishOrder.Count >= totalRacers && HostCeremonyCountdown < 0f)
                 HostCeremonyCountdown = CeremonyDelayMs;
         }
 
@@ -2923,7 +2888,7 @@ namespace HorseTycoon
                 horse.EventActor = true;
                 if (!loc.characters.Contains(horse))
                     loc.characters.Add(horse);
-                SetIdleAnimation(horse);
+                HorseAnimations.SetIdle(horse);
 
                 // Seat the rider on the horse. drawOnTop ensures the rider renders above the horse sprite.
                 rider.EventActor = true;
@@ -3073,7 +3038,7 @@ namespace HorseTycoon
                     if (!r.MovementDone)
                     {
                         r.MovementDone = true;
-                        SetGrazingAnimation(r.Horse);
+                        HorseAnimations.SetGrazing(r.Horse);
                     }
                     continue;
                 }

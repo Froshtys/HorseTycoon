@@ -441,14 +441,14 @@ namespace HorseTycoon
         /// </summary>
         public static void ApplyProxyAppearance(Horse proxy, FarmAnimal source)
         {
-            proxy.modData[HorseSkinKey] = SkinIdToName(source.skinID.Value ?? "");
+            proxy.modData[HorseSkinKey] = Patches.HorseTexturePatches.SkinNameFromId(source.skinID.Value);
             proxy.modData.Remove(OverlaysKey);
             proxy.modData[NoTackKey] = "true";
         }
 
         private static void SetHorseSkin(Horse horse, string skinId, FarmAnimal? sourceAnimal, IMonitor monitor)
         {
-            horse.modData[HorseSkinKey] = SkinIdToName(skinId);
+            horse.modData[HorseSkinKey] = Patches.HorseTexturePatches.SkinNameFromId(skinId);
 
             // Sync overlay list from the animal if it has one explicitly set.
             if (sourceAnimal != null && sourceAnimal.modData.ContainsKey(OverlaysKey))
@@ -463,17 +463,6 @@ namespace HorseTycoon
 
             monitor.Log($"Set horse skin to '{horse.modData[HorseSkinKey]}' (from skinId '{skinId}')", LogLevel.Debug);
         }
-
-        private static string SkinIdToName(string skinId) => skinId switch
-        {
-            "BlueRoan" => "BlueRoan",
-            "Dapple" => "Dapple",
-            "Bay" => "Bay",
-            "Belgian" => "Belgian",
-            "Shire" => "Shire",
-            "Chestnut" => "Chestnut",
-            _ => "Roan"
-        };
 
         /// <summary>Migrates horses that have AT texture keys but not our own skin key, e.g. from old saves.</summary>
         public static void MigrateAtSkinKeys(IMonitor monitor)

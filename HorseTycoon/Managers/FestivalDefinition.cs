@@ -326,7 +326,7 @@ namespace HorseTycoon
             LocationName = "Custom_HorseTycoon_SummerFestival",
             MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
             BusArrival = true,
-            HeadsUpMessage = "The bus to the Summer Horse Festival is now boarding at the Bus Stop! Ride your horse there to compete.",
+            HeadsUpMessage = "The bus to the Summer Horse Festival is now boarding at the Bus Stop.",
 
             // Layout authored for Summer-HorseRace.tmx (65x85): a festival plaza (rows 30-49)
             // holding the market shops + for-sale paddock and the horse pens, above a large

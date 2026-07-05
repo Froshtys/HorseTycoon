@@ -172,7 +172,7 @@ namespace HorseTycoon
                 return false;
             }
 
-            Random rand = new Random();
+            Random rand = Game1.random;
             HorseStats mareStats = mare.GetHorseStats();
             HorseStats foalStats = foal.GetHorseStats();
             foalStats.SpeedIV = InheritIV(mareStats.SpeedIV, sireSpeed, rand);

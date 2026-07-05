@@ -74,22 +74,9 @@ namespace HorseTycoon
             // Hook Events
             this.Helper.Events.Input.ButtonPressed += OnButtonPressed;
             this.Helper.Events.GameLoop.GameLaunched += OnGameLaunched;
-            // Add the daily reset
-            this.Helper.Events.GameLoop.DayStarted += (s, e) =>
-            {
-                this.DailyJumpCount = 0;
-            };
-
-            this.Helper.Events.GameLoop.DayStarted += (s, e) =>
-            {
-                foreach (var horse in HorseHelper.GetAllBarnHorses())
-                {
-                    var stats = horse.GetHorseStats();
-                    // Only reset if they haven't earned the point yet
-                    // If they did earn it, LastTrainDate handles the block
-                    stats.DailyJumps = 0;
-                }
-            };
+            // Per-screen daily reset. Per-horse DailyJumps counters are reset host-side by
+            // TrainingManager.ResetDailyCounters (see ModEntry.OnDayStarted).
+            this.Helper.Events.GameLoop.DayStarted += (s, e) => this.DailyJumpCount = 0;
 
             JumpPatches.Initialize(this);
             JumpLogic.Initialize(this);

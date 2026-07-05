@@ -341,7 +341,7 @@ namespace HorseTycoon
                 foreach (Horse horse in EnumerateProxies())
                 {
                     if (horse.Sprite?.CurrentAnimation == null)
-                        SetGrazingAnimation(horse);
+                        HorseAnimations.SetGrazing(horse, headBobPairs: 2);
                 }
             }
         }
@@ -401,7 +401,7 @@ namespace HorseTycoon
             horse.faceDirection(facing);
             if (!farm.characters.Contains(horse))
                 farm.characters.Add(horse);
-            SetGrazingAnimation(horse);
+            HorseAnimations.SetGrazing(horse, headBobPairs: 2);
         }
 
         /// <summary>Host-only: remove every pen proxy from the synced farm characters collection.</summary>
@@ -455,23 +455,5 @@ namespace HorseTycoon
             });
         }
 
-        private static void SetGrazingAnimation(Horse horse)
-        {
-            if (horse.Sprite == null) return;
-            bool flip = horse.FacingDirection == Game1.left;
-            horse.Sprite.loop = true;
-            horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
-            {
-                new FarmerSprite.AnimationFrame(7, Game1.random.Next(1000, 3200), secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 400, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(22, 100, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(21, 100, secondaryArm: false, flip: flip),
-            });
-        }
     }
 }
