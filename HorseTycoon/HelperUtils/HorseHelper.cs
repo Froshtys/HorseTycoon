@@ -17,6 +17,8 @@ namespace HorseTycoon
         public const string OverlaysKey = "Froshty.HorseTycoon/Overlays";
         // Unqualified item ID of the currently equipped saddle (e.g. "HorseTycoon.SaddleBrown").
         public const string EquippedSaddleKey = "Froshty.HorseTycoon/EquippedSaddle";
+        // Days remaining until a pregnant mare gives birth. Absent = not pregnant.
+        public const string PregnancyDaysLeftKey = "Froshty.HorseTycoon/PregnancyDaysLeft";
         // Fallback stat keys written directly onto a borrowed festival horse (no FarmAnimal backing).
         public const string BorrowedSpeedKey = "Froshty.HorseTycoon/BorrowedSpeed";
         public const string BorrowedSprintKey = "Froshty.HorseTycoon/BorrowedSprint";
@@ -200,6 +202,19 @@ namespace HorseTycoon
             return stable != null
                 && !stable.IsTractorGarage()
                 && stable.modData.ContainsKey(CurrentFarmHorseIdKey);
+        }
+
+        public static bool IsPregnant(FarmAnimal animal)
+        {
+            return animal != null && animal.modData.ContainsKey(PregnancyDaysLeftKey);
+        }
+
+        public static int GetPregnancyDaysLeft(FarmAnimal animal)
+        {
+            return animal.modData.TryGetValue(PregnancyDaysLeftKey, out string value) &&
+                   int.TryParse(value, out int days)
+                ? days
+                : 0;
         }
 
         public static bool IsHidden(FarmAnimal animal)

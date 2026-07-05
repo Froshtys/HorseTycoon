@@ -104,6 +104,14 @@ public partial class HorseSwapMenu : IClickableMenu
                     return;
                 }
 
+                // Pregnant mares rest in the barn until the foal arrives
+                if (HorseHelper.IsPregnant(animal))
+                {
+                    Game1.playSound("cancel");
+                    Game1.showRedMessage("Pregnant and resting in the barn");
+                    return;
+                }
+
                 // 2. Click Action: If the current active horse is clicked, return it
                 if (this.ActiveFarmHorse != null && animal.myID.Value == this.ActiveFarmHorse.myID.Value)
                 {
@@ -180,6 +188,7 @@ public partial class HorseSwapMenu : IClickableMenu
             // Name and Tag Layout Engine
             string name = animal.Name;
             bool isBabyHorseRow = animal.isBaby();
+            bool isPregnantHorseRow = !isBabyHorseRow && HorseHelper.IsPregnant(animal);
 
             if (isActiveHorseRow)
             {
@@ -202,6 +211,17 @@ public partial class HorseSwapMenu : IClickableMenu
                 Vector2 tagSize = Game1.smallFont.MeasureString(babyTag);
                 Vector2 tagPos = new Vector2(relativeX + 110 + (240 - tagSize.X) / 2, relativeY + 58);
                 Utility.drawTextWithShadow(b, babyTag, Game1.smallFont, tagPos, Color.Gray);
+            }
+            else if (isPregnantHorseRow)
+            {
+                Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
+                Vector2 namePos = new Vector2(relativeX + 110 + (240 - nameSize.X) / 2, relativeY + 16);
+                Utility.drawTextWithShadow(b, name, Game1.dialogueFont, namePos, Game1.textColor);
+
+                string pregnantTag = "(pregnant)";
+                Vector2 tagSize = Game1.smallFont.MeasureString(pregnantTag);
+                Vector2 tagPos = new Vector2(relativeX + 110 + (240 - tagSize.X) / 2, relativeY + 58);
+                Utility.drawTextWithShadow(b, pregnantTag, Game1.smallFont, tagPos, Color.MediumVioletRed);
             }
             else
             {

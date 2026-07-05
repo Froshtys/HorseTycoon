@@ -64,7 +64,8 @@ namespace HorseTycoon
 
         private static bool Update_Prefix(FarmAnimal __instance, GameTime time, GameLocation location)
         {
-            return !HorseHelper.IsHidden(__instance);
+            // Pregnant mares rest in place — skip AI so they don't wander or head outside.
+            return !HorseHelper.IsHidden(__instance) && !HorseHelper.IsPregnant(__instance);
         }
 
         private static bool GetBoundingBox_Prefix(FarmAnimal __instance, ref Rectangle __result)
