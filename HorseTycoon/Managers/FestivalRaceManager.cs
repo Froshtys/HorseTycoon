@@ -1780,13 +1780,15 @@ namespace HorseTycoon
             NPC? lewis = festival?.getActorByName("Lewis");
             NPC? horseSeller = festival?.getActorByName(HorseSellerActorName);
             NPC? studKeeper = festival?.getActorByName(StudShopActorName);
+            NPC? itemKeeper = festival?.getActorByName(ItemShopActorName);
 
             bool nearPam = pam != null && IsPlayerFacing(pam);
             bool nearLewis = lewis != null && IsPlayerFacing(lewis);
             bool nearSeller = horseSeller != null && IsPlayerFacing(horseSeller);
             bool nearStud = studKeeper != null && IsPlayerFacing(studKeeper);
+            bool nearItemShop = itemKeeper != null && IsPlayerFacing(itemKeeper);
 
-            if (!nearPam && !nearLewis && !nearSeller && !nearStud)
+            if (!nearPam && !nearLewis && !nearSeller && !nearStud && !nearItemShop)
                 return;
 
             this.Helper.Input.Suppress(e.Button);
@@ -1800,6 +1802,11 @@ namespace HorseTycoon
             if (nearStud)
             {
                 this.OpenStudShop(studKeeper!);
+                return;
+            }
+            if (nearItemShop)
+            {
+                this.OpenItemShop(itemKeeper!);
                 return;
             }
 

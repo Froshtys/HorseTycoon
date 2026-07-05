@@ -94,17 +94,27 @@ namespace HorseTycoon
         public string RaceMusic = "Cowboy_OVERWORLD";
 
         // --- Festival shop NPCs (opt-in) ---
-        // Tile the Horse Seller stands on during the pasture phase; null = no horse seller.
-        // Talking to them opens the daily sale list (Special horses at HorseMarket.SaleGoldPerIvPoint).
+        // All three stall keepers are SVE characters. The sprite name doubles as the actor's
+        // display name and resolves to "Characters/<Name>": SVE loads those sheets itself, and
+        // without SVE the CP pack loads bundled copies (data/festivalnpcs.json), so the sheets
+        // always exist.
+        // Tile the Horse Trader (Alesia) stands on during the pasture phase; null = no horse
+        // seller. Talking to her opens the daily sale list (Special horses at
+        // HorseMarket.SaleGoldPerIvPoint).
         public Point? HorseSellerTile;
         public int HorseSellerFacing = 2;
-        // Character sprite sheet used for the seller's event actor (placeholder art).
-        public string HorseSellerSprite = "Marnie";
-        // Tile the Stud Shop keeper stands on; null = no stud shop. Talking to them offers stud
+        public string HorseSellerSprite = "Alesia";
+        // Tile the Stud Master (Isaac) stands on; null = no stud shop. Talking to him offers stud
         // services: pay the fee, then pick one of the horses you brought to breed.
         public Point? StudShopTile;
         public int StudShopFacing = 2;
-        public string StudShopSprite = "Gus";
+        public string StudShopSprite = "Isaac";
+        // Tile the item stall keeper (Jadu) stands on; null = no item shop. Talking to them opens
+        // the Data/Shops stock defined in the CP pack (Gold Carrot Seeds + one random IV potion,
+        // see data/ivpotions.json).
+        public Point? ItemShopTile;
+        public int ItemShopFacing = 2;
+        public string ItemShopSprite = "Jadu";
 
         // --- Bus arrival cinematic (opt-in) ---
         // When true, the festival opens with the vanilla-style bus driving in from the right before the
@@ -356,6 +366,8 @@ namespace HorseTycoon
             HorseSellerFacing = 2,
             StudShopTile = new Point(43, 42),
             StudShopFacing = 2,
+            ItemShopTile = new Point(37, 42),
+            ItemShopFacing = 2,
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
             NpcRiderSpeeds = new[] { 5, 10, 15, 20 },

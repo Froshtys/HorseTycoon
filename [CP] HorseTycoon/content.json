@@ -25,6 +25,18 @@
       		"FromFile": "data/sound.json"},
 		{
 		"Action": "Include",
-      		"FromFile": "data/festival.json"}
+      		"FromFile": "data/festival.json"},
+		{
+		"Action": "Include",
+      		"FromFile": "data/goldcarrot.json"},
+		{
+		"Action": "Include",
+      		"FromFile": "data/breedingpen.json"},
+		{
+		"Action": "Include",
+      		"FromFile": "data/ivpotions.json"},
+		{
+		"Action": "Include",
+      		"FromFile": "data/festivalnpcs.json"}
 	]
 }

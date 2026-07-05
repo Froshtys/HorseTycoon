@@ -44,6 +44,17 @@ namespace HorseTycoon
             "Starts or fast-forwards a horse pregnancy for testing.\n\nUsage: horse_pregnancy <horse name> [daysLeft]\n- Omit daysLeft to start a fresh 7-day pregnancy.\n- Example: horse_pregnancy Thunder 1 (gives birth tomorrow)",
             this.HandlePregnancyCommand);
 
+            helper.ConsoleCommands.Add("give_gold_carrot",
+            "Adds Gold Carrots to your inventory for testing the breeding pen.\n\nUsage: give_gold_carrot [count]",
+            (cmd, args) =>
+            {
+                if (!Context.IsWorldReady) { this.Monitor.Log("Load a save first.", LogLevel.Warn); return; }
+                int count = args.Length > 0 && int.TryParse(args[0], out int c) ? c : 5;
+                Item carrot = ItemRegistry.Create($"(O){BreedingPenManager.GoldCarrotItemId}", count);
+                Game1.player.addItemByMenuIfNecessary(carrot);
+                this.Monitor.Log($"Gave {count} Gold Carrot(s).", LogLevel.Info);
+            });
+
             var harmony = new Harmony(this.ModManifest.UniqueID);
             FarmAnimalPatches.Apply(harmony);
             PregnancyPatches.Apply(harmony);
@@ -70,6 +81,9 @@ namespace HorseTycoon
 
             // Festival horse market (Horse Seller + Stud Shop NPCs)
             HorseMarket.Initialize(helper, this.Monitor);
+
+            // Robin-built horse breeding pen
+            BreedingPenManager.Initialize(helper, this.Monitor);
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
@@ -194,6 +208,7 @@ namespace HorseTycoon
                 ConvertUnassignedStableHorses();
                 TrainingManager.ResetDailyCounters();
                 BreedingManager.OnDayStarted();
+                BreedingPenManager.OnDayStarted();
             }
         }
 
@@ -233,6 +248,18 @@ namespace HorseTycoon
 
             processHorseSprint(sender, e);
 
+            // Breeding pen: right-click assigns horses, or feeds a held Gold Carrot.
+            if (e.Button.IsActionButton())
+            {
+                Building? penBuilding = Game1.currentLocation.getBuildingAt(e.Cursor.GrabTile);
+                if (BreedingPenManager.IsBreedingPen(penBuilding))
+                {
+                    BreedingPenManager.HandleActionClick(penBuilding!, Game1.player);
+                    this.Helper.Input.Suppress(e.Button);
+                    return;
+                }
+            }
+
             // Only trigger on Left-Click
             if (!e.Button.IsUseToolButton()) return;
 
@@ -243,7 +270,7 @@ namespace HorseTycoon
             Vector2 clickedTile = e.Cursor.Tile;
             Rectangle mouseRect = new Rectangle((int)e.Cursor.AbsolutePixels.X, (int)e.Cursor.AbsolutePixels.Y, 64, 64);
             Horse? clickedHorse = Game1.currentLocation.characters.OfType<Horse>()
-                .FirstOrDefault(h => h.GetBoundingBox().Intersects(mouseRect));
+                .FirstOrDefault(h => !h.modData.ContainsKey(HorseHelper.NoTackKey) && h.GetBoundingBox().Intersects(mouseRect));
 
             if (clickedHorse != null)
             {

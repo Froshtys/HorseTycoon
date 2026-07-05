@@ -1,0 +1,49 @@
+{
+	/*
+	  Horse Breeding Pen — a 6x4 fenced pen built by Robin (3 days), no interior.
+	  Right-click assigns a mare + stallion (handled in C#); feeding both a Gold Carrot
+	  starts a 3-day timer after which the mare becomes pregnant.
+
+	  The BreedingPen.png here is a placeholder — swap in final art at the same size
+	  (96x64 base; make the PNG taller than 64px if the pen should draw above its footprint,
+	  and bump SourceRect.Height to match).
+	*/
+	"Changes": [
+		{
+			"LogName": "Breeding Pen texture",
+			"Action": "Load",
+			"Target": "Froshty.HorseTycoon/BreedingPen",
+			"FromFile": "assets/BreedingPen.png"
+		},
+		{
+			"LogName": "Breeding Pen building",
+			"Action": "EditData",
+			"Target": "Data/Buildings",
+			"Entries": {
+				"Froshty.HorseTycoon_BreedingPen": {
+					"Name": "Horse Breeding Pen",
+					"Description": "A fenced pen where a mare and stallion can be paired for breeding. Feed each one a Gold Carrot to prepare them.",
+					"Texture": "Froshty.HorseTycoon/BreedingPen",
+					"Size": { "X": 6, "Y": 4 },
+					"SourceRect": { "X": 0, "Y": 0, "Width": 96, "Height": 64 },
+					"Builder": "Robin",
+					"BuildDays": 3,
+					"BuildCost": 5000,
+					"BuildMaterials": [
+						{ "Id": "Wood", "ItemId": "(O)388", "Amount": 200 },
+						{ "Id": "Stone", "ItemId": "(O)390", "Amount": 50 },
+						{ "Id": "Hardwood", "ItemId": "(O)709", "Amount": 10 }
+					],
+					"BuildCondition": null,
+					"IndoorMap": null,
+					"IndoorMapType": null,
+					"NonInstancedIndoorLocation": null,
+					"MaxOccupants": 0,
+					"CollisionMap": "XXXXXX\nXOOOOX\nXOOOOX\nXXXXXX",
+					"DrawShadow": true,
+					"FadeWhenBehind": true
+				}
+			}
+		}
+	]
+}

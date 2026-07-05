@@ -1,0 +1,137 @@
+{
+	/*
+	  IV potions + Isaac's festival shop.
+
+	  Three potions, one per IV stat (Speed / Sprint / Jump). Giving one to a horse raises
+	  that stat's IV by one grade (+10, handled in C# — see IVPotionManager). They are sold
+	  only at Isaac's stall at the Summer Horse Festival: the shop stocks the Gold Carrot
+	  Seeds (2 per player) plus exactly ONE of the three potions, picked at random per
+	  festival day (SYNCED_CHOICE — same pick for every player) with quantity 1 per player.
+	  The shop menu is opened from C# via Utility.TryOpenShopMenu (FestivalRaceManager.Shops).
+	*/
+	"Changes": [
+		{
+			"LogName": "IV potion textures",
+			"Action": "Load",
+			"Target": "{{ModId}}/IVPotionSpeed, {{ModId}}/IVPotionSprint, {{ModId}}/IVPotionJump",
+			"FromFile": "assets/potions/{{TargetWithoutPath}}.png"
+		},
+		{
+			"LogName": "IV potion objects",
+			"Action": "EditData",
+			"Target": "Data/Objects",
+			"Entries": {
+				"HorseTycoon.IVPotionSpeed": {
+					"Name": "Speed Potion",
+					"DisplayName": "{{i18n:IVPotionSpeed_Name}}",
+					"Description": "{{i18n:IVPotionSpeed_Description}}",
+					"Type": "Basic",
+					"Category": -999,
+					"Price": 2500,
+					"Texture": "{{ModId}}/IVPotionSpeed",
+					"SpriteIndex": 0,
+					"Edibility": -300,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true
+				},
+				"HorseTycoon.IVPotionSprint": {
+					"Name": "Sprint Potion",
+					"DisplayName": "{{i18n:IVPotionSprint_Name}}",
+					"Description": "{{i18n:IVPotionSprint_Description}}",
+					"Type": "Basic",
+					"Category": -999,
+					"Price": 2500,
+					"Texture": "{{ModId}}/IVPotionSprint",
+					"SpriteIndex": 0,
+					"Edibility": -300,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true
+				},
+				"HorseTycoon.IVPotionJump": {
+					"Name": "Jump Potion",
+					"DisplayName": "{{i18n:IVPotionJump_Name}}",
+					"Description": "{{i18n:IVPotionJump_Description}}",
+					"Type": "Basic",
+					"Category": -999,
+					"Price": 2500,
+					"Texture": "{{ModId}}/IVPotionJump",
+					"SpriteIndex": 0,
+					"Edibility": -300,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true
+				}
+			}
+		},
+		{
+			"LogName": "Isaac festival shop",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"Entries": {
+				"{{ModId}}_IsaacFestivalShop": {
+					/* Jadu runs the stall: vanilla-style portrait + greeting in the shop menu.
+					   "AnyOrNone" matches the ownerName-less TryOpenShopMenu call in
+					   FestivalRaceManager.Shops; the portrait always exists (SVE or our fallback). */
+					"Owners": [
+						{
+							"Id": "Jadu",
+							"Name": "AnyOrNone",
+							"Portrait": "Portraits/Jadu",
+							"Dialogues": [
+								{
+									"Id": "Default",
+									"RandomDialogue": [
+										"Welcome! Rare seeds and horse tonics — gathered from all over the valley.",
+										"Looking for something special for your horses? You've come to the right stall.",
+										"The tonics are one-of-a-kind — once they're gone, they're gone 'til next festival!"
+									]
+								}
+							]
+						}
+					],
+					"Items": [
+						{
+							"Id": "GoldCarrotSeed",
+							"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
+							"Price": 1000,
+							"AvailableStock": 2,
+							"AvailableStockLimit": "Player"
+						},
+						/* Exactly one of the three potions appears per festival day: SYNCED_CHOICE
+						   rolls one synced 0-2 value per day for the shared key, so the conditions
+						   below are mutually exclusive and identical for every player. */
+						{
+							"Id": "IVPotionSpeed",
+							"ItemId": "(O)HorseTycoon.IVPotionSpeed",
+							"Price": 5000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player",
+							"Condition": "SYNCED_CHOICE day {{ModId}}_IsaacPotion 0 2 0"
+						},
+						{
+							"Id": "IVPotionSprint",
+							"ItemId": "(O)HorseTycoon.IVPotionSprint",
+							"Price": 5000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player",
+							"Condition": "SYNCED_CHOICE day {{ModId}}_IsaacPotion 0 2 1"
+						},
+						{
+							"Id": "IVPotionJump",
+							"ItemId": "(O)HorseTycoon.IVPotionJump",
+							"Price": 5000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player",
+							"Condition": "SYNCED_CHOICE day {{ModId}}_IsaacPotion 0 2 2"
+						}
+					]
+				}
+			}
+		}
+	]
+}

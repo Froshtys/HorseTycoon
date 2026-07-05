@@ -39,12 +39,37 @@ public class HorseShopMenu : IClickableMenu
     private string hoverText = "";
     private int InputLockoutTimer = 150;
 
-    public HorseShopMenu(string title, List<HorseOffer> offers, Action<HorseOffer> onSelected)
+    // Vanilla-ShopMenu-style keeper portrait to the left of the menu, with a small
+    // speech box underneath. Null when the caller doesn't provide one (or the
+    // portrait sheet fails to load).
+    private readonly Texture2D? Portrait;
+    private readonly string? PortraitDialogue;
+
+    /// <param name="portraitName">Character whose "Portraits/&lt;name&gt;" sheet is shown beside the
+    /// menu (vanilla shop style); null = no portrait.</param>
+    /// <param name="portraitDialogue">Short keeper greeting shown in a speech box under the
+    /// portrait, describing what the shop is about.</param>
+    public HorseShopMenu(string title, List<HorseOffer> offers, Action<HorseOffer> onSelected,
+        string? portraitName = null, string? portraitDialogue = null)
         : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 770, 580, showUpperRightCloseButton: true)
     {
         this.Title = title;
         this.Offers = offers.Where(o => !o.Purchased).ToList();
         this.OnSelected = onSelected;
+
+        if (portraitName != null)
+        {
+            try
+            {
+                this.Portrait = Game1.content.Load<Texture2D>("Portraits/" + portraitName);
+            }
+            catch
+            {
+                Logger.LogVerbose($"HorseShopMenu: no portrait sheet found for '{portraitName}'.");
+            }
+        }
+        if (portraitDialogue != null)
+            this.PortraitDialogue = Game1.parseText(portraitDialogue, Game1.dialogueFont, 304);
 
         int rightScrollEdgeX = this.xPositionOnScreen + this.width + 16;
         this.upArrow = new ClickableTextureComponent(new Rectangle(rightScrollEdgeX, this.yPositionOnScreen + TopPadding, 44, 48), Game1.mouseCursors, new Rectangle(421, 459, 11, 12), 4f);
@@ -291,6 +316,30 @@ public class HorseShopMenu : IClickableMenu
             new Vector2(this.xPositionOnScreen + 40, this.yPositionOnScreen + this.height + 12), Color.White);
 
         base.draw(b);
+
+        // Keeper portrait + speech box, replicating vanilla ShopMenu.draw (same offsets,
+        // frame sprite, and options.showMerchantPortraits gate).
+        int portraitX = this.xPositionOnScreen - 320;
+        if (portraitX > 0 && Game1.options.showMerchantPortraits)
+        {
+            if (this.Portrait != null)
+            {
+                Utility.drawWithShadow(b, Game1.mouseCursors, new Vector2(portraitX, this.yPositionOnScreen),
+                    new Rectangle(603, 414, 74, 74), Color.White, 0f, Vector2.Zero, 4f, flipped: false, 0.91f);
+                b.Draw(this.Portrait, new Vector2(portraitX + 20, this.yPositionOnScreen + 20),
+                    new Rectangle(0, 0, 64, 64), Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.92f);
+            }
+            if (this.PortraitDialogue != null)
+            {
+                int dialogueX = this.xPositionOnScreen - (int)Game1.dialogueFont.MeasureString(this.PortraitDialogue).X - 64;
+                if (dialogueX > 0)
+                {
+                    IClickableMenu.drawHoverText(b, this.PortraitDialogue, Game1.dialogueFont, 0, 0, -1, null, -1, null, null, 0, null, -1,
+                        dialogueX, this.yPositionOnScreen + ((this.Portrait != null) ? 312 : 0), 1f, null, null,
+                        Game1.menuTexture, new Rectangle(0, 256, 60, 60), null, null);
+                }
+            }
+        }
 
         if (!string.IsNullOrEmpty(this.hoverText))
         {

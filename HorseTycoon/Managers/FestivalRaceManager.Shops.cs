@@ -15,14 +15,21 @@ namespace HorseTycoon
     {
         private const string HorseSellerActorName = "HorseTycoonHorseSeller";
         private const string StudShopActorName = "HorseTycoonStudShop";
+        private const string ItemShopActorName = "HorseTycoonItemShop";
+        // Data/Shops key defined in the CP pack (data/ivpotions.json): Gold Carrot Seeds x2 per
+        // player + exactly one of the three IV potions (synced daily pick), quantity 1 per player.
+        private const string ItemShopId = "CP.HorseTycoon_IsaacFestivalShop";
 
         /// <summary>Spawns the shop keeper event actors for the pasture phase. They're added to
-        /// <see cref="spawnedSpectators"/> so the shops close (despawn) when the race starts.</summary>
+        /// <see cref="spawnedSpectators"/> so the shops close (despawn) when the race starts.
+        /// The sprite name is also the keeper's display name (Alesia/Isaac/Jadu); the character
+        /// sheets always exist because the CP pack bundles them when SVE is absent.</summary>
         private void SpawnShopNpcs()
         {
             FestivalDefinition def = Def;
-            this.SpawnShopNpc(def.HorseSellerTile, def.HorseSellerFacing, def.HorseSellerSprite, HorseSellerActorName, "Horse Trader");
-            this.SpawnShopNpc(def.StudShopTile, def.StudShopFacing, def.StudShopSprite, StudShopActorName, "Stud Master");
+            this.SpawnShopNpc(def.HorseSellerTile, def.HorseSellerFacing, def.HorseSellerSprite, HorseSellerActorName, def.HorseSellerSprite);
+            this.SpawnShopNpc(def.StudShopTile, def.StudShopFacing, def.StudShopSprite, StudShopActorName, def.StudShopSprite);
+            this.SpawnShopNpc(def.ItemShopTile, def.ItemShopFacing, def.ItemShopSprite, ItemShopActorName, def.ItemShopSprite);
         }
 
         private void SpawnShopNpc(Point? tile, int facing, string spriteName, string actorName, string displayName)
@@ -73,7 +80,8 @@ namespace HorseTycoon
                 Game1.drawObjectDialogue("Sold out! Come back at the next festival.");
                 return;
             }
-            Game1.activeClickableMenu = new HorseShopMenu("Horses for sale", offers, this.ConfirmHorsePurchase);
+            Game1.activeClickableMenu = new HorseShopMenu("Horses for sale", offers, this.ConfirmHorsePurchase,
+                Def.HorseSellerSprite, "Every one of these beauties is festival-grade. Buy one and I'll have it delivered straight to your farm!");
         }
 
         private void ConfirmHorsePurchase(HorseOffer offer)
@@ -123,6 +131,32 @@ namespace HorseTycoon
         }
 
         // ====================================================================================
+        // Item Shop (Isaac)
+        // ====================================================================================
+
+        private void OpenItemShop(NPC keeper)
+        {
+            Response[] options =
+            {
+                new("Browse", "Let's see what you've got"),
+                new("No", "Not right now"),
+            };
+            Game1.currentLocation.createQuestionDialogue(
+                "Hey there. I picked up some rare supplies on the road — seeds, tonics... things a horse trainer might want. Interested?",
+                options,
+                (_, answer) =>
+                {
+                    if (answer != "Browse")
+                        return;
+                    Game1.afterDialogues = () =>
+                    {
+                        if (!Utility.TryOpenShopMenu(ItemShopId, ownerName: null))
+                            Logger.LogVerbose($"Failed to open festival item shop '{ItemShopId}' — missing Data/Shops entry?");
+                    };
+                }, keeper);
+        }
+
+        // ====================================================================================
         // Stud Shop
         // ====================================================================================
 
@@ -152,7 +186,8 @@ namespace HorseTycoon
 
         private void ShowStudMenu()
         {
-            Game1.activeClickableMenu = new HorseShopMenu("Stud services", HorseMarket.GetStudOffers(), this.ConfirmStudService);
+            Game1.activeClickableMenu = new HorseShopMenu("Stud services", HorseMarket.GetStudOffers(), this.ConfirmStudService,
+                Def.StudShopSprite, "My stallions' fees follow their pedigree. Pick one and he'll meet a mare you brought.");
         }
 
         private void ConfirmStudService(HorseOffer stud)
