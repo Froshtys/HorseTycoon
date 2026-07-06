@@ -56,8 +56,23 @@ namespace HorseTycoon
         private const int TrailerTileY = 6;
         private const int TrailerTilesHigh = 4;
 
+        /// <summary>Trailer-local pixel position of the first transparent window on every tier sprite,
+        /// and how far the second window sits in from the sprite's right edge. Windows are
+        /// <see cref="WindowWidth"/> x <see cref="WindowHeight"/> holes the loaded horses' heads show through.</summary>
+        private const int Window1X = 26;
+        private const int Window2FromRight = 45;
+        private const int WindowY = 29;
+        private const int WindowWidth = 13;
+        private const int WindowHeight = 9;
+
+        /// <summary>The slice of the horse sheet's right-facing stand frame (frame 7, at 0,32) that lands
+        /// in a window when the head is lined up with it: the head spans rows 5-13, x 17-29 of the frame.
+        /// Drawn with <see cref="SpriteEffects.FlipHorizontally"/> so the horse faces left, toward the bus.</summary>
+        private static readonly Rectangle HorseHeadSource = new(17, 32 + 5, WindowWidth, WindowHeight);
+
         private static IModHelper helper = null!;
         private static readonly Dictionary<int, Texture2D?> trailerTextures = new();
+        private static readonly Dictionary<long, Texture2D> loadedHorseTextures = new();
 
         /// <summary>Current trailer level: 0 = none, 1 = Horse Trailer, 2 = Big Trailer, 3 = Deluxe Trailer.
         /// Saves from before tiered trailers (legacy <see cref="BuiltKey"/>) count as level 1.</summary>
@@ -129,6 +144,8 @@ namespace HorseTycoon
         /// <summary>Host-side construction countdown, mirroring how house upgrades tick down day by day.</summary>
         private static void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
+            loadedHorseTextures.Clear();
+
             if (!Context.IsMainPlayer) return;
 
             Farm farm = Game1.getFarm();
@@ -258,6 +275,32 @@ namespace HorseTycoon
             Logger.LogVerbose($"{tier.Name} purchased for {tier.Price}g + {tier.BarCount} {tier.BarName}s; {BuildDays} days of construction.");
         }
 
+        /// <summary>
+        /// Called from the <c>BusStop.busLeftToDesert</c> prefix when the drive-off animation thinks the
+        /// bus has left the screen. Vanilla fires the departure warp as soon as the bus body clears the
+        /// west edge (<c>busPosition.X + 512 &lt; 10</c>), but the trailer hitched 512px behind it is
+        /// still mid-screen at that point — so this un-sets the private <c>leaving</c> flag, which makes
+        /// <c>UpdateWhenCurrentLocation</c> keep the bus accelerating and re-fire <c>busLeftToDesert</c>
+        /// each tick until the trailer's right edge has cleared the screen too. Returns true while the
+        /// departure should be held back.
+        /// </summary>
+        public static bool TryDelayDepartureForTrailer(BusStop busStop)
+        {
+            if (!IsBuilt || IsUnderConstruction)
+                return false;
+
+            Texture2D? texture = TrailerTextureFor(Level);
+            if (texture == null)
+                return false;
+
+            float trailerRightEdge = busStop.busPosition.X + TrailerDrawOffset.X + texture.Bounds.Width * 4f;
+            if (trailerRightEdge < 10f)
+                return false;
+
+            helper.Reflection.GetField<bool>(busStop, "leaving").SetValue(false);
+            return true;
+        }
+
         // ======================== Drawing ========================
 
         /// <summary>The trailer sprite for the given level, lazily loaded from the tier's asset (all
@@ -293,20 +336,82 @@ namespace HorseTycoon
         {
             if (IsBuilt && !IsUnderConstruction)
             {
-                Texture2D? texture = TrailerTextureFor(Level);
-                if (texture == null) return;
-
-                spriteBatch.Draw(
-                    texture,
-                    Game1.GlobalToLocal(Game1.viewport, __instance.busPosition + TrailerDrawOffset),
-                    texture.Bounds,
-                    Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None,
-                    (__instance.busPosition.Y + 192f) / 10000f);
+                DrawTrailerBehindBus(spriteBatch, __instance.busPosition, (__instance.busPosition.Y + 192f) / 10000f);
             }
             else if (IsUnderConstruction)
             {
                 DrawConstructionSite(spriteBatch);
             }
+        }
+
+        /// <summary>
+        /// Draws the current trailer (with any loaded horses' heads in its windows) hitched behind a bus
+        /// whose body's top-left is at <paramref name="busGlobalPosition"/>. Used by the Bus Stop draw
+        /// patch and by the festival arrival cinematic's mod-drawn bus, so the trailer that drove off
+        /// with the player also arrives with them. No-op without a finished trailer.
+        /// </summary>
+        public static void DrawTrailerBehindBus(SpriteBatch spriteBatch, Vector2 busGlobalPosition, float layerDepth)
+        {
+            if (!IsBuilt || IsUnderConstruction)
+                return;
+            Texture2D? texture = TrailerTextureFor(Level);
+            if (texture == null)
+                return;
+
+            Vector2 trailerGlobalPosition = busGlobalPosition + TrailerDrawOffset;
+            spriteBatch.Draw(
+                texture,
+                Game1.GlobalToLocal(Game1.viewport, trailerGlobalPosition),
+                texture.Bounds,
+                Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None,
+                layerDepth);
+
+            DrawLoadedHorseHeads(spriteBatch, trailerGlobalPosition, texture, layerDepth);
+        }
+
+        /// <summary>
+        /// Draws the heads of the horses loaded onto the bus (any player's selection, local player's
+        /// first) behind the trailer's two transparent windows, so they peek out while the bus waits
+        /// and during the drive-off/arrival animations. Each window shows one horse; extra horses
+        /// beyond the two windows simply aren't visible. Only the window-sized head slice is drawn,
+        /// so nothing can leak outside the trailer art.
+        /// </summary>
+        private static void DrawLoadedHorseHeads(SpriteBatch spriteBatch, Vector2 trailerGlobalPosition, Texture2D trailerTexture, float trailerDepth)
+        {
+            List<long> loadedIds = FestivalRaceManager.GetBusTrailerHorseIds();
+            if (loadedIds.Count == 0) return;
+
+            int[] windowX = { Window1X, trailerTexture.Bounds.Width - Window2FromRight };
+            int window = 0;
+            foreach (long animalId in loadedIds)
+            {
+                if (window >= windowX.Length) break;
+                Texture2D? horseTexture = HorseTextureFor(animalId);
+                if (horseTexture == null) continue;
+
+                spriteBatch.Draw(
+                    horseTexture,
+                    Game1.GlobalToLocal(Game1.viewport,
+                        trailerGlobalPosition + new Vector2(windowX[window] * 4f, WindowY * 4f)),
+                    HorseHeadSource,
+                    Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.FlipHorizontally,
+                    trailerDepth - 1E-05f);
+                window++;
+            }
+        }
+
+        /// <summary>The sprite sheet for a loaded horse, resolved from its barn FarmAnimal and cached
+        /// for the day (the cache is cleared at day start alongside the bus claims).</summary>
+        private static Texture2D? HorseTextureFor(long animalId)
+        {
+            if (loadedHorseTextures.TryGetValue(animalId, out Texture2D? texture))
+                return texture;
+
+            FarmAnimal? animal = HorseHelper.GetAllBarnHorses().FirstOrDefault(a => a.myID.Value == animalId);
+            texture = animal?.Sprite?.Texture;
+            if (texture != null)
+                loadedHorseTextures[animalId] = texture;
+            return texture;
         }
 
         /// <summary>

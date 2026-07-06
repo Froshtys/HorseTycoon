@@ -773,6 +773,22 @@ namespace HorseTycoon
                 });
         }
 
+        /// <summary>Animal IDs of every horse currently loaded onto the festival bus (any player's),
+        /// used by <see cref="BusTrailerManager"/> to show them through the trailer windows. The local
+        /// player's horses come first (in the order they were picked) so their own horses fill the
+        /// visible window slots.</summary>
+        public static List<long> GetBusTrailerHorseIds()
+        {
+            if (BusHorseClaims.Count == 0)
+                return new List<long>();
+            long localId = Game1.player.UniqueMultiplayerID;
+            return BusHorseClaims
+                .OrderByDescending(kv => kv.Value == localId)
+                .ThenBy(kv => SummerBusHorseIds.IndexOf(kv.Key))
+                .Select(kv => kv.Key)
+                .ToList();
+        }
+
         /// <summary>True when another player has already loaded this horse onto their bus today.</summary>
         private static bool IsClaimedByOtherPlayer(long animalId) =>
             BusHorseClaims.TryGetValue(animalId, out long playerId)
@@ -880,9 +896,14 @@ namespace HorseTycoon
         /// Fires before the private <c>BusStop.busLeftToDesert</c>. When the player boarded for the Summer
         /// festival, redirect the destination from the Desert to the festival grounds (which triggers the
         /// festival event), keeping the vanilla drive-off animation. Returns false to skip the Desert warp.
+        /// Also holds the departure (festival or Desert) while the trailer is still driving off screen —
+        /// vanilla warps as soon as the bus body clears the edge, which would cut with the trailer mid-screen.
         /// </summary>
-        private static bool BusLeftToDesert_Prefix()
+        private static bool BusLeftToDesert_Prefix(StardewValley.Locations.BusStop __instance)
         {
+            if (BusTrailerManager.TryDelayDepartureForTrailer(__instance))
+                return false;
+
             if (!BoardingForSummerFestival)
                 return true;
             BoardingForSummerFestival = false;
@@ -1186,6 +1207,7 @@ namespace HorseTycoon
             Vector2 screen = Game1.GlobalToLocal(Game1.viewport, busArrivalPos.Value);
             e.SpriteBatch.Draw(Game1.mouseCursors, screen, BusBodySource, Color.White, 0f, Vector2.Zero, 4f,
                 SpriteEffects.None, 1f);
+            BusTrailerManager.DrawTrailerBehindBus(e.SpriteBatch, busArrivalPos.Value, 1f);
             busDoorSprite.Value?.draw(e.SpriteBatch);
         }
 

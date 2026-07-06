@@ -59,6 +59,12 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.pet)),
                 prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Pet_Prefix))
             );
+
+            // --- Horse sell price scales with IV/EV stats ---
+            harmony.Patch(
+                original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.getSellPrice)),
+                postfix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(GetSellPrice_Postfix))
+            );
         }
 
         // --- Patch Implementations ---
@@ -192,6 +198,17 @@ namespace HorseTycoon
             }
 
             return true;
+        }
+
+        /// <summary>Adds 500g per 10 combined IV/EV points across all stats to a horse's sell price.</summary>
+        public static void GetSellPrice_Postfix(FarmAnimal __instance, ref int __result)
+        {
+            if (__instance.type.Value == null || !__instance.type.Value.Contains("Horse"))
+                return;
+
+            HorseStats stats = new(__instance);
+            int totalPoints = stats.TotalSpeed + stats.TotalSprint + stats.TotalJump;
+            __result += totalPoints / 10 * 500;
         }
 
         /// <summary>Clicking a barn horse while holding an IV potion gives it the potion instead of petting.</summary>
