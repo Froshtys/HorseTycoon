@@ -295,6 +295,8 @@ namespace HorseTycoon
             if (clickedHorse != null)
             {
                 this.OpenStatMenuForHorse(clickedHorse);
+                // Suppress so the same click doesn't fall through to the new menu's buttons
+                this.Helper.Input.Suppress(e.Button);
                 return;
             }
 
@@ -309,6 +311,7 @@ namespace HorseTycoon
                 {
                     Game1.player.mount.dismount();
                 }
+                this.Helper.Input.Suppress(e.Button);
                 return;
             }
         }
