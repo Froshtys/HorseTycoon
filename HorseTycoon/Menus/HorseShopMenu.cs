@@ -42,17 +42,7 @@ namespace HorseTycoon.Menus
             this.Offers = offers.Where(o => !o.Purchased).ToList();
             this.OnSelected = onSelected;
 
-            if (portraitName != null)
-            {
-                try
-                {
-                    this.Portrait = Game1.content.Load<Texture2D>("Portraits/" + portraitName);
-                }
-                catch
-                {
-                    Logger.LogVerbose($"HorseShopMenu: no portrait sheet found for '{portraitName}'.");
-                }
-            }
+            this.Portrait = LoadPortrait(portraitName);
             if (portraitDialogue != null)
                 this.PortraitDialogue = Game1.parseText(portraitDialogue, Game1.dialogueFont, 304);
         }
@@ -108,49 +98,13 @@ namespace HorseTycoon.Menus
             this.DrawStatSegments(b, rowX, rowY, offer.SpeedIV, 0, offer.SprintIV, 0, offer.JumpIV, 0);
 
             // Gold price (Pierre's-shop style: coin icon + amount, right-aligned).
-            string priceText = Utility.getNumberWithCommas(offer.Price) + "g";
-            Vector2 priceSize = Game1.smallFont.MeasureString(priceText);
-            int coinSize = 25; // 9px coin sprite at ~2.8x
-            int priceRightEdge = this.PanelX + this.PanelWidth - 20;
-            int priceY = rowY + PanelHeight - (int)priceSize.Y - 10;
-            Color priceColor = canAfford ? new Color(90, 60, 10) : Color.Firebrick;
-            b.Draw(Game1.mouseCursors,
-                new Vector2(priceRightEdge - priceSize.X - coinSize - 6, priceY + 2),
-                new Rectangle(193, 373, 9, 10), Color.White, 0f, Vector2.Zero, 2.8f, SpriteEffects.None, 1f);
-            Utility.drawTextWithShadow(b, priceText, Game1.smallFont,
-                new Vector2(priceRightEdge - priceSize.X, priceY), priceColor);
+            this.DrawRowPrice(b, rowY, offer.Price, canAfford ? new Color(90, 60, 10) : Color.Firebrick);
         }
 
         protected override void DrawExtras(SpriteBatch b)
         {
-            // Player's current gold in the lower-left, so they can compare against prices.
-            string moneyText = $"You have: {Utility.getNumberWithCommas(Game1.player.Money)}g";
-            Utility.drawTextWithShadow(b, moneyText, Game1.smallFont,
-                new Vector2(this.xPositionOnScreen + 40, this.yPositionOnScreen + this.height + 12), Color.White);
-
-            // Keeper portrait + speech box, replicating vanilla ShopMenu.draw (same offsets,
-            // frame sprite, and options.showMerchantPortraits gate).
-            int portraitX = this.xPositionOnScreen - 320;
-            if (portraitX > 0 && Game1.options.showMerchantPortraits)
-            {
-                if (this.Portrait != null)
-                {
-                    Utility.drawWithShadow(b, Game1.mouseCursors, new Vector2(portraitX, this.yPositionOnScreen),
-                        new Rectangle(603, 414, 74, 74), Color.White, 0f, Vector2.Zero, 4f, flipped: false, 0.91f);
-                    b.Draw(this.Portrait, new Vector2(portraitX + 20, this.yPositionOnScreen + 20),
-                        new Rectangle(0, 0, 64, 64), Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.92f);
-                }
-                if (this.PortraitDialogue != null)
-                {
-                    int dialogueX = this.xPositionOnScreen - (int)Game1.dialogueFont.MeasureString(this.PortraitDialogue).X - 64;
-                    if (dialogueX > 0)
-                    {
-                        IClickableMenu.drawHoverText(b, this.PortraitDialogue, Game1.dialogueFont, 0, 0, -1, null, -1, null, null, 0, null, -1,
-                            dialogueX, this.yPositionOnScreen + ((this.Portrait != null) ? 312 : 0), 1f, null, null,
-                            Game1.menuTexture, new Rectangle(0, 256, 60, 60), null, null);
-                    }
-                }
-            }
+            this.DrawPlayerMoney(b);
+            this.DrawKeeperPortrait(b, this.Portrait, this.PortraitDialogue);
         }
     }
 }

@@ -170,6 +170,18 @@ namespace HorseTycoon
         }
 
         /// <summary>
+        /// Fee the Stud Shop pays for one of the player's own stallions: 200g per 10 IV points
+        /// plus 100g per 10 EV points, summed across Speed/Sprint/Jump.
+        /// </summary>
+        public static int GetStudOfferFee(FarmAnimal stud)
+        {
+            var stats = stud.GetHorseStats();
+            int ivSum = stats.SpeedIV + stats.SprintIV + stats.JumpIV;
+            int evSum = stats.SpeedEV + stats.SprintEV + stats.JumpEV;
+            return ivSum / 10 * 200 + evSum / 10 * 100;
+        }
+
+        /// <summary>
         /// Completes a stud purchase for the local player: deducts gold and records the pregnancy on
         /// the mare (directly on the host, via mod message from a farmhand). The stud's IVs are stored
         /// on the mare so the foal inherits from both parents (see BreedingManager).

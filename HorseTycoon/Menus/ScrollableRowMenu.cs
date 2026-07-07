@@ -288,6 +288,75 @@ namespace HorseTycoon.Menus
             Utility.drawTextWithShadow(b, tag, Game1.smallFont, new Vector2(rowX + 110 + (240 - tagSize.X) / 2, rowY + 58), tagColor);
         }
 
+        /// <summary>Load a "Portraits/&lt;name&gt;" sheet for <see cref="DrawKeeperPortrait"/>; null when
+        /// the name is null or the sheet is missing.</summary>
+        protected static Texture2D? LoadPortrait(string? portraitName)
+        {
+            if (portraitName == null)
+                return null;
+            try
+            {
+                return Game1.content.Load<Texture2D>("Portraits/" + portraitName);
+            }
+            catch
+            {
+                Logger.LogVerbose($"ScrollableRowMenu: no portrait sheet found for '{portraitName}'.");
+                return null;
+            }
+        }
+
+        /// <summary>Keeper portrait + speech box to the left of the menu, replicating vanilla
+        /// ShopMenu.draw (same offsets, frame sprite, and options.showMerchantPortraits gate).</summary>
+        /// <param name="parsedDialogue">Speech-box text, already run through Game1.parseText.</param>
+        protected void DrawKeeperPortrait(SpriteBatch b, Texture2D? portrait, string? parsedDialogue)
+        {
+            int portraitX = this.xPositionOnScreen - 320;
+            if (portraitX <= 0 || !Game1.options.showMerchantPortraits)
+                return;
+
+            if (portrait != null)
+            {
+                Utility.drawWithShadow(b, Game1.mouseCursors, new Vector2(portraitX, this.yPositionOnScreen),
+                    new Rectangle(603, 414, 74, 74), Color.White, 0f, Vector2.Zero, 4f, flipped: false, 0.91f);
+                b.Draw(portrait, new Vector2(portraitX + 20, this.yPositionOnScreen + 20),
+                    new Rectangle(0, 0, 64, 64), Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.92f);
+            }
+            if (parsedDialogue != null)
+            {
+                int dialogueX = this.xPositionOnScreen - (int)Game1.dialogueFont.MeasureString(parsedDialogue).X - 64;
+                if (dialogueX > 0)
+                {
+                    IClickableMenu.drawHoverText(b, parsedDialogue, Game1.dialogueFont, 0, 0, -1, null, -1, null, null, 0, null, -1,
+                        dialogueX, this.yPositionOnScreen + ((portrait != null) ? 312 : 0), 1f, null, null,
+                        Game1.menuTexture, new Rectangle(0, 256, 60, 60), null, null);
+                }
+            }
+        }
+
+        /// <summary>Player's current gold in the lower-left, so they can compare against prices.</summary>
+        protected void DrawPlayerMoney(SpriteBatch b)
+        {
+            string moneyText = $"You have: {Utility.getNumberWithCommas(Game1.player.Money)}g";
+            Utility.drawTextWithShadow(b, moneyText, Game1.smallFont,
+                new Vector2(this.xPositionOnScreen + 40, this.yPositionOnScreen + this.height + 12), Color.White);
+        }
+
+        /// <summary>Gold amount (Pierre's-shop style: coin icon + text, right-aligned) at the
+        /// bottom-right of a row panel.</summary>
+        protected void DrawRowPrice(SpriteBatch b, int rowY, int price, Color color)
+        {
+            string priceText = Utility.getNumberWithCommas(price) + "g";
+            Vector2 priceSize = Game1.smallFont.MeasureString(priceText);
+            int coinSize = 25; // 9px coin sprite at ~2.8x
+            int priceRightEdge = this.PanelX + this.PanelWidth - 20;
+            int priceY = rowY + PanelHeight - (int)priceSize.Y - 10;
+            b.Draw(Game1.mouseCursors,
+                new Vector2(priceRightEdge - priceSize.X - coinSize - 6, priceY + 2),
+                new Rectangle(193, 373, 9, 10), Color.White, 0f, Vector2.Zero, 2.8f, SpriteEffects.None, 1f);
+            Utility.drawTextWithShadow(b, priceText, Game1.smallFont,
+                new Vector2(priceRightEdge - priceSize.X, priceY), color);
+        }
+
         /// <summary>The three Speed/Sprint/Jump pixel-segment bars with labels and the dark wood
         /// partition line, in the standard row layout shared by every list menu.</summary>
         protected void DrawStatSegments(SpriteBatch b, int rowX, int rowY,

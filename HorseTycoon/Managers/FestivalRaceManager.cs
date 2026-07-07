@@ -1249,6 +1249,7 @@ namespace HorseTycoon
             this.SpawnDecorativeHorses();
             this.SpawnSpectators(setupSpectators);
             this.SpawnShopNpcs();
+            this.SpawnBookie();
             this.SyncBack2WaterTiles(Game1.currentLocation);
 
 
@@ -1803,17 +1804,26 @@ namespace HorseTycoon
             NPC? horseSeller = festival?.getActorByName(HorseSellerActorName);
             NPC? studKeeper = festival?.getActorByName(StudShopActorName);
             NPC? itemKeeper = festival?.getActorByName(ItemShopActorName);
+            NPC? bookie = festival?.getActorByName(BookieActorName);
 
             bool nearPam = pam != null && IsPlayerFacing(pam);
             bool nearLewis = lewis != null && IsPlayerFacing(lewis);
             bool nearSeller = horseSeller != null && IsPlayerFacing(horseSeller);
             bool nearStud = studKeeper != null && IsPlayerFacing(studKeeper);
             bool nearItemShop = itemKeeper != null && IsPlayerFacing(itemKeeper);
+            bool nearBookie = bookie != null && IsPlayerFacing(bookie);
 
-            if (!nearPam && !nearLewis && !nearSeller && !nearStud && !nearItemShop)
+            if (!nearPam && !nearLewis && !nearSeller && !nearStud && !nearItemShop && !nearBookie)
                 return;
 
             this.Helper.Input.Suppress(e.Button);
+
+            // The Bouncer runs the odds book at away festivals.
+            if (nearBookie)
+            {
+                this.ShowBookieDialog(bookie!);
+                return;
+            }
 
             // Festival market stalls (summer away festival).
             if (nearSeller)
@@ -3483,6 +3493,7 @@ namespace HorseTycoon
         // ======================== Betting System ========================
 
         internal const string BetRewardQuestId = "HorseTycoon.BetReward";
+        internal const string BetRewardAwayQuestId = "HorseTycoon.BetRewardAway";
 
         private void DeliverBetResult()
         {
@@ -3499,12 +3510,19 @@ namespace HorseTycoon
                 return;
             }
 
-            int winnings = betAmount.Value * 2;
+            // Odds bets (the Bouncer's away-festival book) pay stake + stake × odds; Pam's
+            // walk-in book is a flat winner-takes-double.
+            bool oddsBet = betOddsDenominator.Value > 0;
+            int winnings = oddsBet
+                ? BookiePayout(betAmount.Value, betOddsNumerator.Value, betOddsDenominator.Value)
+                : betAmount.Value * 2;
+            string bookieName = oddsBet ? "the Bouncer" : "Pam";
+            string oddsNote = oddsBet ? $" at {betOddsNumerator.Value}/{betOddsDenominator.Value}" : "";
             var quest = new Quest();
-            quest.id.Value = BetRewardQuestId;
+            quest.id.Value = oddsBet ? BetRewardAwayQuestId : BetRewardQuestId;
             quest.questType.Value = Quest.type_basic;
             quest.questTitle = "Horse Race Bet";
-            quest.questDescription = $"You called it — {winnerName} took the top spot. Go collect your winnings from Pam.";
+            quest.questDescription = $"You called it — {winnerName} took the top spot{oddsNote}. Go collect your winnings from {bookieName}.";
             quest.currentObjective = "Collect your winnings.";
             quest.moneyReward.Value = winnings;
             quest.completed.Value = true;
@@ -3699,6 +3717,9 @@ namespace HorseTycoon
             betTargetFarmerId.Value = null;
             betTargetNpcName.Value = null;
             betAmount.Value = 0;
+            betOddsNumerator.Value = 0;
+            betOddsDenominator.Value = 0;
+            postedOdds.Value = null;
             // Static host-side state — safe to clear on any screen since only the host writes to these.
             FinishOrder.Clear();
             DisqualifiedFarmers.Clear();

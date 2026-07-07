@@ -25,6 +25,10 @@ namespace HorseTycoon
         private bool horseSellerIntroSeen;
         private bool studShopIntroSeen;
 
+        // Player stallions already sold to the Stud Shop this festival (one sale per horse per
+        // festival); shown greyed out in the offer menu.
+        private readonly HashSet<long> soldStudIds = new();
+
         /// <summary>Spawns the shop keeper event actors for the pasture phase. They're added to
         /// <see cref="spawnedSpectators"/> so the shops close (despawn) when the race starts.
         /// The sprite name is also the keeper's display name (Alesia/Isaac/Jadu); the character
@@ -33,6 +37,7 @@ namespace HorseTycoon
         {
             this.horseSellerIntroSeen = false;
             this.studShopIntroSeen = false;
+            this.soldStudIds.Clear();
 
             FestivalDefinition def = Def;
             this.SpawnShopNpc(def.HorseSellerTile, def.HorseSellerFacing, def.HorseSellerSprite, HorseSellerActorName, def.HorseSellerSprite);
@@ -179,21 +184,52 @@ namespace HorseTycoon
 
         private void OpenStudShop(NPC studKeeper)
         {
-            if (this.GetBroughtBreedableHorses().Count == 0)
-            {
-                this.Speak(studKeeper, "My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today. Bring one along next time!");
-                return;
-            }
-
             if (!this.studShopIntroSeen)
             {
                 this.studShopIntroSeen = true;
                 this.Speak(studKeeper,
-                    "Looking to breed a champion? My stallions' fees are based on their pedigree — pick one and I'll introduce him to one of the horses you brought.",
-                    this.ShowStudMenu);
+                    "Looking to breed a champion? My stallions' fees are based on their pedigree — or if you've got a promising sire of your own, I'll pay good money for his services.",
+                    () => this.ShowStudShopChoices(studKeeper));
                 return;
             }
-            this.ShowStudMenu();
+            this.ShowStudShopChoices(studKeeper);
+        }
+
+        private void ShowStudShopChoices(NPC studKeeper)
+        {
+            Response[] choices =
+            {
+                new("Browse", "Browse studs"),
+                new("Offer", "Offer my studs"),
+                new("Leave", "Leave"),
+            };
+            Game1.currentLocation.createQuestionDialogue("What would you like to do?", choices, (_, answer) =>
+            {
+                switch (answer)
+                {
+                    case "Browse":
+                        if (this.GetBroughtBreedableHorses().Count == 0)
+                        {
+                            Game1.afterDialogues = () => this.Speak(studKeeper,
+                                "My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today. Bring one along next time!");
+                            return;
+                        }
+                        Game1.afterDialogues = this.ShowStudMenu;
+                        break;
+
+                    case "Offer":
+                        var studs = this.GetOfferableStuds();
+                        if (studs.Count == 0)
+                        {
+                            Game1.afterDialogues = () => this.Speak(studKeeper,
+                                "I'd pay well for a grown stallion's services, but it doesn't look like you own one. Come see me when you do!");
+                            return;
+                        }
+                        Game1.afterDialogues = () =>
+                            Game1.activeClickableMenu = new StudOfferMenu(studs, this.soldStudIds, Def.StudShopSprite);
+                        break;
+                }
+            });
         }
 
         private void ShowStudMenu()
@@ -245,6 +281,16 @@ namespace HorseTycoon
                                     $"the foal is due in {BreedingManager.GestationDays} days.");
                             });
                 });
+        }
+
+        /// <summary>The player's horses whose stud services can be offered to the Stud Shop: grown
+        /// stallions from any barn (they don't need to have been brought to the festival). Horses
+        /// already sold this festival stay in the list so the menu can show them greyed out.</summary>
+        private List<FarmAnimal> GetOfferableStuds()
+        {
+            return HorseHelper.GetAllBarnHorses()
+                .Where(a => a.isMale() && !a.isBaby())
+                .ToList();
         }
 
         /// <summary>The local player's horses at this festival that can be bred with a stud: the mares

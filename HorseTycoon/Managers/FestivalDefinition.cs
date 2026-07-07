@@ -115,6 +115,12 @@ namespace HorseTycoon
         public Point? ItemShopTile;
         public int ItemShopFacing = 2;
         public string ItemShopSprite = "Jadu";
+        // Tile the bookie (vanilla Bouncer) stands on; null = no bookie (walk-in festivals use
+        // Pam's flat winner-takes-double book instead). The bookie posts per-racer fractional
+        // odds computed from horse stats and pays out at those odds (see
+        // FestivalRaceManager.Bookie.cs).
+        public Point? BookieTile;
+        public int BookieFacing = 2;
 
         // --- Bus arrival cinematic (opt-in) ---
         // When true, the festival opens with the vanilla-style bus driving in from the right before the
@@ -376,6 +382,9 @@ namespace HorseTycoon
             StudShopFacing = 2,
             ItemShopTile = new Point(37, 42),
             ItemShopFacing = 2,
+            // The Bouncer runs the betting book at away races, at the west end of the shop row.
+            BookieTile = new Point(34, 42),
+            BookieFacing = 2,
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
             NpcRiderSpeeds = new[] { 5, 10, 15, 20 },

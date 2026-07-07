@@ -240,6 +240,8 @@ namespace HorseTycoon
                 {
                     asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardQuestId] =
                         "Basic/Horse Race Bet/You called it right. Here's what you're owed. Don't spend it all in one place. - Pam/Collect your winnings.";
+                    asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardAwayQuestId] =
+                        "Basic/Horse Race Bet/Good call. Here's your payout, counted twice. Pleasure doing business. - The Bouncer/Collect your winnings.";
                 });
             }
         }
