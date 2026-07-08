@@ -318,6 +318,18 @@ namespace HorseTycoon
         };
 
         /// <summary>
+        /// TESTING ONLY: same Spring 19 Forest festival as <see cref="Forest"/>, but also triggerable on
+        /// Spring 3 so it can be reached quickly without fast-forwarding. Remove when done testing.
+        /// </summary>
+        public static FestivalDefinition ForestSpringTest()
+        {
+            FestivalDefinition def = Forest();
+            def.EventId = "festival_spring3";
+            def.Day = 3;
+            return def;
+        }
+
+        /// <summary>
         /// The Summer 19 Horse Festival, reached by buying a bus ticket at the real Bus Stop. Hosted in a
         /// dedicated CP custom location (Custom_HorseTycoon_SummerFestival) whose map is a copy of the
         /// vanilla Bus Stop (CP.HorseTycoon_SummerBusFestival, 65x30).

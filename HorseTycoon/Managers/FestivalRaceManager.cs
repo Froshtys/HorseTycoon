@@ -36,6 +36,7 @@ namespace HorseTycoon
         private static readonly List<FestivalDefinition> Festivals = new()
         {
             FestivalDefinition.Forest(),
+            FestivalDefinition.ForestSpringTest(), // TESTING ONLY: remove when done testing.
             FestivalDefinition.FallBeach(),
             FestivalDefinition.SummerBusStop(),
         };

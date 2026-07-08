@@ -23,6 +23,28 @@
 			}
 		},
 		{
+			"LogName": "TESTING ONLY - Horse Festival also on Spring 3 (remove when done testing)",
+			"Action": "EditData",
+			"Target": "Data/Festivals/FestivalDates",
+			"Entries": {
+				"spring3": "{{i18n:SpringHorseFestival_Name}}"
+			}
+		},
+		{
+			"LogName": "TESTING ONLY - Horse Festival data (spring 3, remove when done testing)",
+			"Action": "Load",
+			"Target": "Data/Festivals/spring3",
+			"FromFile": "data/spring19.json"
+		},
+		{
+			"LogName": "TESTING ONLY - Localize festival name (spring 3, remove when done testing)",
+			"Action": "EditData",
+			"Target": "Data/Festivals/spring3",
+			"Entries": {
+				"name": "{{i18n:SpringHorseFestival_Name}}"
+			}
+		},
+		{
 			"LogName": "Horse Festival - Festival map (copy of Cindersap Forest)",
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_ForestFestival",
