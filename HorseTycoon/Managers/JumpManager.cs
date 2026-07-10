@@ -22,7 +22,6 @@ namespace HorseTycoon
         // State Tracking
         private readonly PerScreen<float> velX = new();
         private readonly PerScreen<float> velY = new();
-        private readonly PerScreen<float> lastYJumpVelocity = new();
         private readonly PerScreen<bool> playerJumpingWithHorse = new();
         private readonly PerScreen<bool> blockedJump = new();
         // Forward-jump trajectory state. We drive the player along an absolute path from the jump start so
@@ -39,7 +38,6 @@ namespace HorseTycoon
         // Properties
         internal float VelX { get => velX.Value; set => velX.Value = value; }
         internal float VelY { get => velY.Value; set => velY.Value = value; }
-        internal float LastYJumpVelocity { get => lastYJumpVelocity.Value; set => lastYJumpVelocity.Value = value; }
         internal bool PlayerJumpingWithHorse { get => playerJumpingWithHorse.Value; set => playerJumpingWithHorse.Value = value; }
         internal bool BlockedJump { get => blockedJump.Value; set => blockedJump.Value = value; }
 
@@ -136,12 +134,21 @@ namespace HorseTycoon
 
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
-            if (Game1.player.yJumpVelocity == 0f && LastYJumpVelocity < 0f)
+            // The jump is over when the synchronized jump has fully landed (velocity and offset
+            // both zero — synchronizedJump sets them non-zero synchronously, so this can't trigger
+            // on the subscribe tick) or was cancelled externally (dismount, warp, or anything
+            // calling completelyStopAnimating zeroes both mid-air). Checking only the landing
+            // descent (velocity crossing negative → zero) missed the cancel case, leaving this
+            // handler subscribed forever and rewriting the player's position every tick — remote
+            // clients then saw the horse gallop in place whenever this player stood still mounted.
+            bool jumpOver = Game1.player.yJumpVelocity == 0f && Game1.player.yJumpOffset == 0;
+            if (jumpOver || Game1.player.mount == null)
             {
                 PlayerJumpingWithHorse = false;
                 BlockedJump = false;
+                if (IsForwardJump)
+                    Game1.player.canMove = true;
                 IsForwardJump = false;
-                Game1.player.canMove = true;
                 this.Helper.Events.GameLoop.UpdateTicked -= OnUpdateTicked;
                 return;
             }
@@ -176,7 +183,6 @@ namespace HorseTycoon
                 Game1.player.position.X += VelX;
                 Game1.player.position.Y += VelY;
             }
-            LastYJumpVelocity = Game1.player.yJumpVelocity;
         }
 
         private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)

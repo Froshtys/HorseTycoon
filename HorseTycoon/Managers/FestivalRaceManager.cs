@@ -332,6 +332,11 @@ namespace HorseTycoon
         private const string MsgNpcSprint = "NpcSprint";
         private record NpcSprintMessage(int NpcIndex, float DurationMs);
 
+        // Announces the farm's first Spring Horse Festival win so every other player gets
+        // Lewis's news letter naming the winner.
+        private const string MsgSpringWin = "SpringFestivalWin";
+        private record SpringWinMessage(string WinnerName);
+
         // Custom start sound registered as a Data/AudioChanges cue in [CP] HorseTycoon/data/sound.json.
         private const string RaceStartSoundCue = "CP.HorseTycoon_RaceStart";
         private const int RaceStartSoundMs = 8000;
@@ -1366,6 +1371,12 @@ namespace HorseTycoon
                     }
                 }
                 Logger.LogVerbose($"Bus claim update from player {claimMsg.PlayerId}: {(claimMsg.Release ? "released" : "claimed")} {claimMsg.AnimalIds.Count} horse(s).");
+                return;
+            }
+
+            if (e.Type == MsgSpringWin)
+            {
+                this.HandleSpringWinNews(e.ReadAs<SpringWinMessage>().WinnerName, isWinner: false);
                 return;
             }
 
@@ -2529,7 +2540,10 @@ namespace HorseTycoon
 
                 case 7: // Prize for 1st
                     if (order.Count >= 1 && order[0] == localId)
+                    {
+                        this.RecordSpringFestivalWin();
                         AwardPrizes(Def.FirstPlacePrizes);
+                    }
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -2569,6 +2583,83 @@ namespace HorseTycoon
             if (racer != null)
                 return racer.Rider?.displayName ?? racer.Rider?.Name ?? "Mystery Rider";
             return GetFarmerName(uniqueId);
+        }
+
+        /// <summary>Hidden mail flag marking that a player has won the Spring Horse Festival race.
+        /// Farmer.mailReceived is net-synced, so the host sees farmhand wins too; this is what
+        /// unlocks Robin's bus-trailer offer (see <see cref="BusTrailerManager"/>).</summary>
+        internal const string SpringWinFlagMailId = "HorseTycoon.SpringFestivalWin";
+        /// <summary>Lewis's congratulation letter, queued the night of the win (Data/Mail entries
+        /// added in ModEntry). The Bus variant is sent when the bus is already repaired and adds a
+        /// P.S. pointing the player at Robin's horse trailer.</summary>
+        internal const string SpringWinLetterMailId = "HorseTycoon.SpringFestivalWinLetter";
+        internal const string SpringWinLetterBusMailId = "HorseTycoon.SpringFestivalWinLetterBus";
+        /// <summary>Lewis's news letter for everyone who *didn't* win, naming the winner. Sent to all
+        /// other farmers (online and offline) the first time anyone on the farm wins.</summary>
+        internal const string SpringWinSpectatorMailId = "HorseTycoon.SpringFestivalWinSpectator";
+        internal const string SpringWinSpectatorBusMailId = "HorseTycoon.SpringFestivalWinSpectatorBus";
+        /// <summary>Farm modData key holding the first spring-festival winner's name. Host-written
+        /// (synced + saved) and injected into the spectator letters' text in ModEntry's Data/Mail edit.</summary>
+        internal const string SpringWinnerNameKey = "Froshty.HorseTycoon/SpringFestivalWinnerName";
+
+        /// <summary>Whether any player on this farm has ever won the Spring Horse Festival.</summary>
+        internal static bool HasAnyPlayerWonSpringFestival()
+            => Game1.getAllFarmers().Any(f => f.mailReceived.Contains(SpringWinFlagMailId));
+
+        /// <summary>Runs on the local winner's client when they take 1st place. On the player's first
+        /// spring win, sets the hidden win flag and queues Lewis's congratulation letter for tomorrow.
+        /// If it's also the farm's first win, spreads the news so everyone else gets a letter too.</summary>
+        private void RecordSpringFestivalWin()
+        {
+            if (Def.Season != "spring" || Game1.player.mailReceived.Contains(SpringWinFlagMailId))
+                return;
+
+            bool farmFirstWin = !HasAnyPlayerWonSpringFestival();
+            Game1.player.mailReceived.Add(SpringWinFlagMailId);
+            bool busRepaired = Game1.MasterPlayer.mailReceived.Contains("ccVault");
+            Game1.addMailForTomorrow(busRepaired ? SpringWinLetterBusMailId : SpringWinLetterMailId);
+            Logger.LogVerbose($"First spring festival win recorded for {Game1.player.Name}; Lewis letter queued (busRepaired={busRepaired}, farmFirstWin={farmFirstWin}).");
+
+            if (!farmFirstWin)
+                return;
+
+            this.Helper.Multiplayer.SendMessage(
+                new SpringWinMessage(Game1.player.Name),
+                MsgSpringWin,
+                modIDs: new[] { this.Helper.ModRegistry.ModID });
+            this.HandleSpringWinNews(Game1.player.Name, isWinner: true);
+        }
+
+        /// <summary>Delivers the farm-first-win news. On the host, stamps the winner's name into farm
+        /// modData (the spectator letter text reads it) and queues letters for offline farmhands; on
+        /// every non-winner client, queues the local player's own spectator letter. Runs directly on
+        /// the winner's client and via <see cref="MsgSpringWin"/> on every other client.</summary>
+        private void HandleSpringWinNews(string winnerName, bool isWinner)
+        {
+            bool busRepaired = Game1.MasterPlayer.mailReceived.Contains("ccVault");
+            string spectatorMail = busRepaired ? SpringWinSpectatorBusMailId : SpringWinSpectatorMailId;
+
+            if (Game1.IsMasterGame)
+            {
+                Game1.getFarm().modData[SpringWinnerNameKey] = winnerName;
+
+                // Offline farmhands: the host owns their save data, so queue their letters directly.
+                // Online players (including the winner) are skipped — each queues their own locally.
+                foreach (Farmer farmer in Game1.getAllFarmers())
+                {
+                    if (Game1.getOnlineFarmers().Contains(farmer))
+                        continue;
+                    if (!farmer.hasOrWillReceiveMail(spectatorMail))
+                        farmer.mailForTomorrow.Add(spectatorMail);
+                }
+            }
+
+            // Re-resolve Data/Mail so the spectator letters pick up the winner's name.
+            this.Helper.GameContent.InvalidateCache("Data/Mail");
+
+            if (!isWinner && !Game1.player.hasOrWillReceiveMail(spectatorMail))
+                Game1.addMailForTomorrow(spectatorMail);
+            Logger.LogVerbose($"Spring win news handled (winner={winnerName}, isWinner={isWinner}, host={Game1.IsMasterGame}).");
         }
 
         private static void AwardPrizes(params string[] itemIds)

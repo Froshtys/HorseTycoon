@@ -86,15 +86,31 @@ namespace HorseTycoon
 
         public static void Farmer_getMovementSpeed_Postfix(Farmer __instance, ref float __result)
         {
-            if (__instance.isRidingHorse() && __instance.mount != null)
+            // Must never throw: getMovementSpeed feeds NetPosition.UpdateExtrapolation in
+            // Farmer.Update, and an exception there skips the reset of the synced 'moving'
+            // flag — remote clients then see this player's horse gallop in place forever.
+            try
             {
-                var (speedBoost, totalSprint) = HorseHelper.GetRaceStats(__instance.mount);
-                __result += speedBoost;
+                if (__instance.isRidingHorse() && __instance.mount != null)
+                {
+                    var (speedBoost, totalSprint) = HorseHelper.GetRaceStats(__instance.mount);
+                    __result += speedBoost;
 
-                // Festival freezes the vanilla sprint buff, so apply its bonus here via the shared formula.
-                if (FestivalRaceManager.IsSprinting)
-                    __result += HorseStats.SprintSpeedBonus(totalSprint);
+                    // Festival freezes the vanilla sprint buff, so apply its bonus here via the shared formula.
+                    if (FestivalRaceManager.IsSprinting)
+                        __result += HorseStats.SprintSpeedBonus(totalSprint);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!loggedMovementSpeedError)
+                {
+                    loggedMovementSpeedError = true;
+                    Manager?.Monitor.Log($"Failed to apply horse speed bonus (further errors suppressed): {ex}", StardewModdingAPI.LogLevel.Error);
+                }
             }
         }
+
+        private static bool loggedMovementSpeedError;
     }
 }

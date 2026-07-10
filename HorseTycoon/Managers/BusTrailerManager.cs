@@ -117,10 +117,19 @@ namespace HorseTycoon
         /// <summary>The next tier Robin can offer, or null when the trailer is maxed out.</summary>
         private static TrailerTier? NextTier => Level < Tiers.Length ? Tiers[Level] : null;
 
+        /// <summary>A farmhand bought a trailer tier from Robin; the host starts the construction.</summary>
+        private const string MsgTrailerPurchase = "BusTrailerPurchase";
+        private record TrailerPurchaseMessage(int TargetLevel);
+
+        /// <summary>Construction finished (host-side countdown); farmhands show the completion toast.</summary>
+        private const string MsgTrailerBuilt = "BusTrailerBuilt";
+        private record TrailerBuiltMessage(string TrailerName);
+
         public static void Initialize(IModHelper modHelper)
         {
             helper = modHelper;
             helper.Events.GameLoop.DayStarted += OnDayStarted;
+            helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
 
             var harmony = new Harmony("Froshty.HorseTycoon.BusTrailer");
 
@@ -161,6 +170,10 @@ namespace HorseTycoon
                 farm.modData[LevelKey] = level.ToString();
                 string name = Tiers[System.Math.Min(level, Tiers.Length) - 1].Name.ToLower();
                 Game1.showGlobalMessage($"Robin has finished the {name} at the bus stop.");
+                helper.Multiplayer.SendMessage(
+                    new TrailerBuiltMessage(name),
+                    MsgTrailerBuilt,
+                    modIDs: new[] { helper.ModRegistry.ModID });
                 Logger.LogVerbose($"Bus horse trailer construction complete (level {level}).");
             }
             else
@@ -169,15 +182,50 @@ namespace HorseTycoon
             }
         }
 
+        /// <summary>Stamps the construction countdown into farm modData. Host-only: farm modData is
+        /// synced from the host, so farmhand purchases arrive via <see cref="MsgTrailerPurchase"/>.</summary>
+        private static void StartConstruction(int targetLevel)
+        {
+            Farm farm = Game1.getFarm();
+            farm.modData[DaysLeftKey] = BuildDays.ToString();
+            farm.modData[TargetLevelKey] = targetLevel.ToString();
+        }
+
+        private static void OnModMessageReceived(object? sender, ModMessageReceivedEventArgs e)
+        {
+            if (e.FromModID != helper.ModRegistry.ModID)
+                return;
+
+            if (e.Type == MsgTrailerBuilt)
+            {
+                Game1.showGlobalMessage($"Robin has finished the {e.ReadAs<TrailerBuiltMessage>().TrailerName} at the bus stop.");
+                return;
+            }
+
+            if (e.Type != MsgTrailerPurchase || !Context.IsMainPlayer)
+                return;
+
+            int targetLevel = e.ReadAs<TrailerPurchaseMessage>().TargetLevel;
+            if (IsUnderConstruction || targetLevel != Level + 1)
+            {
+                Logger.LogVerbose($"Ignoring stale trailer purchase message (target {targetLevel}, current level {Level}, underConstruction={IsUnderConstruction}).");
+                return;
+            }
+            StartConstruction(targetLevel);
+            Logger.LogVerbose($"Farmhand trailer purchase applied: level {targetLevel} under construction.");
+        }
+
         // ======================== Robin's carpenter menu ========================
 
-        /// <summary>Whether Robin should currently offer the next trailer tier. Host-only (it's shared farm
-        /// infrastructure, like the vanilla community upgrade) and gated on the bus being repaired.</summary>
+        /// <summary>Whether Robin should currently offer the next trailer tier. Any player can buy it
+        /// (it's one shared farm-wide trailer, like the vanilla community upgrade), gated on the bus
+        /// being repaired and on someone on the farm having won the Spring Horse Festival (which earns
+        /// Lewis's scouting letter).</summary>
         private static bool ShouldOfferTrailer()
         {
             return Context.IsWorldReady
-                && Game1.IsMasterGame
                 && Game1.MasterPlayer.mailReceived.Contains("ccVault")
+                && FestivalRaceManager.HasAnyPlayerWonSpringFestival()
                 && NextTier != null
                 && !IsUnderConstruction;
         }
@@ -249,6 +297,12 @@ namespace HorseTycoon
             TrailerTier? tier = NextTier;
             if (tier == null) return;
 
+            // Re-check in case another player started this build while the menu was open.
+            if (IsUnderConstruction)
+            {
+                Game1.drawObjectDialogue("Robin is already working on the trailer.");
+                return;
+            }
             if (Game1.player.Money < tier.Price)
             {
                 Game1.drawObjectDialogue(Game1.content.LoadString("Strings\\UI:NotEnoughMoney3"));
@@ -262,9 +316,19 @@ namespace HorseTycoon
 
             Game1.player.Money -= tier.Price;
             Game1.player.Items.ReduceId(tier.BarItemId, tier.BarCount);
-            Farm farm = Game1.getFarm();
-            farm.modData[DaysLeftKey] = BuildDays.ToString();
-            farm.modData[TargetLevelKey] = (Level + 1).ToString();
+            if (Context.IsMainPlayer)
+            {
+                StartConstruction(Level + 1);
+            }
+            else
+            {
+                // Farmhands can't reliably write Farm modData from Robin's shop (locations only
+                // sync while a player is inside), so the host applies the construction state.
+                helper.Multiplayer.SendMessage(
+                    new TrailerPurchaseMessage(Level + 1),
+                    MsgTrailerPurchase,
+                    modIDs: new[] { helper.ModRegistry.ModID });
+            }
 
             NPC? robin = Game1.getCharacterFromName("Robin");
             if (robin != null)

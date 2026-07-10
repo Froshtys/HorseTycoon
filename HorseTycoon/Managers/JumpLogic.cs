@@ -107,7 +107,6 @@ namespace HorseTycoon
             float power = (float)Math.Sqrt(distance * 16);
             Manager.VelX = ox * power;
             Manager.VelY = oy * power;
-            Manager.LastYJumpVelocity = 0;
             // Travel exactly `distance` tiles horizontally from the jump start, ignoring input drift.
             Manager.JumpDistanceRemaining = distance * Game1.tileSize;
             Manager.JumpStartPos = Game1.player.Position;

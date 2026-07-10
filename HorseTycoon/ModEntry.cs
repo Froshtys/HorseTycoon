@@ -244,12 +244,54 @@ namespace HorseTycoon
                         "Basic/Horse Race Bet/Good call. Here's your payout, counted twice. Pleasure doing business. - The Bouncer/Collect your winnings.";
                 });
             }
+            else if (e.NameWithoutLocale.IsEquivalentTo("Data/Mail"))
+            {
+                const string letterBody =
+                    "Dear @,^^Congratulations on your victory at the Spring Horse Festival! The whole valley is still talking about that ride.^" +
+                    "^Between you and me, word of a performance like that tends to travel. I wouldn't be surprised if you're scouted for bigger and better things before long. Keep that horse of yours in top form!^" +
+                    "^   -Mayor Lewis";
+                const string busPostscript =
+                    "^^P.S. Now that the bus is running again, you might pay Robin a visit. I hear she's been sketching plans for a horse trailer — just the thing for hauling your champion to competitions out of town.";
+                e.Edit(asset =>
+                {
+                    var data = asset.AsDictionary<string, string>().Data;
+                    data[FestivalRaceManager.SpringWinLetterMailId] =
+                        letterBody + "[#]Spring Horse Festival Champion";
+                    data[FestivalRaceManager.SpringWinLetterBusMailId] =
+                        letterBody + busPostscript + "[#]Spring Horse Festival Champion";
+
+                    // Spectator letters go to everyone who didn't win, naming the winner. The name is
+                    // stamped into farm modData by FestivalRaceManager.HandleSpringWinNews (host-only
+                    // write, synced + saved), which also invalidates Data/Mail so this re-runs.
+                    string winner = "one of your neighbors";
+                    if (Context.IsWorldReady
+                        && Game1.getFarm().modData.TryGetValue(FestivalRaceManager.SpringWinnerNameKey, out string? winnerName)
+                        && !string.IsNullOrWhiteSpace(winnerName))
+                    {
+                        winner = winnerName;
+                    }
+                    string spectatorBody =
+                        $"Dear @,^^What a race at the Spring Horse Festival! Seeing as {winner} took first place, the whole valley's been buzzing about your farm.^" +
+                        $"^Between you and me, word of a performance like that tends to travel. I wouldn't be surprised if your farm gets scouted for bigger and better things before long.^" +
+                        "^   -Mayor Lewis";
+                    string spectatorPostscript =
+                        "^^P.S. Now that the bus is running again, someone from your farm might pay Robin a visit. I hear she's been sketching plans for a horse trailer — just the thing for hauling your horses to competitions out of town.";
+                    data[FestivalRaceManager.SpringWinSpectatorMailId] =
+                        spectatorBody + "[#]News From the Horse Festival";
+                    data[FestivalRaceManager.SpringWinSpectatorBusMailId] =
+                        spectatorBody + spectatorPostscript + "[#]News From the Horse Festival";
+                });
+            }
         }
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
             HorseTexturePatches.PreloadTextures();
             HorseHelper.MigrateAtSkinKeys(this.Monitor);
+
+            // Data/Mail may have been cached before the save loaded, without the spring-festival
+            // winner's name from farm modData — drop it so the next read re-resolves with the name.
+            this.Helper.GameContent.InvalidateCache("Data/Mail");
         }
 
 
