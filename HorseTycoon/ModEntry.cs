@@ -239,19 +239,19 @@ namespace HorseTycoon
                 e.Edit(asset =>
                 {
                     asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardQuestId] =
-                        "Basic/Horse Race Bet/You called it right. Here's what you're owed. Don't spend it all in one place. - Pam/Collect your winnings.";
+                        "Basic/Horse Race Bet/You called it right. Here's what you're owed. Don't spend it all in one place.^ - Pam/Collect your winnings.";
                     asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardAwayQuestId] =
-                        "Basic/Horse Race Bet/Good call. Here's your payout, counted twice. Pleasure doing business. - The Bouncer/Collect your winnings.";
+                        "Basic/Horse Race Bet/Good call. Here's your payout, counted twice. Pleasure doing business.^ - The Bouncer/Collect your winnings.";
                 });
             }
             else if (e.NameWithoutLocale.IsEquivalentTo("Data/Mail"))
             {
                 const string letterBody =
-                    "Dear @,^^Congratulations on your victory at the Spring Horse Festival! The whole valley is still talking about that ride.^" +
-                    "^Between you and me, word of a performance like that tends to travel. I wouldn't be surprised if you're scouted for bigger and better things before long. Keep that horse of yours in top form!^" +
+                    "Dear @,^Congratulations on your victory at the Spring Horse Festival! The whole valley is talking about that ride.^" +
+                    "^Word of a performance like that tends to travel. I wouldn't be surprised if you're scouted for bigger and better things before long. Keep that horse of yours in top shape!^" +
                     "^   -Mayor Lewis";
                 const string busPostscript =
-                    "^^P.S. Now that the bus is running again, you might pay Robin a visit. I hear she's been sketching plans for a horse trailer — just the thing for hauling your champion to competitions out of town.";
+                    "^^P.S. You might want to pay Robin a visit. I hear she's been sketching plans for a horse trailer, just the thing for hauling your champion to competitions out of town.";
                 e.Edit(asset =>
                 {
                     var data = asset.AsDictionary<string, string>().Data;
@@ -272,10 +272,10 @@ namespace HorseTycoon
                     }
                     string spectatorBody =
                         $"Dear @,^^What a race at the Spring Horse Festival! Seeing as {winner} took first place, the whole valley's been buzzing about your farm.^" +
-                        $"^Between you and me, word of a performance like that tends to travel. I wouldn't be surprised if your farm gets scouted for bigger and better things before long.^" +
+                        $"^Word of a performance like that tends to travel. I wouldn't be surprised if your farm gets scouted for bigger and better things before long.^" +
                         "^   -Mayor Lewis";
                     string spectatorPostscript =
-                        "^^P.S. Now that the bus is running again, someone from your farm might pay Robin a visit. I hear she's been sketching plans for a horse trailer — just the thing for hauling your horses to competitions out of town.";
+                        "^^P.S. Someone from your farm might pay Robin a visit. I hear she's been sketching plans for a horse trailer, just the thing for hauling your horses to competitions out of town.";
                     data[FestivalRaceManager.SpringWinSpectatorMailId] =
                         spectatorBody + "[#]News From the Horse Festival";
                     data[FestivalRaceManager.SpringWinSpectatorBusMailId] =
