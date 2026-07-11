@@ -57,6 +57,37 @@ namespace HorseTycoon
                 this.Monitor.Log($"Gave {count} Gold Carrot(s).", LogLevel.Info);
             });
 
+            helper.ConsoleCommands.Add("dump_patches",
+            "Lists every mod's Harmony patches (prefix/postfix/transpiler) attached to a GameLocation method, to diagnose why our own prefix isn't firing.\n\nUsage: dump_patches <method>\n- method: createQuestionDialogue (default) or carpenters",
+            (cmd, args) =>
+            {
+                bool wantCarpenters = args.Length > 0 && args[0].Equals("carpenters", StringComparison.OrdinalIgnoreCase);
+                var method = wantCarpenters
+                    ? AccessTools.Method(typeof(GameLocation), nameof(GameLocation.carpenters))
+                    : AccessTools.Method(typeof(GameLocation), nameof(GameLocation.createQuestionDialogue),
+                        new[] { typeof(string), typeof(Response[]), typeof(string) });
+                if (method == null) { this.Monitor.Log("Could not resolve the target method via reflection.", LogLevel.Error); return; }
+
+                var info = Harmony.GetPatchInfo(method);
+                if (info == null) { this.Monitor.Log("No patches are attached to this method at all.", LogLevel.Info); return; }
+
+                this.Monitor.Log($"Prefixes ({info.Prefixes.Count}):", LogLevel.Info);
+                foreach (var p in info.Prefixes)
+                    this.Monitor.Log($"  - {p.owner} :: {p.PatchMethod.DeclaringType}.{p.PatchMethod.Name} (priority {p.priority})", LogLevel.Info);
+
+                this.Monitor.Log($"Postfixes ({info.Postfixes.Count}):", LogLevel.Info);
+                foreach (var p in info.Postfixes)
+                    this.Monitor.Log($"  - {p.owner} :: {p.PatchMethod.DeclaringType}.{p.PatchMethod.Name} (priority {p.priority})", LogLevel.Info);
+
+                this.Monitor.Log($"Transpilers ({info.Transpilers.Count}):", LogLevel.Info);
+                foreach (var p in info.Transpilers)
+                    this.Monitor.Log($"  - {p.owner} :: {p.PatchMethod.DeclaringType}.{p.PatchMethod.Name} (priority {p.priority})", LogLevel.Info);
+
+                this.Monitor.Log($"Finalizers ({info.Finalizers.Count}):", LogLevel.Info);
+                foreach (var p in info.Finalizers)
+                    this.Monitor.Log($"  - {p.owner} :: {p.PatchMethod.DeclaringType}.{p.PatchMethod.Name} (priority {p.priority})", LogLevel.Info);
+            });
+
             var harmony = new Harmony(this.ModManifest.UniqueID);
             FarmAnimalPatches.Apply(harmony);
             PregnancyPatches.Apply(harmony);
@@ -482,14 +513,13 @@ namespace HorseTycoon
                 // 2. Hide if menu is busy (Vanilla or AHM)
                 if (menu.movingAnimal || menu.confirmingSell) return;
 
-                // 3. Gender marker to the right of the name box (horses only) — vanilla
-                // male/female symbols from the character-creation menu.
+                // 3. Gender marker to the right of the name box (horses only)
                 if (menu.animal != null && menu.animal.type.Value.Contains("Horse"))
                 {
                     Rectangle genderSource = menu.animal.isMale()
                         ? new Rectangle(128, 192, 16, 16)
                         : new Rectangle(144, 192, 16, 16);
-                    Vector2 genderPos = new Vector2(menu.textBox.X + menu.textBox.Width + 12, menu.textBox.Y + 12);
+                    Vector2 genderPos = new Vector2(menu.textBox.X + menu.textBox.Width - 32, menu.textBox.Y + 6);
                     e.SpriteBatch.Draw(Game1.mouseCursors, genderPos, genderSource, Color.White, 0f, Vector2.Zero, 2.5f, SpriteEffects.None, 0.9f);
                 }
 

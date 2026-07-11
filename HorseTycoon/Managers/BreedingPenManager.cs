@@ -38,6 +38,12 @@ namespace HorseTycoon
 
         public const int BreedDelayDays = 3;
 
+        // Purely visual nudge so the proxies sit a bit higher in the pen (toward the back fence)
+        // instead of right at the tile's top edge.
+        private const float ProxyYOffset = 12f;
+        // Purely visual: pushes the mare/stallion a bit farther apart horizontally than their tiles alone.
+        private const float ProxyXSpread = 16f;
+
         // Multiplayer: broadcast a one-shot "chew" so every client animates the fed horse.
         private const string MsgChew = "PenChew";
         private record ChewMessage(string PenId, bool IsMare);
@@ -340,11 +346,31 @@ namespace HorseTycoon
             {
                 foreach (Horse horse in EnumerateProxies())
                 {
+                    horse.drawOnTop = true; // not netcode-synced; reassert locally on every client
+
+                    // Vanilla's own carrot-eating overlay (see PlayChewOnProxy) is still running —
+                    // Horse.update() decrements this itself, so leave the horse alone until it hits 0.
+                    if (GetMunchingCarrotTimer(horse) > 0)
+                        continue;
+
                     if (horse.Sprite?.CurrentAnimation == null)
                         HorseAnimations.SetGrazing(horse, headBobPairs: 2);
                 }
             }
         }
+
+        // Vanilla's private Horse.munchingCarrotTimer: when >0, Horse.update()/draw() already draw
+        // the correct muzzle-down eating overlay (oriented per FacingDirection) and skip idle logic.
+        // We drive that directly instead of hand-rolling frames, so we get the real art, the real
+        // pause, and correct left/right orientation for free.
+        private static readonly System.Reflection.FieldInfo MunchingCarrotTimerField =
+            HarmonyLib.AccessTools.Field(typeof(Horse), "munchingCarrotTimer");
+
+        private static int GetMunchingCarrotTimer(Horse horse) =>
+            (int)MunchingCarrotTimerField.GetValue(horse)!;
+
+        private static void SetMunchingCarrotTimer(Horse horse, int milliseconds) =>
+            MunchingCarrotTimerField.SetValue(horse, milliseconds);
 
         private static string ComputePenSignature()
         {
@@ -375,15 +401,15 @@ namespace HorseTycoon
 
                 // Mare on the left facing right, stallion on the right facing left (facing each other).
                 if (mare != null)
-                    SpawnProxy(farm, mare, pen, new Vector2(pen.tileX.Value + 2, pen.tileY.Value + 2), Game1.right, isMare: true);
+                    SpawnProxy(farm, mare, pen, new Vector2(pen.tileX.Value + 2, pen.tileY.Value + 2), Game1.right, isMare: true, xPixelOffset: -ProxyXSpread);
                 if (stallion != null)
-                    SpawnProxy(farm, stallion, pen, new Vector2(pen.tileX.Value + 3, pen.tileY.Value + 2), Game1.left, isMare: false);
+                    SpawnProxy(farm, stallion, pen, new Vector2(pen.tileX.Value + 3, pen.tileY.Value + 2), Game1.left, isMare: false, xPixelOffset: ProxyXSpread);
             }
 
             LastProxySignature = ComputePenSignature();
         }
 
-        private static void SpawnProxy(Farm farm, FarmAnimal source, Building pen, Vector2 tile, int facing, bool isMare)
+        private static void SpawnProxy(Farm farm, FarmAnimal source, Building pen, Vector2 tile, int facing, bool isMare, float xPixelOffset = 0f)
         {
             var horse = new Horse(Guid.NewGuid(), (int)tile.X, (int)tile.Y)
             {
@@ -396,9 +422,10 @@ namespace HorseTycoon
             horse.controller = null;
             horse.EventActor = false;
             horse.currentLocation = farm;
-            horse.Position = tile * 64f;
+            horse.Position = tile * 64f - new Vector2(0f, ProxyYOffset) + new Vector2(xPixelOffset, 0f);
             horse.Halt();
             horse.faceDirection(facing);
+            horse.drawOnTop = true;
             if (!farm.characters.Contains(horse))
                 farm.characters.Add(horse);
             HorseAnimations.SetGrazing(horse, headBobPairs: 2);
@@ -430,8 +457,6 @@ namespace HorseTycoon
                 modIDs: new[] { Helper.ModRegistry.ModID });
         }
 
-        // --- Animations (frames per the vanilla Horse grass-eating idle: 7 idle, 21-24 head-down) ---
-
         private static void PlayChewOnProxy(string penId, bool mare)
         {
             string tag = $"{penId}:{(mare ? "mare" : "stallion")}";
@@ -439,20 +464,14 @@ namespace HorseTycoon
                 .FirstOrDefault(h => h.modData.TryGetValue(PenProxyKey, out string v) && v == tag);
             if (horse?.Sprite == null) return;
 
-            bool flip = horse.FacingDirection == Game1.left;
-            horse.Sprite.loop = false;
-            horse.Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
-            {
-                new FarmerSprite.AnimationFrame(21, 120, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(22, 120, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 180, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 180, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 180, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(24, 180, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(23, 180, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(22, 120, secondaryArm: false, flip: flip),
-                new FarmerSprite.AnimationFrame(21, 120, secondaryArm: false, flip: flip),
-            });
+            // Stop the grazing loop and hand off to vanilla's own carrot-eating overlay (see
+            // GetMunchingCarrotTimer). It draws a dedicated muzzle-down sprite oriented by
+            // FacingDirection, so the mare (facing right) and stallion (facing left) each get the
+            // correctly mirrored art automatically, and Horse.update() skips idle animation
+            // while it's active — no need to fight the grazing loop ourselves.
+            horse.Sprite.StopAnimation();
+            SetMunchingCarrotTimer(horse, 1500);
+            horse.doEmote(20);
         }
 
     }

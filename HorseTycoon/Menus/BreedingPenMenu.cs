@@ -108,7 +108,7 @@ namespace HorseTycoon.Menus
             // Status line along the bottom.
             int days = BreedingPenManager.GetBreedDaysLeft(this.Pen);
             string status = days > 0
-                ? $"Breeding in progress — {days} day{(days == 1 ? "" : "s")} until pregnancy."
+                ? $"Breeding in progress. {days} day{(days == 1 ? "" : "s")} until pregnancy."
                 : "Add a mare and a stallion, then feed each a Gold Carrot.";
             Vector2 statusSize = Game1.smallFont.MeasureString(status);
             Utility.drawTextWithShadow(b, status, Game1.smallFont,

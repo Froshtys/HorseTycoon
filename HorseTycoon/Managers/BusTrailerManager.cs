@@ -5,6 +5,7 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Locations;
+using StardewValley.Menus;
 
 namespace HorseTycoon
 {
@@ -133,21 +134,50 @@ namespace HorseTycoon
 
             var harmony = new Harmony("Froshty.HorseTycoon.BusTrailer");
 
-            // Inject the trailer option into Robin's carpenter question menu.
-            harmony.Patch(
-                original: AccessTools.Method(typeof(GameLocation), nameof(GameLocation.createQuestionDialogue),
-                    new[] { typeof(string), typeof(Response[]), typeof(string) }),
-                prefix: new HarmonyMethod(typeof(BusTrailerManager), nameof(CreateQuestionDialogue_Prefix)));
+            // Inject the trailer option into Robin's carpenter question menu. Patched on carpenters()
+            // itself (not createQuestionDialogue) because createQuestionDialogue is small/hot enough
+            // that the JIT inlines it into callers like carpenters(), which silently defeats a prefix
+            // patch on it (Harmony.GetPatchInfo still reports the patch as attached, but the redirect
+            // is never hit at that call site). carpenters() is rare/large enough to stay un-inlined.
+            PatchOrLog(harmony, "carpenters", () => harmony.Patch(
+                original: AccessTools.Method(typeof(GameLocation), nameof(GameLocation.carpenters)),
+                postfix: new HarmonyMethod(typeof(BusTrailerManager), nameof(Carpenters_Postfix))));
 
             // Handle the injected menu option and the follow-up yes/no answer.
-            harmony.Patch(
+            PatchOrLog(harmony, "answerDialogueAction", () => harmony.Patch(
                 original: AccessTools.Method(typeof(GameLocation), nameof(GameLocation.answerDialogueAction)),
-                prefix: new HarmonyMethod(typeof(BusTrailerManager), nameof(AnswerDialogueAction_Prefix)));
+                prefix: new HarmonyMethod(typeof(BusTrailerManager), nameof(AnswerDialogueAction_Prefix))));
 
             // Draw the finished trailer / construction site behind the bus.
-            harmony.Patch(
+            PatchOrLog(harmony, "BusStop.draw", () => harmony.Patch(
                 original: AccessTools.Method(typeof(BusStop), nameof(BusStop.draw), new[] { typeof(SpriteBatch) }),
-                postfix: new HarmonyMethod(typeof(BusTrailerManager), nameof(BusStopDraw_Postfix)));
+                postfix: new HarmonyMethod(typeof(BusTrailerManager), nameof(BusStopDraw_Postfix))));
+
+            // Block walking through the trailer's footprint (both mid-construction and once built).
+            // This is the widest isCollidingPosition overload; the other overloads all funnel into it,
+            // so a single postfix here covers farmer movement, pathfinding, etc.
+            PatchOrLog(harmony, "isCollidingPosition", () => harmony.Patch(
+                original: AccessTools.Method(typeof(GameLocation), nameof(GameLocation.isCollidingPosition), new[]
+                {
+                    typeof(Rectangle), typeof(xTile.Dimensions.Rectangle), typeof(bool), typeof(int), typeof(bool),
+                    typeof(Character), typeof(bool), typeof(bool), typeof(bool), typeof(bool)
+                }),
+                postfix: new HarmonyMethod(typeof(BusTrailerManager), nameof(IsCollidingPosition_Postfix))));
+        }
+
+        /// <summary>Applies a Harmony patch and logs whether it actually succeeded, instead of letting a
+        /// failure surface only as a missing effect later (used to diagnose a patch silently not firing).</summary>
+        private static void PatchOrLog(Harmony harmony, string label, Action patch)
+        {
+            try
+            {
+                patch();
+                Logger.LogVerbose($"BusTrailerManager: patched {label} successfully.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogVerbose($"BusTrailerManager: FAILED to patch {label}: {ex}");
+            }
         }
 
         /// <summary>Host-side construction countdown, mirroring how house upgrades tick down day by day.</summary>
@@ -223,32 +253,55 @@ namespace HorseTycoon
         /// Lewis's scouting letter).</summary>
         private static bool ShouldOfferTrailer()
         {
-            return Context.IsWorldReady
-                && Game1.MasterPlayer.mailReceived.Contains("ccVault")
-                && FestivalRaceManager.HasAnyPlayerWonSpringFestival()
-                && NextTier != null
-                && !IsUnderConstruction;
+            bool worldReady = Context.IsWorldReady;
+            bool hasCcVault = worldReady && Game1.MasterPlayer.mailReceived.Contains("ccVault");
+            bool wonSpringFestival = worldReady && FestivalRaceManager.HasAnyPlayerWonSpringFestival();
+            TrailerTier? nextTier = worldReady ? NextTier : null;
+            bool underConstruction = worldReady && IsUnderConstruction;
+
+            Logger.LogVerbose($"ShouldOfferTrailer: worldReady={worldReady}, hasCcVault={hasCcVault}, "
+                + $"wonSpringFestival={wonSpringFestival}, level={(worldReady ? Level : -1)}, "
+                + $"nextTier={nextTier?.Name ?? "null"}, underConstruction={underConstruction}");
+
+            return worldReady
+                && hasCcVault
+                && wonSpringFestival
+                && nextTier != null
+                && !underConstruction;
         }
 
         /// <summary>
-        /// Fires before <see cref="GameLocation.createQuestionDialogue(string, Response[], string)"/>. When
-        /// Robin's carpenter menu is being built (dialog key <c>carpenter</c>), inserts the trailer option
-        /// just above "Leave".
+        /// Fires after <see cref="GameLocation.carpenters(Location)"/>. If vanilla just built and showed
+        /// the "carpenter" question dialogue, mutates the already-constructed <see cref="DialogueBox"/>'s
+        /// response list directly to insert the trailer option just above "Leave" (rather than patching
+        /// <c>createQuestionDialogue</c> itself, since that call gets JIT-inlined into this caller).
         /// </summary>
-        private static void CreateQuestionDialogue_Prefix(string question, ref Response[] answerChoices, string dialogKey)
+        private static void Carpenters_Postfix(GameLocation __instance)
         {
-            if (dialogKey != "carpenter" || !ShouldOfferTrailer())
+            if (!ShouldOfferTrailer())
+                return;
+            if (__instance.lastQuestionKey != "carpenter")
+                return;
+            if (Game1.activeClickableMenu is not DialogueBox dialogueBox || !dialogueBox.isQuestion)
                 return;
 
             string label = Level == 0
                 ? $"Build a {NextTier!.Name}"
                 : $"Upgrade to a {NextTier!.Name}";
 
-            var choices = answerChoices.ToList();
+            var choices = dialogueBox.responses.ToList();
             int leaveIndex = choices.FindIndex(r => r.responseKey == "Leave");
             if (leaveIndex < 0) leaveIndex = choices.Count;
             choices.Insert(leaveIndex, new Response("HorseTrailer", label));
-            answerChoices = choices.ToArray();
+            dialogueBox.responses = choices.ToArray();
+
+            // The box's height/position were already computed (by the constructor) for the original,
+            // shorter response list. Recompute them the same way the constructor does, or the added
+            // response overflows past the bottom edge instead of the box growing to fit it.
+            helper.Reflection.GetMethod(dialogueBox, "setUpQuestions").Invoke();
+            dialogueBox.height = dialogueBox.heightForQuestions;
+            dialogueBox.x = (int)Utility.getTopLeftPositionForCenteringOnScreen(dialogueBox.width, dialogueBox.height).X;
+            dialogueBox.y = Game1.uiViewport.Height - dialogueBox.height - 64;
         }
 
         /// <summary>
@@ -283,8 +336,8 @@ namespace HorseTycoon
 
             string price = Utility.getNumberWithCommas(tier.Price);
             string pitch = Level == 0
-                ? $"I could build you a horse trailer for the bus! With that hitched up, you could haul your horses to festivals out of town. It'll cost {price}g plus {tier.BarCount} {tier.BarName}s and take {BuildDays} days. Want me to get started?"
-                : $"I could stretch that trailer into a {tier.Name.ToLower()} — room for {tier.HorseCapacity} horses! It'll cost {price}g plus {tier.BarCount} {tier.BarName}s and take {BuildDays} days. Want me to get started?";
+                ? $"I can build you a horse trailer for the bus. With that hitched up, you could bring your horses to festivals out of town. It'll cost {price}g plus {tier.BarCount} {tier.BarName}s and take {BuildDays} days. Want me to get started?"
+                : $"I could upgrade that trailer into a {tier.Name.ToLower()}, room for {tier.HorseCapacity} horses! It'll cost {price}g plus {tier.BarCount} {tier.BarName}s and take {BuildDays} days. Want me to get started?";
 
             location.createQuestionDialogue(
                 Game1.parseText(pitch),
@@ -363,6 +416,38 @@ namespace HorseTycoon
 
             helper.Reflection.GetField<bool>(busStop, "leaving").SetValue(false);
             return true;
+        }
+
+        // ======================== Collision ========================
+
+        /// <summary>The trailer's pixel footprint behind the bus (construction site or finished trailer,
+        /// whichever is current), or null when there's no trailer and none is being built. The footprint
+        /// is anchored at a fixed tile regardless of the bus's drive-off/arrival animation, matching
+        /// <see cref="DrawConstructionSite"/>'s tile math. The front row (nearest the bus) is left out so
+        /// players can walk behind the trailer; the construction site is one row shorter still, since the
+        /// framing hasn't gone up yet.</summary>
+        private static Rectangle? GetFootprint()
+        {
+            if (!Context.IsWorldReady || (!IsBuilt && !IsUnderConstruction))
+                return null;
+
+            int level = IsUnderConstruction ? TargetLevel : Level;
+            int tilesWide = Tiers[System.Math.Min(level, Tiers.Length) - 1].TilesWide;
+            int blockedRows = TrailerTilesHigh - 1 - (IsUnderConstruction ? 1 : 0);
+            return new Rectangle(TrailerTileX * 64, (TrailerTileY + 1) * 64, tilesWide * 64, blockedRows * 64);
+        }
+
+        /// <summary>Fires after <see cref="GameLocation.isCollidingPosition"/>. Blocks movement into the
+        /// trailer's footprint at the Bus Stop, since it's drawn/tracked purely by this manager rather
+        /// than as a real <see cref="StardewValley.Buildings.Building"/> with its own collision box.</summary>
+        private static void IsCollidingPosition_Postfix(GameLocation __instance, Rectangle position, ref bool __result)
+        {
+            if (__result || __instance is not BusStop)
+                return;
+
+            Rectangle? footprint = GetFootprint();
+            if (footprint.HasValue && position.Intersects(footprint.Value))
+                __result = true;
         }
 
         // ======================== Drawing ========================

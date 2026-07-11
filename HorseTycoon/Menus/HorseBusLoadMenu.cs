@@ -23,7 +23,7 @@ namespace HorseTycoon.Menus
         private readonly ClickableTextureComponent departButton;
 
         protected override int ItemCount => this.Animals.Count;
-        protected override string Title => "Load horses onto the bus";
+        protected override string Title => "Load the horse trailer";
 
         public HorseBusLoadMenu(List<FarmAnimal> animals, IEnumerable<long> preselectedIds, int capacity, Action<List<FarmAnimal>> onConfirm)
         {
