@@ -425,6 +425,10 @@ namespace HorseTycoon
             horse.Position = tile * 64f - new Vector2(0f, ProxyYOffset) + new Vector2(xPixelOffset, 0f);
             horse.Halt();
             horse.faceDirection(facing);
+            // The pen box is fully solid (see breedingpen.json), so the proxy would otherwise
+            // sort behind the building's fence texture. drawOnTop forces a fixed high layerDepth
+            // (Character.draw) so the horse always renders above the fence. Not a netcode field —
+            // must also be (re)applied per-client in OnUpdateTicked below.
             horse.drawOnTop = true;
             if (!farm.characters.Contains(horse))
                 farm.characters.Add(horse);

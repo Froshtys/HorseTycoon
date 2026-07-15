@@ -59,6 +59,13 @@ namespace HorseTycoon
             actor.Sprite.StopAnimation();
             actor.EventActor = true;
 
+            // Once this actor gets a currentLocation, NPC.update() auto-calls ChooseAppearance(),
+            // which reloads the sprite/portrait from "Characters/Portraits" + getTextureName() (the
+            // actor's own Name, e.g. "HorseTycoonHorseSeller") rather than the borrowed spriteName,
+            // logging a load-failure warning and clobbering the sheet we just borrowed. Disable it
+            // since this is a fixed, temporary festival actor with no per-location appearance data.
+            actor.AllowDynamicAppearance = false;
+
             // Portrait for the keeper's intro dialogue lines (vanilla dialogue box).
             try
             {

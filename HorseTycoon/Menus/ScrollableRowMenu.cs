@@ -21,6 +21,12 @@ namespace HorseTycoon.Menus
         protected const int MaxVisibleItems = 4;
         protected const int PanelHeight = RowHeight + 4;
 
+        /// <summary>Left edge of the stat-bar block (divider sits 10px before it), relative to
+        /// <see cref="RowContentX"/>. The name column uses the space between the sprite and it.</summary>
+        protected const int StatBlockX = 369;
+        private const int NameColumnX = 104;
+        private const int NameColumnWidth = 250;
+
         // Vanilla checkbox sprites shared by several subclasses.
         protected static readonly Rectangle EmptyCheckboxSource = new(227, 425, 9, 9);
         protected static readonly Rectangle CheckedCheckboxSource = new(236, 425, 9, 9);
@@ -47,8 +53,15 @@ namespace HorseTycoon.Menus
         protected int PanelX => this.xPositionOnScreen + 32;
         protected int PanelWidth => this.width - 64;
 
-        protected ScrollableRowMenu()
-            : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 770, 580, showUpperRightCloseButton: true)
+        /// <summary>Extra width for menus whose rows show a gold price column
+        /// (<see cref="DrawRowPrice"/>), so the price doesn't crowd the stat labels.</summary>
+        protected const int PriceColumnWidth = 200;
+
+        /// <param name="extraWidth">Widens the menu to the right (the left edge stays put so the
+        /// keeper portrait and speech box keep their space). Pass <see cref="PriceColumnWidth"/>
+        /// when rows draw prices.</param>
+        protected ScrollableRowMenu(int extraWidth = 0)
+            : base(Game1.uiViewport.Width / 2 - 375, Game1.uiViewport.Height / 2 - 290, 770 + extraWidth, 580, showUpperRightCloseButton: true)
         {
             int rightScrollEdgeX = this.xPositionOnScreen + this.width + 16;
             this.upArrow = new ClickableTextureComponent(new Rectangle(rightScrollEdgeX, this.yPositionOnScreen + TopPadding, 44, 48), Game1.mouseCursors, new Rectangle(421, 459, 11, 12), 4f);
@@ -226,10 +239,13 @@ namespace HorseTycoon.Menus
             int titleX = this.xPositionOnScreen + (this.width - SpriteText.getWidthOfString(title)) / 2;
             SpriteText.drawStringWithScrollBackground(b, title, titleX, this.yPositionOnScreen);
 
-            IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(403, 383, 6, 6), this.scrollBarRunner.X, this.scrollBarRunner.Y, this.scrollBarRunner.Width, this.scrollBarRunner.Height, Color.White, 4f, false);
-            this.scrollBar.draw(b);
-            this.upArrow.draw(b);
-            this.downArrow.draw(b);
+            if (this.ItemCount > MaxVisibleItems)
+            {
+                IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(403, 383, 6, 6), this.scrollBarRunner.X, this.scrollBarRunner.Y, this.scrollBarRunner.Width, this.scrollBarRunner.Height, Color.White, 4f, false);
+                this.scrollBar.draw(b);
+                this.upArrow.draw(b);
+                this.downArrow.draw(b);
+            }
 
             for (int i = 0; i < MaxVisibleItems; i++)
             {
@@ -269,7 +285,7 @@ namespace HorseTycoon.Menus
         protected static void DrawCenteredName(SpriteBatch b, string name, Color color, int rowX, int rowY)
         {
             Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
-            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(rowX + 110 + (240 - nameSize.X) / 2, rowY + 32), color);
+            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(rowX + NameColumnX + (NameColumnWidth - nameSize.X) / 2, rowY + 32), color);
         }
 
         /// <summary>Name plus an optional status tag ("(baby)", "(pregnant)", ...) underneath, both
@@ -283,9 +299,9 @@ namespace HorseTycoon.Menus
             }
 
             Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
-            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(rowX + 110 + (240 - nameSize.X) / 2, rowY + 16), Game1.textColor);
+            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(rowX + NameColumnX + (NameColumnWidth - nameSize.X) / 2, rowY + 16), Game1.textColor);
             Vector2 tagSize = Game1.smallFont.MeasureString(tag);
-            Utility.drawTextWithShadow(b, tag, Game1.smallFont, new Vector2(rowX + 110 + (240 - tagSize.X) / 2, rowY + 58), tagColor);
+            Utility.drawTextWithShadow(b, tag, Game1.smallFont, new Vector2(rowX + NameColumnX + (NameColumnWidth - tagSize.X) / 2, rowY + 58), tagColor);
         }
 
         /// <summary>Load a "Portraits/&lt;name&gt;" sheet for <see cref="DrawKeeperPortrait"/>; null when
@@ -312,7 +328,10 @@ namespace HorseTycoon.Menus
         {
             int portraitX = this.xPositionOnScreen - 320;
             if (portraitX <= 0 || !Game1.options.showMerchantPortraits)
+            {
+                Logger.LogVerbose($"DrawKeeperPortrait: hidden (portraitX={portraitX}, showMerchantPortraits={Game1.options.showMerchantPortraits}).");
                 return;
+            }
 
             if (portrait != null)
             {
@@ -323,38 +342,36 @@ namespace HorseTycoon.Menus
             }
             if (parsedDialogue != null)
             {
-                int dialogueX = this.xPositionOnScreen - (int)Game1.dialogueFont.MeasureString(parsedDialogue).X - 64;
-                if (dialogueX > 0)
-                {
-                    IClickableMenu.drawHoverText(b, parsedDialogue, Game1.dialogueFont, 0, 0, -1, null, -1, null, null, 0, null, -1,
-                        dialogueX, this.yPositionOnScreen + ((portrait != null) ? 312 : 0), 1f, null, null,
-                        Game1.menuTexture, new Rectangle(0, 256, 60, 60), null, null);
-                }
+                // Vanilla hides the speech box when it doesn't fully fit left of the menu
+                // (needs ~370px vs the portrait's 320px); clamp to the screen edge instead
+                // so the dialogue always shows whenever the portrait does.
+                int dialogueX = Math.Max(8, this.xPositionOnScreen - (int)Game1.dialogueFont.MeasureString(parsedDialogue).X - 64);
+                IClickableMenu.drawHoverText(b, parsedDialogue, Game1.dialogueFont, 0, 0, -1, null, -1, null, null, 0, null, -1,
+                    dialogueX, this.yPositionOnScreen + ((portrait != null) ? 312 : 0), 1f, null, null,
+                    Game1.menuTexture, new Rectangle(0, 256, 60, 60), null, null);
             }
         }
 
-        /// <summary>Player's current gold in the lower-left, so they can compare against prices.</summary>
+        /// <summary>Player's current gold in the lower-left, so they can compare against prices.
+        /// Uses the vanilla hanging money-box sign (same widget ShopMenu draws).</summary>
         protected void DrawPlayerMoney(SpriteBatch b)
         {
-            string moneyText = $"You have: {Utility.getNumberWithCommas(Game1.player.Money)}g";
-            Utility.drawTextWithShadow(b, moneyText, Game1.smallFont,
-                new Vector2(this.xPositionOnScreen + 40, this.yPositionOnScreen + this.height + 12), Color.White);
+            Game1.dayTimeMoneyBox.drawMoneyBox(b, this.xPositionOnScreen - 4, this.yPositionOnScreen + this.height - 12);
         }
 
-        /// <summary>Gold amount (Pierre's-shop style: coin icon + text, right-aligned) at the
-        /// bottom-right of a row panel.</summary>
-        protected void DrawRowPrice(SpriteBatch b, int rowY, int price, Color color)
+        /// <summary>Gold amount vanilla-ShopMenu style (SpriteText digits then a shadowed coin,
+        /// right-aligned, vertically centered in the row; dimmed like Pierre's when the player
+        /// can't act on it). Same offsets/scales as ShopMenu.draw.</summary>
+        protected void DrawRowPrice(SpriteBatch b, int rowY, int price, bool dimmed = false)
         {
-            string priceText = Utility.getNumberWithCommas(price) + "g";
-            Vector2 priceSize = Game1.smallFont.MeasureString(priceText);
-            int coinSize = 25; // 9px coin sprite at ~2.8x
-            int priceRightEdge = this.PanelX + this.PanelWidth - 20;
-            int priceY = rowY + PanelHeight - (int)priceSize.Y - 10;
-            b.Draw(Game1.mouseCursors,
-                new Vector2(priceRightEdge - priceSize.X - coinSize - 6, priceY + 2),
-                new Rectangle(193, 373, 9, 10), Color.White, 0f, Vector2.Zero, 2.8f, SpriteEffects.None, 1f);
-            Utility.drawTextWithShadow(b, priceText, Game1.smallFont,
-                new Vector2(priceRightEdge - priceSize.X, priceY), color);
+            string priceText = price + " ";
+            int rightEdge = this.PanelX + this.PanelWidth;
+            int priceY = rowY + (PanelHeight - 44) / 2;
+            SpriteText.drawString(b, priceText, rightEdge - SpriteText.getWidthOfString(priceText) - 60, priceY,
+                999999, -1, 999999, dimmed ? 0.5f : 1f, 0.88f);
+            Utility.drawWithShadow(b, Game1.mouseCursors, new Vector2(rightEdge - 52, priceY + 8),
+                new Rectangle(193, 373, 9, 10), Color.White * (dimmed ? 0.25f : 1f), 0f, Vector2.Zero, 4f,
+                flipped: false, -1f, -1, -1, dimmed ? 0f : 0.35f);
         }
 
         /// <summary>The three Speed/Sprint/Jump pixel-segment bars with labels and the dark wood
@@ -362,12 +379,12 @@ namespace HorseTycoon.Menus
         protected void DrawStatSegments(SpriteBatch b, int rowX, int rowY,
             int speedIV, int speedEV, int sprintIV, int sprintEV, int jumpIV, int jumpEV)
         {
-            int barStartX = rowX + 345;
+            int barStartX = rowX + StatBlockX;
             int barStartY = rowY + 16;
             const int verticalGap = 28;
             int labelX = barStartX + 125 + 32 + 12;
 
-            b.Draw(Game1.staminaRect, new Rectangle(rowX + 350 - 15, rowY + 12, 2, RowHeight - 20), Color.SaddleBrown * 0.4f);
+            b.Draw(Game1.staminaRect, new Rectangle(barStartX - 10, rowY + 12, 2, RowHeight - 20), Color.SaddleBrown * 0.4f);
             MenuDrawingHelper.DrawPixelSegments(b, barStartX, barStartY, speedIV, speedEV, 2f);
             MenuDrawingHelper.DrawPixelSegments(b, barStartX, barStartY + verticalGap, sprintIV, sprintEV, 2f);
             MenuDrawingHelper.DrawPixelSegments(b, barStartX, barStartY + verticalGap * 2, jumpIV, jumpEV, 2f);

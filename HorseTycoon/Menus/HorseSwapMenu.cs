@@ -154,7 +154,7 @@ namespace HorseTycoon.Menus
 
             // Daily-training checkboxes to the right of the stat labels.
             const float checkboxScale = 2.6f;
-            int checkboxColumnX = rowX + 345 + 272;
+            int checkboxColumnX = rowX + StatBlockX + 272;
             int barStartY = rowY + 16;
             const int verticalGap = 28;
             b.Draw(Game1.mouseCursors, new Vector2(checkboxColumnX, barStartY + 2), TrainingManager.HasTrainedSpeedToday(animal) ? CheckedCheckboxSource : EmptyCheckboxSource, Color.White, 0f, Vector2.Zero, checkboxScale, SpriteEffects.None, 1f);

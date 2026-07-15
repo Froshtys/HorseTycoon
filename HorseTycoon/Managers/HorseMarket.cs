@@ -32,7 +32,7 @@ namespace HorseTycoon
     {
         public const int SaleGoldPerIvPoint = 1000;
         public const int StudGoldPerIvPoint = 500;
-        public const int SaleOfferCount = 5;
+        public const int SaleOfferCount = 6;
         public const int StudOfferCount = 4;
 
         private const string MsgBuyHorse = "MarketBuyHorse";
@@ -123,15 +123,19 @@ namespace HorseTycoon
             return offers;
         }
 
+        /// <summary>Longest generated name that fits the menus' name column without clipping
+        /// into the stat bars. Char count (not pixel width) so all multiplayer clients agree.</summary>
+        private const int MaxNameLength = 12;
+
         private static string GenerateName(System.Random rng, HashSet<string> usedNames)
         {
             for (int attempt = 0; attempt < 50; attempt++)
             {
                 string name = $"{NameFirstParts[rng.Next(NameFirstParts.Length)]} {NameSecondParts[rng.Next(NameSecondParts.Length)]}";
-                if (usedNames.Add(name))
+                if (name.Length <= MaxNameLength && usedNames.Add(name))
                     return name;
             }
-            return $"{NameFirstParts[rng.Next(NameFirstParts.Length)]} {NameSecondParts[rng.Next(NameSecondParts.Length)]} II";
+            return $"{NameFirstParts[rng.Next(NameFirstParts.Length)]} II";
         }
 
         /// <summary>

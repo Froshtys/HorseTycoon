@@ -36,6 +36,7 @@ namespace HorseTycoon.Menus
         /// <param name="soldIds">Horses already sold this festival; clicked horses are added so the
         /// state survives closing and reopening the menu.</param>
         public StudOfferMenu(List<FarmAnimal> studs, HashSet<long> soldIds, string? portraitName)
+            : base(PriceColumnWidth)
         {
             this.Studs = studs;
             this.SoldIds = soldIds;
@@ -108,7 +109,7 @@ namespace HorseTycoon.Menus
             var stats = stud.GetHorseStats();
             this.DrawStatSegments(b, rowX, rowY, stats.SpeedIV, stats.SpeedEV, stats.SprintIV, stats.SprintEV, stats.JumpIV, stats.JumpEV);
 
-            this.DrawRowPrice(b, rowY, HorseMarket.GetStudOfferFee(stud), sellable ? new Color(90, 60, 10) : Color.Gray);
+            this.DrawRowPrice(b, rowY, HorseMarket.GetStudOfferFee(stud), dimmed: !sellable);
         }
 
         protected override void DrawExtras(SpriteBatch b)

@@ -1096,6 +1096,14 @@ namespace HorseTycoon
             activeDef.Value = DefinitionForEvent(festival);
             FestivalDefinition def = activeDef.Value!;
 
+            // BoardBusToSummerFestival/BusLeftToDesert_Prefix leave these set from the departure
+            // animation at the BusStop. Vanilla's own warp completion clears them automatically,
+            // but only when !eventUp — and by the time we land here the festival Event is already
+            // up, so that auto-clear is skipped. Left set, the player stays frozen/uncontrollable
+            // once the cinematic below hands control back.
+            Game1.freezeControls = false;
+            Game1.viewportFreeze = false;
+
             Game1.changeMusicTrack("silence", track_interruptable: true);
             Game1.displayFarmer = false;
             Game1.player.CanMove = false;

@@ -37,6 +37,7 @@ namespace HorseTycoon.Menus
         /// portrait, describing what the shop is about.</param>
         public HorseShopMenu(string title, List<HorseOffer> offers, Action<HorseOffer> onSelected,
             string? portraitName = null, string? portraitDialogue = null)
+            : base(PriceColumnWidth)
         {
             this.title = title;
             this.Offers = offers.Where(o => !o.Purchased).ToList();
@@ -97,8 +98,8 @@ namespace HorseTycoon.Menus
 
             this.DrawStatSegments(b, rowX, rowY, offer.SpeedIV, 0, offer.SprintIV, 0, offer.JumpIV, 0);
 
-            // Gold price (Pierre's-shop style: coin icon + amount, right-aligned).
-            this.DrawRowPrice(b, rowY, offer.Price, canAfford ? new Color(90, 60, 10) : Color.Firebrick);
+            // Gold price (Pierre's-shop style: amount + coin, right-aligned, dimmed if unaffordable).
+            this.DrawRowPrice(b, rowY, offer.Price, dimmed: !canAfford);
         }
 
         protected override void DrawExtras(SpriteBatch b)
