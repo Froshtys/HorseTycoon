@@ -277,8 +277,8 @@ namespace HorseTycoon
 
             // 8 total racers (4 players + 4 NPCs); topmost slot (slot 6, offset -6) lands the gate at (35, 6).
             StartStall = new Point(34, 14),
-            FinishMin = new Point(91, 7),
-            FinishMax = new Point(91, 14),
+            FinishMin = new Point(125, 9),
+            FinishMax = new Point(125, 16),
             DqZoneNorthOfY = -1,
             DqZoneEastOfX = -1,
             DqZoneWestOfX = 32,
@@ -306,10 +306,10 @@ namespace HorseTycoon
             NpcJumpMinSkill = 50,
             NpcRaceRoutes = new[]
             {
-                new[] { new Point(61, 13), new Point(91, 12) },
-                new[] { new Point(57, 10), new Point(91, 12) },
-                new[] { new Point(58, 17), new Point(91, 12) },
-                new[] { new Point(56, 20), new Point(91, 12) },
+                new[] { new Point(61, 13), new Point(128, 12) },
+                new[] { new Point(57, 10), new Point(128, 12) },
+                new[] { new Point(58, 17), new Point(128, 12) },
+                new[] { new Point(56, 20), new Point(128, 12) },
             },
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },

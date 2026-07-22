@@ -481,8 +481,10 @@ namespace HorseTycoon
             return true;
         }
 
-        /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" during our race.</summary>
-        public static bool EventUpForSpeed() => Game1.eventUp && !RaceRidingActive;
+        /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" for the whole time
+        /// our festival is running (not just while actively racing), so players can run on foot while
+        /// browsing the pasture/shops too. Other vanilla events (weddings, other festivals) are unaffected.</summary>
+        public static bool EventUpForSpeed() => Game1.eventUp && RaceFestival == null;
 
         /// <summary>True whenever the horse festival is in any of the racing phases).</summary>
         public static bool IsInAnyRacingPhase => Instance?.phase.Value is Phase.Racing or Phase.Finished;

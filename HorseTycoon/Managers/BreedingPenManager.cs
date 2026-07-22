@@ -475,7 +475,33 @@ namespace HorseTycoon
             // while it's active — no need to fight the grazing loop ourselves.
             horse.Sprite.StopAnimation();
             SetMunchingCarrotTimer(horse, 1500);
-            horse.doEmote(20);
+            PlayHeartAbove(horse);
+        }
+
+        // doEmote's heart draws via Character.DrawEmote, which sorts by StandingPixel.Y and ignores
+        // drawOnTop — it rendered behind the (fully solid) pen building. A manually-placed TAS lets us
+        // force a layerDepth that's always above the building instead.
+        private static void PlayHeartAbove(Horse horse)
+        {
+            GameLocation? location = horse.currentLocation;
+            if (location == null) return;
+
+            Vector2 pos = new(
+                horse.Position.X + horse.Sprite.SpriteWidth * 4f / 2f - 32f,
+                horse.Position.Y - 96f);
+
+            var heartTas = new TemporaryAnimatedSprite("TileSheets\\emotes", new Rectangle(0, 80, 16, 16), 250f, 4, 2, pos, flicker: false, flipped: false)
+            {
+                layerDepth = 1f,
+                scale = 4f
+            };
+            var introTas = new TemporaryAnimatedSprite("TileSheets\\emotes", new Rectangle(0, 0, 16, 16), 20f, 4, 0, pos, flicker: false, flipped: false)
+            {
+                layerDepth = 1f,
+                scale = 4f,
+                endFunction = _ => location.temporarySprites.Add(heartTas)
+            };
+            location.temporarySprites.Add(introTas);
         }
 
     }

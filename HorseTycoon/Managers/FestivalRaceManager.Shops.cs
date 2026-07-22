@@ -96,8 +96,20 @@ namespace HorseTycoon
         // Horse Seller
         // ====================================================================================
 
+        /// <summary>The HUD money box is hidden during the festival, so its dial/shake only advance
+        /// while one of our shop menus draws it. Snap it to the player's current money on shop entry
+        /// so earlier changes (bus fare, bets) don't replay their animation on first open; money
+        /// spent inside the shop session still animates normally.</summary>
+        private static void SnapMoneyDial()
+        {
+            Game1.dayTimeMoneyBox.moneyDial.currentValue = Game1.player.Money;
+            Game1.dayTimeMoneyBox.moneyDial.previousTargetValue = Game1.player.Money;
+            Game1.dayTimeMoneyBox.moneyShakeTimer = 0;
+        }
+
         private void OpenHorseSellerShop(NPC seller)
         {
+            SnapMoneyDial();
             if (HorseMarket.GetSaleOffers().All(o => o.Purchased))
             {
                 this.Speak(seller, "Sold out! Come back at the next festival.");
@@ -148,29 +160,41 @@ namespace HorseTycoon
                     // Another player may have bought this offer while the confirm dialogue was open.
                     if (offer.Purchased)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("Sorry — that horse was just sold to someone else!");
+                        this.SayThenReturnToSaleMenu("Sorry — that horse was just sold to someone else!");
                         return;
                     }
 
                     if (Game1.player.Money < offer.Price)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("You don't have enough gold.");
+                        this.SayThenReturnToSaleMenu("You don't have enough gold.");
                         return;
                     }
                     if (HorseHelper.GetAvailableBarn() == null)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("You'll need a barn on your farm before I can deliver a horse.");
+                        this.SayThenReturnToSaleMenu("You'll need a barn on your farm before I can deliver a horse.");
                         return;
                     }
                     if (HorseHelper.GetBarnWithHorseSpace() == null)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("Your barn is full! Make some room — or build another stable — and come see me again.");
+                        this.SayThenReturnToSaleMenu("Your barn is full! Make some room — or build another stable — and come see me again.");
                         return;
                     }
 
                     HorseMarket.PurchaseHorse(offer);
-                    Game1.afterDialogues = () => Game1.drawObjectDialogue($"{offer.Name} has been delivered to your barn, ready and waiting for you at home!");
+                    this.SayThenReturnToSaleMenu($"{offer.Name} has been delivered to your barn, ready and waiting for you at home!");
                 });
+        }
+
+        /// <summary>Show a message once the current dialogue closes, then drop the player back into
+        /// the sale menu (so a purchase or a failed check doesn't kick them out of the shop).
+        /// <see cref="ShowHorseSaleMenu"/> handles the everything-sold case itself.</summary>
+        private void SayThenReturnToSaleMenu(string message)
+        {
+            Game1.afterDialogues = () =>
+            {
+                Game1.drawObjectDialogue(message);
+                Game1.afterDialogues = this.ShowHorseSaleMenu;
+            };
         }
 
         // ====================================================================================
@@ -191,6 +215,7 @@ namespace HorseTycoon
 
         private void OpenStudShop(NPC studKeeper)
         {
+            SnapMoneyDial();
             if (!this.studShopIntroSeen)
             {
                 this.studShopIntroSeen = true;
@@ -280,12 +305,14 @@ namespace HorseTycoon
                                 if (Game1.player.Money < stud.Price)
                                 {
                                     Game1.drawObjectDialogue("You don't have enough gold.");
+                                    Game1.afterDialogues = this.ShowStudMenu;
                                     return;
                                 }
                                 HorseMarket.PurchaseStudService(stud, mare);
                                 Game1.drawObjectDialogue(
                                     $"{mare.Name} and {stud.Name} hit it off! {mare.Name} is now pregnant — " +
                                     $"the foal is due in {BreedingManager.GestationDays} days.");
+                                Game1.afterDialogues = this.ShowStudMenu;
                             });
                 });
         }

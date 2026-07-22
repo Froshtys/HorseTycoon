@@ -66,6 +66,22 @@ namespace HorseTycoon.Menus
 
             if (current != null)
             {
+                // Breeding is in progress — confirm before scrapping it.
+                if (BreedingPenManager.GetBreedDaysLeft(this.Pen) > 0)
+                {
+                    Building confirmPen = this.Pen;
+                    Game1.activeClickableMenu = new ConfirmationDialog(
+                        $"Remove {current.displayName}? This will stop the breeding in progress.",
+                        _ =>
+                        {
+                            Game1.playSound("coin");
+                            BreedingPenManager.RemoveHorse(confirmPen, wasMare: asMare);
+                            Game1.activeClickableMenu = new BreedingPenMenu(confirmPen);
+                        },
+                        _ => Game1.activeClickableMenu = new BreedingPenMenu(confirmPen));
+                    return;
+                }
+
                 // Occupied slot → remove and return the horse to its barn.
                 Game1.playSound("coin");
                 BreedingPenManager.RemoveHorse(this.Pen, wasMare: asMare);
@@ -152,7 +168,7 @@ namespace HorseTycoon.Menus
                 new Vector2(slot.X + slot.Width / 2 - nameSize.X / 2, slot.Y + slot.Height - 96), Game1.textColor);
 
             // Fed status.
-            string fedText = fed ? "Fed ✓" : "Not fed";
+            string fedText = fed ? "Fed" : "Not fed";
             Color fedColor = fed ? Color.ForestGreen : Color.Firebrick;
             Vector2 fedSize = Game1.smallFont.MeasureString(fedText);
             Utility.drawTextWithShadow(b, fedText, Game1.smallFont,
