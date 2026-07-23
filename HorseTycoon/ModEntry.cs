@@ -120,6 +120,9 @@ namespace HorseTycoon
 
             // Robin-built horse breeding pen
             BreedingPenManager.Initialize(helper, this.Monitor);
+
+            // Debug tool: ht_record_jumps to author NPC race routes + jump zones by riding the course
+            JumpPathRecorder.Initialize(helper, this.Monitor);
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)

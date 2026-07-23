@@ -3089,7 +3089,14 @@ namespace HorseTycoon
         /// </summary>
         private void LoadNpcJumpZonesFromMap(GameLocation loc)
         {
-            Def.NpcJumpZones.Clear();
+            // Zones authored in code (FestivalDefinition.NpcJumpZones) take precedence — the map's
+            // scan-order pairing can't express curving tracks with vertical/westward chained jumps, so
+            // festivals with complex courses define zones explicitly and skip the map scan entirely.
+            if (Def.NpcJumpZones.Count > 0)
+            {
+                this.Monitor.Log($"Using {Def.NpcJumpZones.Count} code-defined NPC jump zone(s); skipping map scan.", LogLevel.Info);
+                return;
+            }
 
             var approachLayer = loc.map.GetLayer(NpcJumpApproachLayer);
             var landingLayer = loc.map.GetLayer(NpcJumpLandingLayer);

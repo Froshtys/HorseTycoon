@@ -12,7 +12,7 @@ namespace HorseTycoon
     /// Register one instance per festival in <c>FestivalRaceManager.Festivals</c>. Tile coordinates
     /// are tuned in-game with the <c>ht_race_tile</c> console command.
     /// </summary>
-    public sealed class FestivalDefinition
+    public sealed partial class FestivalDefinition
     {
         // --- Identity / scheduling ---
         // Event id format: "festival_" + the file key from Event.tryToLoadFestival (e.g. Data/Festivals/spring21).
@@ -306,11 +306,49 @@ namespace HorseTycoon
             NpcJumpMinSkill = 50,
             NpcRaceRoutes = new[]
             {
+                // Index 0/2/3 (Marnie/Abigail/Sebastian) are still placeholder straight-line routes and
+                // must be re-recorded on the expanded map with ht_record_jumps.
                 new[] { new Point(61, 13), new Point(128, 12) },
-                new[] { new Point(57, 10), new Point(128, 12) },
+                // Index 1 = Leah's line, reduced to only the jump takeoff/landing tiles (chained
+                // duplicates deduped) so A* walks straight between jumps instead of stalling on the
+                // dense every-3s waypoints. Final (120, 10) is a non-jump anchor past the finish band
+                // (X=125) so she crosses the line and registers a finish.
+                new[]
+                {
+                    new Point(47, 21), new Point(50, 21), new Point(53, 16), new Point(53, 14), new Point(55, 14), new Point(57, 14),
+                    new Point(68, 12), new Point(68, 10), new Point(70, 10), new Point(72, 10), new Point(74, 10), new Point(75, 10),
+                    new Point(77, 10), new Point(79, 10), new Point(80, 10), new Point(82, 10), new Point(84, 10), new Point(85, 10),
+                    new Point(88, 10), new Point(90, 17), new Point(90, 19), new Point(90, 21), new Point(87, 35), new Point(87, 37),
+                    new Point(87, 39), new Point(89, 39), new Point(93, 39), new Point(95, 39), new Point(100, 40), new Point(103, 40),
+                    new Point(106, 40), new Point(109, 40), new Point(112, 24), new Point(114, 24), new Point(115, 24), new Point(117, 24),
+                    new Point(118, 24), new Point(120, 24), new Point(144, 35), new Point(146, 35), new Point(150, 36), new Point(153, 36),
+                    new Point(157, 36), new Point(160, 36), new Point(167, 39), new Point(168, 39), new Point(170, 39), new Point(172, 39),
+                    new Point(185, 34), new Point(185, 32), new Point(185, 30), new Point(187, 16), new Point(187, 13), new Point(182, 8),
+                    new Point(180, 8), new Point(178, 8), new Point(177, 8), new Point(175, 8), new Point(173, 8), new Point(172, 8),
+                    new Point(170, 8), new Point(168, 8), new Point(166, 8), new Point(164, 8), new Point(160, 10), new Point(158, 10),
+                    new Point(157, 10), new Point(155, 10), new Point(148, 10), new Point(146, 10), new Point(145, 10), new Point(143, 10),
+                    new Point(120, 10),
+                },
                 new[] { new Point(58, 17), new Point(128, 12) },
                 new[] { new Point(56, 20), new Point(128, 12) },
             },
+
+            // Jump zones authored in code, not the TMX. The map's NpcJumpApproach/NpcJumpLanding loader
+            // pairs tiles by scan order (top→bottom, left→right), which can't express this curving track's
+            // vertical and westward chained jumps — the pairs would cross-match. MinSkill 45 = Leah's jump
+            // skill, so she clears every zone on her recorded line. Recorded via ht_record_jumps.
+            NpcJumpZones = JumpZones(45,
+                (47, 21, 50, 21), (53, 16, 53, 14), (53, 14, 55, 14), (55, 14, 57, 14),
+                (68, 12, 68, 10), (68, 10, 70, 10), (70, 10, 72, 10), (72, 10, 74, 10),
+                (75, 10, 77, 10), (77, 10, 79, 10), (80, 10, 82, 10), (82, 10, 84, 10),
+                (85, 10, 88, 10), (90, 17, 90, 19), (90, 19, 90, 21), (87, 35, 87, 37),
+                (87, 39, 89, 39), (93, 39, 95, 39), (100, 40, 103, 40), (106, 40, 109, 40),
+                (112, 24, 114, 24), (115, 24, 117, 24), (118, 24, 120, 24), (144, 35, 146, 35),
+                (150, 36, 153, 36), (157, 36, 160, 36), (167, 39, 168, 39), (168, 39, 170, 39),
+                (170, 39, 172, 39), (185, 34, 185, 32), (185, 32, 185, 30), (187, 16, 187, 13),
+                (182, 8, 180, 8), (180, 8, 178, 8), (177, 8, 175, 8), (175, 8, 173, 8),
+                (172, 8, 170, 8), (170, 8, 168, 8), (168, 8, 166, 8), (166, 8, 164, 8),
+                (160, 10, 158, 10), (157, 10, 155, 10), (148, 10, 146, 10), (145, 10, 143, 10)),
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
@@ -421,6 +459,23 @@ namespace HorseTycoon
     /// One jump obstacle on the race course. NPCs whose TotalJump meets MinSkill clear
     /// it cleanly (arc to LandingTile); those below MinSkill do an in-place blocked hop.
     /// </summary>
+    public sealed partial class FestivalDefinition
+    {
+        /// <summary>
+        /// Builds an <see cref="NpcJumpZones"/> dictionary from explicit (approach → landing) tile pairs,
+        /// all sharing one MinSkill. Explicit pairing sidesteps the TMX scan-order pairing, which can't
+        /// represent curving tracks with vertical or westward chained jumps.
+        /// </summary>
+        private static System.Collections.Generic.Dictionary<Point, NpcJumpZone> JumpZones(
+            int minSkill, params (int ax, int ay, int lx, int ly)[] pairs)
+        {
+            var zones = new System.Collections.Generic.Dictionary<Point, NpcJumpZone>();
+            foreach (var (ax, ay, lx, ly) in pairs)
+                zones[new Point(ax, ay)] = new NpcJumpZone { LandingTile = new Point(lx, ly), MinSkill = minSkill };
+            return zones;
+        }
+    }
+
     public sealed class NpcJumpZone
     {
         /// <summary>Tile the NPC lands on after a successful jump.</summary>
