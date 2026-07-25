@@ -48,6 +48,10 @@ namespace HorseTycoon
         public static IReadOnlyList<(string Season, int Day, string AssetKey)> CalendarFestivals =>
             Festivals.Select(f => (f.Season, f.Day, f.Season + f.Day)).ToList();
 
+        /// <summary>Every registered horse festival, for code outside the manager that needs their data
+        /// (e.g. ModEntry injecting each festival's advance-notice letter into Data/Mail).</summary>
+        internal static IReadOnlyList<FestivalDefinition> AllFestivals => Festivals;
+
         // Prefix for the race-start ready check. A unique suffix is appended per race attempt (see
         // BeginRace) because Game1.netReady caches checks by id until the day-start Reset() and never
         // un-readies a completed one — reusing a fixed id makes a second race confirm instantly.
@@ -1664,6 +1668,37 @@ namespace HorseTycoon
             SummerBusHorseIds.Clear();
             SummerBusSelectionMade = false;
             SummerFareWaived = false;
+
+            this.DeliverFestivalNotices();
+        }
+
+        /// <summary>
+        /// Drops each festival's advance-notice letter into the local player's mailbox on the morning
+        /// AnnouncementDaysBefore days ahead of it — Lewis for the walk-in races, the Horse Racing
+        /// Committee for the summer away race. Runs per-client (DayStarted fires on every machine), so
+        /// every online player gets their own copy; the letter repeats every year, so it's added straight
+        /// to the mailbox rather than gated on mailReceived.
+        /// </summary>
+        private void DeliverFestivalNotices()
+        {
+            foreach (FestivalDefinition def in Festivals)
+            {
+                int noticeDay = def.Day - def.AnnouncementDaysBefore;
+                if (def.AnnouncementMailId == null
+                    || noticeDay < 1
+                    || Game1.currentSeason != def.Season
+                    || Game1.dayOfMonth != noticeDay
+                    || Game1.player.mailbox.Contains(def.AnnouncementMailId))
+                    continue;
+
+                // Away races: only invite players who could actually make the trip.
+                if (def.AnnouncementRequiresBusAccess
+                    && (!Game1.MasterPlayer.mailReceived.Contains("ccVault") || !BusTrailerManager.IsBuilt))
+                    continue;
+
+                Game1.player.mailbox.Add(def.AnnouncementMailId);
+                Logger.LogVerbose($"Queued festival notice {def.AnnouncementMailId} for {Game1.player.Name}.");
+            }
         }
 
         /// <summary>

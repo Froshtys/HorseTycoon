@@ -317,6 +317,14 @@ namespace HorseTycoon
                         spectatorBody + "[#]News From the Horse Festival";
                     data[FestivalRaceManager.SpringWinSpectatorBusMailId] =
                         spectatorBody + spectatorPostscript + "[#]News From the Horse Festival";
+
+                    // Advance-notice letters, one per festival that defines one (see FestivalDefinition).
+                    // Delivered a few days ahead of each race by FestivalRaceManager.DeliverFestivalNotices.
+                    foreach (FestivalDefinition def in FestivalRaceManager.AllFestivals)
+                    {
+                        if (def.AnnouncementMailId != null)
+                            data[def.AnnouncementMailId] = def.AnnouncementLetterText + "[#]" + def.AnnouncementLetterTitle;
+                    }
                 });
             }
         }

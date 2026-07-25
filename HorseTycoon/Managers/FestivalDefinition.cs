@@ -140,6 +140,18 @@ namespace HorseTycoon
         // Registered festivals
         // ====================================================================================
 
+        // --- Advance-notice letter (opt-in) ---
+        // Letter delivered to every player's mailbox a few days before the festival, every year.
+        // Null id = no letter. Text uses the usual Data/Mail codes (@ = farmer name, ^ = line break);
+        // the title is appended as "[#]<title>" when the entry is injected in ModEntry's Data/Mail edit.
+        public string? AnnouncementMailId;
+        public int AnnouncementDaysBefore = 3;
+        public string AnnouncementLetterText = "";
+        public string AnnouncementLetterTitle = "";
+        // When true the letter only reaches players who could actually attend an away race
+        // (bus repaired + horse trailer built), matching the HeadsUpMessage rule.
+        public bool AnnouncementRequiresBusAccess;
+
         /// <summary>The original Spring 19 Horse Festival in Cindersap Forest.</summary>
         public static FestivalDefinition Forest() => new()
         {
@@ -148,6 +160,14 @@ namespace HorseTycoon
             Day = 19,
             LocationName = "Forest",
             MapAssetKey = "CP.HorseTycoon_ForestFestival",
+
+            AnnouncementMailId = "HorseTycoon.SpringFestivalNotice",
+            AnnouncementLetterTitle = "The Spring Horse Festival",
+            AnnouncementLetterText =
+                "Dear @,^^In three days' time the valley gathers in Cindersap Forest for the Spring Horse Festival. "
+                + "Come riding on your horse at noon and I'll see it entered in the race.^"
+                + "^If you don't have one, Marnie is loaning them out. Pam will be taking wagers, as always.^"
+                + "^   -Mayor Lewis",
 
             PenSlots = new[]
             {
@@ -264,7 +284,14 @@ namespace HorseTycoon
             LocationName = "Beach",
             MapAssetKey = "CP.HorseTycoon_FallBeach",
 
-            // TODO(beach): re-author all tiles below for FallBeach.tmx — placeholders from Forest.
+            AnnouncementMailId = "HorseTycoon.FallFestivalNotice",
+            AnnouncementLetterTitle = "The Fall Horse Festival",
+            AnnouncementLetterText =
+                "Dear @,^^Three days from now the Fall Horse Festival takes over the beach. We've marked out a course "
+                + "along the sand and I'll warn you now, it's a jumping track with driftwood, crates, whatever the tide left us.^"
+                + "^If your horse has been schooled over fences, this is the day to show it."
+                + "^   -Mayor Lewis",
+
             PenSlots = new[]
             {
                 new Point(7, 4), new Point(5, 5), new Point(6, 7), new Point(4, 9),
@@ -364,6 +391,9 @@ namespace HorseTycoon
             FestivalDefinition def = Forest();
             def.EventId = "festival_spring3";
             def.Day = 3;
+            // The real Spring 19 festival already sends the advance notice; a second copy of the same
+            // letter (and a negative notice day) makes no sense for the test slot.
+            def.AnnouncementMailId = null;
             return def;
         }
 
@@ -383,6 +413,16 @@ namespace HorseTycoon
             MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
             BusArrival = true,
             HeadsUpMessage = "The bus to the Summer Horse Festival is now boarding.",
+
+            AnnouncementMailId = "HorseTycoon.SummerFestivalNotice",
+            AnnouncementLetterTitle = "Invitation: Summer Horse Race",
+            AnnouncementLetterText =
+                "Dear @,^^Our scouts have had their eye on your stable, and the Committee is pleased to invite you to "
+                + "compete at this year's Summer Horse Race, held three days from now, out of town.^"
+                + "^The bus leaves at 12:00pm and a horse trailer is needed to carry "
+                + "your horses. Come prepared, there will be traders the purse is worth the trip.^"
+                + "^   -The Horse Racing Committee",
+            AnnouncementRequiresBusAccess = true,
 
             // Layout authored for Summer-HorseRace.tmx (65x85): a festival plaza (rows 30-49)
             // holding the market shops + for-sale paddock and the horse pens, above a large
