@@ -18,9 +18,10 @@ namespace HorseTycoon.Patches
     /// </summary>
     internal static class CalendarPatches
     {
-        /// <summary>The mod's horse icon (loaded from the CP content pack); the left 16x16 frame is the head.</summary>
+        /// <summary>The mod's horse icon (loaded from the CP content pack). The 32x16 image holds one
+        /// centred horse head spanning x=9..23, so the 16x16 frame that contains it starts at x=8.</summary>
         private const string HorseIconAsset = "CP.HorseTycoon/HorseIcon";
-        private static readonly Rectangle IconSourceRect = new(0, 0, 16, 16);
+        private static readonly Rectangle IconSourceRect = new(8, 0, 16, 16);
         private static Texture2D? _icon;
 
         internal static void Apply(Harmony harmony)
@@ -29,9 +30,13 @@ namespace HorseTycoon.Patches
                 original: AccessTools.Method(typeof(Billboard), nameof(Billboard.GetEventsForDay)),
                 postfix: new HarmonyMethod(typeof(CalendarPatches), nameof(GetEventsForDay_Postfix)));
 
+            // Drawn from a drawMouse prefix rather than a Billboard.draw postfix: Billboard.draw ends with
+            // drawMouse + drawHoverText, so a postfix would paint the icon on top of the cursor and tooltip.
+            // drawMouse is the last thing before those, so hooking it keeps the icon under both while still
+            // being late enough to sit above the calendar cells.
             harmony.Patch(
-                original: AccessTools.Method(typeof(Billboard), nameof(Billboard.draw), new[] { typeof(SpriteBatch) }),
-                postfix: new HarmonyMethod(typeof(CalendarPatches), nameof(Draw_Postfix)));
+                original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.drawMouse)),
+                prefix: new HarmonyMethod(typeof(CalendarPatches), nameof(DrawMouse_Prefix)));
         }
 
         /// <summary>The horse festival for the given calendar day in the current season, or null.</summary>
@@ -66,10 +71,13 @@ namespace HorseTycoon.Patches
         }
 
         /// <summary>Draws the horse icon on each horse-festival day slot of the currently shown month.</summary>
-        private static void Draw_Postfix(Billboard __instance, SpriteBatch b)
+        private static void DrawMouse_Prefix(IClickableMenu __instance, SpriteBatch b)
         {
+            if (__instance is not Billboard billboard)
+                return;
+
             // calendarDays is only populated in calendar mode (null on the daily-quest board).
-            List<ClickableTextureComponent>? days = __instance.calendarDays;
+            List<ClickableTextureComponent>? days = billboard.calendarDays;
             if (days == null)
                 return;
 

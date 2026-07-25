@@ -48,7 +48,10 @@ namespace HorseTycoon
         public static IReadOnlyList<(string Season, int Day, string AssetKey)> CalendarFestivals =>
             Festivals.Select(f => (f.Season, f.Day, f.Season + f.Day)).ToList();
 
-        private const string ReadyCheckName = "Froshty.HorseTycoon.horseRaceStart";
+        // Prefix for the race-start ready check. A unique suffix is appended per race attempt (see
+        // BeginRace) because Game1.netReady caches checks by id until the day-start Reset() and never
+        // un-readies a completed one — reusing a fixed id makes a second race confirm instantly.
+        private const string ReadyCheckPrefix = "Froshty.HorseTycoon.horseRaceStart";
 
         /// <summary>Event id of the Summer bus-away festival (see FestivalDefinition.SummerBusStop),
         /// which the bus-ticket patches need to look up outside any active festival.</summary>
@@ -85,7 +88,10 @@ namespace HorseTycoon
         // Hard cap on total racers (players + NPCs). NPC slots are filled first-come, first-dropped.
         private const int MaxRacers = 8;
 
-        private enum Phase { None, Arrival, Pasture, Racing, Finished, Ceremony }
+        // Lineup: riders are positioned in their stalls and Lewis gives his pre-race announcement; players
+        // are held (no NPC movement, no finish checks) until every client clicks through and the "go" barrier
+        // releases, at which point Racing begins with the countdown. Mirrors the Egg Festival cutscene→barrier.
+        private enum Phase { None, Arrival, Pasture, Lineup, Racing, Finished, Ceremony }
         private enum AiMode { Normal, Match }
 
         private class NpcRacer
@@ -170,7 +176,23 @@ namespace HorseTycoon
         private readonly PerScreen<int> wanderDir = new(() => -1);
         private readonly PerScreen<int> wanderTicks = new(() => 0);
         private readonly PerScreen<bool> readyCheckOpen = new(() => false);
-        private readonly PerScreen<bool> pendingRaceReadyCheck = new(() => false);
+        // The unique ready-check id for a race start that arrived before this screen was ready to open it,
+        // or null if none is pending. Carrying the id (rather than a bool) keeps every client on the same
+        // fresh netReady check — a reused id stays IsReady=true after its first completion and would make
+        // the dialog confirm instantly. See <see cref="OpenRaceReadyCheck"/>.
+        private readonly PerScreen<string?> pendingRaceReadyCheckId = new(() => null);
+        // Id for the second "all clicked through Lewis's announcement" barrier (see OpenCountdownBarrier),
+        // derived from the start barrier's id so every client agrees without another broadcast.
+        private readonly PerScreen<string?> goBarrierId = new(() => null);
+        // True once this screen has opened its go barrier for the current lineup, so UpdateLineup only opens it once.
+        private readonly PerScreen<bool> goBarrierOpened = new(() => false);
+        // True once Lewis's announcement dialogue has been shown this lineup; gates the UpdateLineup fallback so
+        // it can't fire during the fade-in before the dialogue appears.
+        private readonly PerScreen<bool> announcementShown = new(() => false);
+        // Counts consecutive ticks the screen has been stuck fully black during festival entry.
+        private readonly PerScreen<int> entryBlackTicks = new(() => 0);
+        // Counts consecutive ticks the vanilla "waiting for other players" festivalStart dialog has been open.
+        private readonly PerScreen<int> festivalReadyStuckTicks = new(() => 0);
         private readonly PerScreen<List<Vector2>> stallFenceTiles = new(() => new List<Vector2>());
         private readonly PerScreen<bool> stallsSpawned = new(() => false);
         private readonly PerScreen<Horse?> penHorse = new(() => null);
@@ -340,6 +362,8 @@ namespace HorseTycoon
         // Custom start sound registered as a Data/AudioChanges cue in [CP] HorseTycoon/data/sound.json.
         private const string RaceStartSoundCue = "CP.HorseTycoon_RaceStart";
         private const int RaceStartSoundMs = 8000;
+        // Global-fade speed for the transition into the race lineup (vanilla default; lower = slower).
+        private const float RaceFadeSpeed = 0.02f;
 
         public void Initialize()
         {
@@ -935,6 +959,10 @@ namespace HorseTycoon
             if (!Context.IsWorldReady)
                 return;
 
+            // Rescue a straggler stuck on the vanilla "waiting for other players" gate. Runs before the
+            // RaceFestival check below because this fires pre-warp, while the player is still outside.
+            this.GuardStuckFestivalReadyCheck();
+
             // Capture the ridden horse every tick before the festival dismounts the player on warp.
             if (Game1.player.isRidingHorse() && Game1.player.mount != null)
             {
@@ -952,7 +980,11 @@ namespace HorseTycoon
             }
 
             if (!festival.playerControlSequence)
+            {
+                this.GuardEntryFade();
                 return;
+            }
+            entryBlackTicks.Value = 0;
 
             switch (phase.Value)
             {
@@ -967,6 +999,10 @@ namespace HorseTycoon
                     break;
                 case Phase.Pasture:
                     this.UpdatePasture();
+                    AdvanceHorseAnimations();
+                    break;
+                case Phase.Lineup:
+                    this.UpdateLineup();
                     AdvanceHorseAnimations();
                     break;
                 case Phase.Racing:
@@ -1229,6 +1265,88 @@ namespace HorseTycoon
 
         // ======================== End Bus Arrival Cinematic ========================
 
+        /// <summary>
+        /// Safeguard against the festival-entry black screen. The festival set-up script fades the screen
+        /// to black (leaving <see cref="Game1.fadeToBlackAlpha"/> at 1) and only clears it with
+        /// <c>globalFadeToClear</c> as its final command. If a stray menu/dialogue opens on this client
+        /// mid-setup, the event stops advancing before that clear runs, stranding the player on a fully
+        /// black screen with only the cursor until they click the menu away. Runs while the set-up event
+        /// is mid-script (before <c>playerControl</c>); if the screen stays fully black for longer than a
+        /// normal near-instant set-up would take, we clear the fade ourselves.
+        /// </summary>
+        private void GuardEntryFade()
+        {
+            // Only a near-opaque screen counts as stuck; a fade still in progress is left to finish.
+            if (Game1.fadeToBlackAlpha < 0.99f && !Game1.globalFade)
+            {
+                entryBlackTicks.Value = 0;
+                return;
+            }
+
+            // ~1.5s at 60fps. A normal set-up reaches playerControl within a tick or two, so this only
+            // trips when the event is genuinely stalled behind a blocking menu.
+            if (++entryBlackTicks.Value < 90)
+                return;
+
+            // Log the blocking menu (the likeliest culprit) so a recurrence can be traced to its type.
+            string blocker = Game1.activeClickableMenu != null
+                ? Game1.activeClickableMenu.GetType().Name
+                : (Game1.dialogueUp ? "dialogue box" : "none (no menu open)");
+            Logger.LogVerbose($"Festival entry fade appears stuck black; force-clearing the screen fade. Blocking menu: {blocker}");
+            Game1.globalFade = false;
+            Game1.fadeToBlack = false;
+            Game1.fadeToBlackAlpha = 0f;
+            entryBlackTicks.Value = 0;
+        }
+
+        /// <summary>The vanilla ready-check id shown as the "waiting for other players" dialog on festival entry.</summary>
+        private const string FestivalStartReadyCheck = "festivalStart";
+
+        /// <summary>
+        /// Rescues a player stranded on the vanilla <c>festivalStart</c> "waiting for other players" dialog.
+        /// That ready check requires every online farmer to be ready before anyone warps in, so a straggler
+        /// who reaches the festival after others have already entered waits forever — the players inside no
+        /// longer report themselves ready, so the count can never complete. When we detect another player is
+        /// already inside the festival (or after a long absolute timeout), we confirm the dialog locally,
+        /// which runs its original warp callback and takes this player in. Festivals are per-client temp-map
+        /// events, so letting one straggler through independently is safe.
+        /// </summary>
+        private void GuardStuckFestivalReadyCheck()
+        {
+            if (Game1.activeClickableMenu is not ReadyCheckDialog rcd || rcd.checkName != FestivalStartReadyCheck)
+            {
+                festivalReadyStuckTicks.Value = 0;
+                return;
+            }
+
+            FestivalDefinition? def = CurrentWindowFestival();
+            if (def == null)
+            {
+                festivalReadyStuckTicks.Value = 0;
+                return;
+            }
+
+            festivalReadyStuckTicks.Value++;
+
+            // Primary trigger: someone is already inside the festival, so the check can never complete.
+            // A brief grace (~2s) avoids racing a normal simultaneous entry that's about to confirm anyway.
+            bool someoneInside = Game1.getOnlineFarmers()
+                .Any(f => f.UniqueMultiplayerID != Game1.player.UniqueMultiplayerID
+                    && f.currentLocation?.Name == def.LocationName);
+            bool stuckWithPeerInside = someoneInside && festivalReadyStuckTicks.Value >= 120;
+
+            // Absolute fallback (~30s) in case the peer-location check misses (e.g. a disconnecting player).
+            bool absoluteTimeout = festivalReadyStuckTicks.Value >= 1800;
+
+            if (!stuckWithPeerInside && !absoluteTimeout)
+                return;
+
+            Logger.LogVerbose($"festivalStart ready check stuck for {festivalReadyStuckTicks.Value} ticks "
+                + $"(peerInside={someoneInside}); confirming locally to enter {def.LocationName}.");
+            festivalReadyStuckTicks.Value = 0;
+            rcd.confirm(); // runs the dialog's captured warp callback → warps this player into the festival
+        }
+
         private void EnterPasture(Event festival)
         {
             phase.Value = Phase.Pasture;
@@ -1392,10 +1510,11 @@ namespace HorseTycoon
 
             if (e.Type == MsgOpenReadyCheck)
             {
+                string readyCheckId = e.ReadAs<string>();
                 if (RaceFestival != null && phase.Value == Phase.Pasture)
-                    this.OpenRaceReadyCheck();
+                    this.OpenRaceReadyCheck(readyCheckId);
                 else
-                    pendingRaceReadyCheck.Value = true;
+                    pendingRaceReadyCheckId.Value = readyCheckId;
                 return;
             }
 
@@ -1592,10 +1711,11 @@ namespace HorseTycoon
 
         private void UpdatePasture()
         {
-            if (pendingRaceReadyCheck.Value && RaceFestival != null && !readyCheckOpen.Value)
+            if (pendingRaceReadyCheckId.Value != null && RaceFestival != null && !readyCheckOpen.Value)
             {
-                pendingRaceReadyCheck.Value = false;
-                this.OpenRaceReadyCheck();
+                string id = pendingRaceReadyCheckId.Value;
+                pendingRaceReadyCheckId.Value = null;
+                this.OpenRaceReadyCheck(id);
             }
 
             // With two bus horses in the pasture, whichever one the player mounts races.
@@ -2065,36 +2185,43 @@ namespace HorseTycoon
         {
             if (!Game1.IsMultiplayer)
             {
-                this.LineUp();
+                this.FadeToRace();
                 return;
             }
 
-            this.OpenRaceReadyCheck();
-            this.Helper.Multiplayer.SendMessage(true, MsgOpenReadyCheck,
+            // Fresh id per attempt so the check starts un-ready on every client (see ReadyCheckPrefix).
+            string id = $"{ReadyCheckPrefix}.{Game1.uniqueIDForThisGame}.{Game1.ticks}";
+            this.OpenRaceReadyCheck(id);
+            this.Helper.Multiplayer.SendMessage(id, MsgOpenReadyCheck,
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
         }
 
         /// <summary>Opens the race ready check on this screen. ReadyCheckDialog's update() loop marks the local
-        /// player ready each tick and fires onConfirm once all online players have confirmed.</summary>
-        private void OpenRaceReadyCheck()
+        /// player ready each tick and fires onConfirm once all online players have reached it. The host passes a
+        /// unique <paramref name="id"/> per race attempt (broadcast to farmhands) so every client shares a fresh
+        /// netReady check that starts un-ready — see <see cref="ReadyCheckPrefix"/>.
+        ///
+        /// This mirrors the vanilla Egg Festival's <c>waitForOtherPlayers startContest</c> barrier: after the host
+        /// confirms with Lewis, every client hits a non-cancelable ready check that auto-readies on arrival and
+        /// holds until all clients are present, then the race begins simultaneously. <c>allowCancel: false</c>
+        /// matches that barrier — once the host says go it's a committed sync point, so no client can flash past
+        /// or back out and desync the start.</summary>
+        private void OpenRaceReadyCheck(string id)
         {
             if (readyCheckOpen.Value || phase.Value != Phase.Pasture)
                 return;
 
             readyCheckOpen.Value = true;
             Game1.activeClickableMenu = new ReadyCheckDialog(
-                ReadyCheckName,
-                allowCancel: true,
+                id,
+                allowCancel: false,
                 onConfirm: (_) =>
                 {
                     Game1.exitActiveMenu();
                     readyCheckOpen.Value = false;
-                    this.LineUp();
-                },
-                onCancel: (_) =>
-                {
-                    Game1.netReady.SetLocalReady(ReadyCheckName, ready: false);
-                    readyCheckOpen.Value = false;
+                    // The go barrier reuses this start barrier's (unique) id so all clients agree on it.
+                    goBarrierId.Value = id + ".go";
+                    this.FadeToRace();
                 });
         }
 
@@ -2106,7 +2233,10 @@ namespace HorseTycoon
             if (horse == null || loc == null)
                 return;
 
-            phase.Value = Phase.Racing;
+            // Lineup (not Racing yet): riders are placed in stalls and Lewis announces; the countdown, music,
+            // and NPC movement wait until every client clears his dialogue and the go barrier releases.
+            phase.Value = Phase.Lineup;
+            goBarrierOpened.Value = false;
 
             this.SetLayerVisible("Racing", true);
             this.DespawnSpectators();
@@ -2144,17 +2274,115 @@ namespace HorseTycoon
             horse.rider = Game1.player;
             horse.mounting.Value = true;
             Game1.player.synchronizedJump(6f);
-            Game1.player.freezePause = 5000;
             Game1.player.Halt();
             Game1.player.UsingTool = false;
 
             this.DespawnPenNpcHorses();
             this.SpawnNpcRacers(loc, System.Math.Max(1, Game1.getOnlineFarmers().Count()));
 
+            // Silence the pasture music for Lewis's announcement; the start cue/race music begin with the
+            // countdown once everyone has clicked through (see StartRaceCountdown).
             Game1.changeMusicTrack("none", track_interruptable: false, MusicContext.Event);
+        }
+
+        /// <summary>Transitions from the pasture to the starting stalls with a slow fade: fade to black, reposition
+        /// riders into their stalls while the screen is dark (<see cref="LineUp"/>), then fade back in and let
+        /// Lewis give his announcement. Runs per client; the later go barrier re-syncs everyone before the start.</summary>
+        private void FadeToRace()
+        {
+            // Enter Lineup up front so the rider is held (CanMove off) through both fades, before repositioning.
+            phase.Value = Phase.Lineup;
+            goBarrierOpened.Value = false;
+            announcementShown.Value = false;
+
+            Game1.globalFadeToBlack(() =>
+            {
+                this.LineUp();
+                Game1.globalFadeToClear(this.AnnounceRace, RaceFadeSpeed);
+            }, RaceFadeSpeed);
+        }
+
+        /// <summary>Lewis's pre-race announcement, shown on each client once its rider is in the stall. When the
+        /// player clicks through it, <see cref="OpenCountdownBarrier"/> holds them until every client has done the
+        /// same, then the countdown begins — mirroring the Egg Festival's cutscene-then-waitForOtherPlayers.</summary>
+        private void AnnounceRace()
+        {
+            // Page breaks must use the delimited form "#$b#" — Dialogue.parseDialogueString splits on '#'
+            // first, so a bare "$b" stays embedded in the text and never becomes a break. A page with no
+            // emotion token shows Lewis's neutral portrait; "$h" on the last page switches him to happy.
+            const string announcement =
+                       "What a beautiful day for a race! The weather is perfect, and the crowd is buzzing with excitement."
+                       + "#$b#"
+                       + "The horses look fit and ready, raring to run."
+                       + "#$b#"
+                       + "Let the race begin!$h";
+
+            announcementShown.Value = true;
+
+            NPC? lewis = RaceFestival?.getActorByName("Lewis");
+            if (lewis != null)
+            {
+                lewis.CurrentDialogue.Push(new Dialogue(lewis, null, announcement));
+                Game1.drawDialogue(lewis);
+            }
+            else
+            {
+                Game1.drawObjectDialogue(announcement);
+            }
+            Game1.afterDialogues = this.OpenCountdownBarrier;
+        }
+
+        /// <summary>After Lewis's announcement, hold this client on a non-cancelable barrier until every player
+        /// has clicked through, then start the countdown together. In single player it starts immediately.</summary>
+        private void OpenCountdownBarrier()
+        {
+            // Idempotent: afterDialogues and the UpdateLineup fallback can both reach here; only the first acts.
+            if (goBarrierOpened.Value)
+                return;
+            goBarrierOpened.Value = true;
+
+            if (!Game1.IsMultiplayer || goBarrierId.Value == null)
+            {
+                this.StartRaceCountdown();
+                return;
+            }
+
+            string id = goBarrierId.Value;
+            Game1.activeClickableMenu = new ReadyCheckDialog(
+                id,
+                allowCancel: false,
+                onConfirm: (_) =>
+                {
+                    Game1.exitActiveMenu();
+                    this.StartRaceCountdown();
+                });
+        }
+
+        /// <summary>Begins the Racing phase: the start cue plays, the countdown ticks (race music kicks in near
+        /// its end), and gates open when it completes. Runs simultaneously on all clients via the go barrier.</summary>
+        private void StartRaceCountdown()
+        {
+            phase.Value = Phase.Racing;
+            goBarrierId.Value = null;
+            Game1.player.freezePause = 5000;
             Game1.playSound(RaceStartSoundCue);
             this.startCountdown.Value = RaceStartSoundMs;
             this.raceMusicStarted.Value = false;
+        }
+
+        /// <summary>Holds riders in their stalls during Lewis's announcement and the go barrier. No NPC movement
+        /// or finish checks run here, so the race can't advance until <see cref="StartRaceCountdown"/> fires.</summary>
+        private void UpdateLineup()
+        {
+            Game1.player.CanMove = false;
+
+            // Fallback: if the announcement dialogue never armed afterDialogues (e.g. it was dismissed by some
+            // other menu closing), open the go barrier once we're no longer showing a menu so we can't stall.
+            // Gated on announcementShown and no active fade so it can't fire during the fade-in before the
+            // dialogue even appears.
+            if (announcementShown.Value && !goBarrierOpened.Value
+                && !Game1.globalFade && Game1.activeClickableMenu == null && !Game1.dialogueUp)
+                this.OpenCountdownBarrier();
         }
 
         // Slot 0 = center, odd slots go below (+), even slots above (-), alternating outward.
@@ -3817,7 +4045,10 @@ namespace HorseTycoon
             wanderDir.Value = -1;
             wanderTicks.Value = 0;
             readyCheckOpen.Value = false;
-            pendingRaceReadyCheck.Value = false;
+            pendingRaceReadyCheckId.Value = null;
+            goBarrierId.Value = null;
+            goBarrierOpened.Value = false;
+            announcementShown.Value = false;
             ceremonyOrder.Value.Clear();
             ceremonyStep.Value = 0;
             disqualified.Value = false;
