@@ -275,11 +275,9 @@ namespace HorseTycoon
             stats.SprintEV = 0;
             stats.JumpEV = 0;
 
-            horse.homeInterior = interior;
-            horse.home = barn;
+            HorseHelper.RegisterHorseInBarn(horse, barn);
             // Reload after age/home/skin are set so the adult sprite and skin texture apply.
             horse.reload(barn);
-            interior.animals.Add(horse.myID.Value, horse);
 
             _monitor.Log($"Delivered purchased horse '{name}' (skin '{skinId}', IVs {speedIV}/{sprintIV}/{jumpIV}) to {barn.buildingType.Value}.", LogLevel.Info);
         }

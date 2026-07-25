@@ -260,6 +260,9 @@ namespace HorseTycoon
             if (Context.IsMainPlayer)
             {
                 ConvertUnassignedStableHorses();
+                HorseHelper.RepairBarnResidency();
+                // Stable.dayUpdate may have respawned a blank Horse character overnight.
+                HorseHelper.SyncStableHorseAppearance();
                 TrainingManager.ResetDailyCounters();
                 BreedingManager.OnDayStarted();
                 BreedingPenManager.OnDayStarted();
@@ -273,9 +276,9 @@ namespace HorseTycoon
                 e.Edit(asset =>
                 {
                     asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardQuestId] =
-                        "Basic/Horse Race Bet/You called it right. Here's what you're owed. Don't spend it all in one place.^ - Pam/Collect your winnings.";
+                        "Basic/Horse Race Bet/You called it right. Here's what you're owed. Don't spend it all in one place.\n - Pam/Collect your winnings.";
                     asset.AsDictionary<string, string>().Data[FestivalRaceManager.BetRewardAwayQuestId] =
-                        "Basic/Horse Race Bet/Good call. Here's your payout, counted twice. Pleasure doing business.^ - The Bouncer/Collect your winnings.";
+                        "Basic/Horse Race Bet/Good call. Here's your payout, counted twice. Pleasure doing business.\n - The Bouncer/Collect your winnings.";
                 });
             }
             else if (e.NameWithoutLocale.IsEquivalentTo("Data/Mail"))
@@ -322,6 +325,11 @@ namespace HorseTycoon
         {
             HorseTexturePatches.PreloadTextures();
             HorseHelper.MigrateAtSkinKeys(this.Monitor);
+
+            // Saddle state lives on the barn horse; rebuild each stable character's tack from it
+            // (and migrate saves where the saddle was only recorded on the character).
+            if (Context.IsMainPlayer)
+                HorseHelper.SyncStableHorseAppearance();
 
             // Data/Mail may have been cached before the save loaded, without the spring-festival
             // winner's name from farm modData — drop it so the next read re-resolves with the name.

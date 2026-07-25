@@ -65,6 +65,12 @@ namespace HorseTycoon
                 original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.getSellPrice)),
                 postfix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(GetSellPrice_Postfix))
             );
+
+            // --- Stable/pen horses are fed from the silo instead of the barn trough ---
+            harmony.Patch(
+                original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.dayUpdate)),
+                prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(DayUpdate_Prefix))
+            );
         }
 
         // --- Patch Implementations ---
@@ -190,7 +196,7 @@ namespace HorseTycoon
                 FarmAnimal? animal = HorseHelper.GetFarmAnimalForHorse(__instance);
                 if (animal != null && !animal.wasPet.Value)
                 {
-                    animal.wasPet.Value = true;
+                    ApplyPetting(animal);
                     __instance.doEmote(20);
                     Game1.playSound("CP.HorseTycoon_Neigh");
                     return false; // don't mount yet — let the player interact again to ride
@@ -198,6 +204,39 @@ namespace HorseTycoon
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Applies the friendship/happiness a real <see cref="FarmAnimal.pet"/> grants. Calling
+        /// pet() directly isn't an option for a hidden horse: it would halt the player, turn them
+        /// toward the animal's spot inside the barn, and refuse outright after 7pm.
+        /// </summary>
+        private static void ApplyPetting(FarmAnimal animal)
+        {
+            animal.wasPet.Value = true;
+            animal.friendshipTowardFarmer.Value = Math.Min(1000, animal.friendshipTowardFarmer.Value + 15);
+            int happinessDrain = animal.GetAnimalData()?.HappinessDrain ?? 0;
+            animal.happiness.Value = (byte)Math.Min(255, animal.happiness.Value + Math.Max(5, 30 + happinessDrain));
+        }
+
+        /// <summary>
+        /// Feeds hidden horses (stable-active or penned) straight from the silo.
+        /// A barn's auto-feeder only fills one trough tile per <see cref="AnimalHouse.animalLimit"/>,
+        /// and there are exactly that many trough tiles, so the extra horses our stable capacity
+        /// bonus allows would find no hay and go hungry forever. A hidden horse isn't standing in
+        /// the barn anyway, so it takes its hay from the silo and leaves the troughs to the rest.
+        /// </summary>
+        public static void DayUpdate_Prefix(FarmAnimal __instance)
+        {
+            if (__instance.type.Value?.Contains("Horse") != true || !HorseHelper.IsHidden(__instance))
+                return;
+            if (__instance.fullness.Value >= 200)
+                return;
+
+            // Falls through to the vanilla trough logic when the silo is empty.
+            GameLocation root = (__instance.homeInterior ?? Game1.getFarm()).GetRootLocation();
+            if (GameLocation.GetHayFromAnySilo(root) != null)
+                __instance.fullness.Value = 255;
         }
 
         /// <summary>Adds 500g per 10 combined IV/EV points across all stats to a horse's sell price.</summary>

@@ -53,17 +53,59 @@ namespace HorseTycoon
         public static bool IsSaddleItem(Item? item) =>
             item != null && SaddleItemOverlays.ContainsKey(item.ItemId);
 
-        public static string GetEquippedSaddleId(Horse horse) =>
-            horse.modData.TryGetValue(EquippedSaddleKey, out string? id) ? id : "HorseTycoon.SaddleBrown";
+        public const string DefaultSaddleId = "HorseTycoon.SaddleBrown";
+
+        /// <summary>
+        /// The saddle a horse is wearing. The backing <see cref="FarmAnimal"/> is the authority: the
+        /// stable's <see cref="Horse"/> character is transient (it's recreated by
+        /// <c>Stable.grabHorse</c> and reused across swaps), so its own copy is only a cache.
+        /// </summary>
+        public static string GetEquippedSaddleId(Horse horse)
+        {
+            FarmAnimal? animal = GetFarmAnimalForHorse(horse);
+            if (animal != null && animal.modData.TryGetValue(EquippedSaddleKey, out string? animalId))
+                return animalId;
+
+            return horse.modData.TryGetValue(EquippedSaddleKey, out string? id) ? id : DefaultSaddleId;
+        }
 
         public static void EquipSaddle(Horse horse, string itemId)
         {
             horse.modData[EquippedSaddleKey] = itemId;
             if (SaddleItemOverlays.TryGetValue(itemId, out string? overlays))
                 horse.modData[OverlaysKey] = overlays;
+
+            // Persist onto the barn horse so the saddle survives stable swaps and overnight
+            // recreation of the Horse character.
+            FarmAnimal? animal = GetFarmAnimalForHorse(horse);
+            if (animal != null)
+                EquipSaddle(animal, itemId);
         }
+
+        /// <summary>Records the equipped saddle on a barn horse's persistent record.</summary>
+        public static void EquipSaddle(FarmAnimal animal, string itemId)
+        {
+            animal.modData[EquippedSaddleKey] = itemId;
+            if (SaddleItemOverlays.TryGetValue(itemId, out string? overlays))
+                animal.modData[OverlaysKey] = overlays;
+        }
+
         public static string? GetOverlaysRaw(FarmAnimal animal) =>
             animal.modData.TryGetValue(OverlaysKey, out string? v) ? v : null;
+
+        /// <summary>Overlay string to render a barn horse with, defaulting to brown tack for horses
+        /// that predate the saddle system.</summary>
+        public static string GetOverlaysForAnimal(FarmAnimal animal)
+        {
+            if (animal.modData.TryGetValue(EquippedSaddleKey, out string? saddleId)
+                && SaddleItemOverlays.TryGetValue(saddleId, out string? overlays))
+            {
+                return overlays;
+            }
+
+            string? raw = GetOverlaysRaw(animal);
+            return string.IsNullOrWhiteSpace(raw) ? SaddleItemOverlays[DefaultSaddleId] : raw;
+        }
 
         public static void SetOverlays(FarmAnimal animal, IEnumerable<string> overlayNames)
         {
@@ -356,22 +398,64 @@ namespace HorseTycoon
             // 3. Link to Stable
             stable.modData[CurrentFarmHorseIdKey] = newHorse.myID.Value.ToString();
 
-            // 4. Assign to Barn
-            newHorse.homeInterior = barn.GetIndoors() as AnimalHouse;
-            newHorse.home = barn;
+            // 4. Assign to Barn (bypassing capacity)
+            RegisterHorseInBarn(newHorse, barn);
 
             // Force sprite to reflect adult age — the constructor loads the baby sprite at age 0,
             // so reload() must be called after age and home are set.
             newHorse.reload(barn);
-
-            // Force into Barn list (bypassing capacity)
-            barn.GetIndoors().animals.Add(newHorse.myID.Value, newHorse);
 
             string skinId = newHorse.skinID.Value ?? "";
             monitor.Log($"Horse skin selected: {skinId}", LogLevel.Info);
             SetHorseSkin(horse, skinId, newHorse, monitor);
 
             monitor.Log($"Successfully converted stable horse '{horse.Name}' and moved to {barn.buildingType.Value}.", LogLevel.Info);
+        }
+
+        /// <summary>
+        /// Moves a horse into a barn as a registered resident. This is <see cref="AnimalHouse.adoptAnimal"/>
+        /// without its capacity assumptions — we add horses directly so a stable's capacity bonus can
+        /// overflow the barn (see <see cref="GetBarnWithHorseSpace"/>).
+        /// <para>Registering in <c>animalsThatLiveHere</c> matters: vanilla reassigns each resident's
+        /// <c>homeInterior</c> from that list when a barn is moved or upgraded, so an unregistered
+        /// horse would keep a stale home and be treated as left outside overnight.</para>
+        /// </summary>
+        public static void RegisterHorseInBarn(FarmAnimal horse, Building barn)
+        {
+            if (horse == null || barn?.GetIndoors() is not AnimalHouse interior)
+                return;
+
+            horse.home = barn;
+            horse.homeInterior = interior;
+
+            if (!interior.animals.ContainsKey(horse.myID.Value))
+                interior.animals.Add(horse.myID.Value, horse);
+
+            if (!interior.animalsThatLiveHere.Contains(horse.myID.Value))
+                interior.animalsThatLiveHere.Add(horse.myID.Value);
+        }
+
+        /// <summary>
+        /// Re-registers barn horses that predate <see cref="RegisterHorseInBarn"/> — earlier versions
+        /// added them to a barn's animal list only, leaving them off its resident list.
+        /// </summary>
+        public static void RepairBarnResidency()
+        {
+            foreach (Building barn in Game1.getFarm().buildings)
+            {
+                if (barn.GetIndoors() is not AnimalHouse interior)
+                    continue;
+
+                foreach (FarmAnimal animal in interior.animals.Values.ToArray())
+                {
+                    if (animal.type.Value?.Contains("Horse") != true
+                        || interior.animalsThatLiveHere.Contains(animal.myID.Value))
+                        continue;
+
+                    RegisterHorseInBarn(animal, barn);
+                    Logger.LogVerbose($"Re-registered '{animal.Name}' as a resident of {barn.buildingType.Value}.");
+                }
+            }
         }
 
         public static Building? GetAvailableBarn()
@@ -450,18 +534,89 @@ namespace HorseTycoon
         {
             horse.modData[HorseSkinKey] = Patches.HorseTexturePatches.SkinNameFromId(skinId);
 
-            // Sync overlay list from the animal if it has one explicitly set.
-            if (sourceAnimal != null && sourceAnimal.modData.ContainsKey(OverlaysKey))
+            if (sourceAnimal != null)
             {
-                horse.modData[OverlaysKey] = sourceAnimal.modData[OverlaysKey];
+                // The animal is the authority. Never leave the previous occupant's tack on the
+                // character — a stable reuses one Horse across swaps.
+                MigrateSaddleToAnimal(horse, sourceAnimal);
+                horse.modData[EquippedSaddleKey] =
+                    sourceAnimal.modData.TryGetValue(EquippedSaddleKey, out string? id) ? id : DefaultSaddleId;
+                horse.modData[OverlaysKey] = GetOverlaysForAnimal(sourceAnimal);
             }
             else if (!horse.modData.ContainsKey(EquippedSaddleKey))
             {
-                // New horse — default to brown saddle.
-                EquipSaddle(horse, "HorseTycoon.SaddleBrown");
+                // New horse with no barn record yet — default to brown saddle.
+                EquipSaddle(horse, DefaultSaddleId);
             }
 
             monitor.Log($"Set horse skin to '{horse.modData[HorseSkinKey]}' (from skinId '{skinId}')", LogLevel.Debug);
+        }
+
+        /// <summary>
+        /// Copies saddle state from a stable's <see cref="Horse"/> character down onto its barn horse
+        /// for saves written before the animal became the authority. Only fills gaps — an animal that
+        /// already has a saddle recorded wins.
+        /// </summary>
+        private static void MigrateSaddleToAnimal(Horse horse, FarmAnimal animal)
+        {
+            if (animal.modData.ContainsKey(EquippedSaddleKey))
+                return;
+
+            if (horse.modData.TryGetValue(EquippedSaddleKey, out string? saddleId)
+                && SaddleItemOverlays.ContainsKey(saddleId))
+            {
+                EquipSaddle(animal, saddleId);
+            }
+            else if (animal.modData.ContainsKey(OverlaysKey))
+            {
+                // Legacy overlay-only record: recover the saddle id from the overlay string.
+                string overlays = animal.modData[OverlaysKey];
+                string? matched = SaddleItemOverlays.FirstOrDefault(p => p.Value == overlays).Key;
+                if (matched != null)
+                    animal.modData[EquippedSaddleKey] = matched;
+            }
+        }
+
+        /// <summary>
+        /// Re-applies each stable horse's skin and tack from its barn horse. The <see cref="Horse"/>
+        /// character is transient — <c>Stable.grabHorse</c> spawns a fresh one (with empty modData)
+        /// whenever the old character has gone missing, e.g. overnight or after a festival — so its
+        /// appearance is rebuilt from the persistent record on every load and day start.
+        /// </summary>
+        public static void SyncStableHorseAppearance()
+        {
+            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
+            {
+                if (stable.IsTractorGarage()
+                    || !stable.modData.TryGetValue(CurrentFarmHorseIdKey, out string? idStr)
+                    || !long.TryParse(idStr, out long animalId))
+                {
+                    continue;
+                }
+
+                Horse? horse = stable.getStableHorse();
+                FarmAnimal? animal = GetHiddenHorseById(animalId);
+                if (horse == null || animal == null)
+                    continue;
+
+                MigrateSaddleToAnimal(horse, animal);
+
+                string skinName = Patches.HorseTexturePatches.SkinNameFromId(animal.skinID.Value);
+                string saddleId = animal.modData.TryGetValue(EquippedSaddleKey, out string? id) ? id : DefaultSaddleId;
+                string overlays = GetOverlaysForAnimal(animal);
+
+                if (horse.modData.TryGetValue(HorseSkinKey, out string? oldSkin) && oldSkin == skinName
+                    && horse.modData.TryGetValue(OverlaysKey, out string? oldOverlays) && oldOverlays == overlays)
+                {
+                    horse.modData[EquippedSaddleKey] = saddleId;
+                    continue;
+                }
+
+                horse.modData[HorseSkinKey] = skinName;
+                horse.modData[EquippedSaddleKey] = saddleId;
+                horse.modData[OverlaysKey] = overlays;
+                Logger.LogVerbose($"Restored appearance for stable horse '{horse.Name}': {skinName} / {overlays}.");
+            }
         }
 
         /// <summary>Migrates horses that have AT texture keys but not our own skin key, e.g. from old saves.</summary>

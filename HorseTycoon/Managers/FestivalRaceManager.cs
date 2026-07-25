@@ -53,6 +53,11 @@ namespace HorseTycoon
         // un-readies a completed one — reusing a fixed id makes a second race confirm instantly.
         private const string ReadyCheckPrefix = "Froshty.HorseTycoon.horseRaceStart";
 
+        // Prefix for the ceremony-end ready check, which holds every player at the awards until all of
+        // them have clicked through Lewis's lines so nobody is warped home mid-ceremony. Same unique-suffix
+        // rule as ReadyCheckPrefix — the id is minted once by the host and shipped in StartCeremonyMessage.
+        private const string CeremonyEndCheckPrefix = "Froshty.HorseTycoon.horseRaceEnd";
+
         /// <summary>Event id of the Summer bus-away festival (see FestivalDefinition.SummerBusStop),
         /// which the bus-ticket patches need to look up outside any active festival.</summary>
         private const string SummerFestivalEventId = "festival_summer19";
@@ -155,6 +160,10 @@ namespace HorseTycoon
 
         private readonly PerScreen<Phase> phase = new(() => Phase.None);
         private readonly PerScreen<Horse?> competitor = new(() => null);
+        // Facing direction the local mount's gallop animation was last armed for, so we only reassign
+        // on a direction change. StoppedAnimDir means "currently on the standing idle".
+        private readonly PerScreen<int> localMountAnimDir = new(() => int.MinValue);
+        private const int StoppedAnimDir = -1;
         private readonly PerScreen<FarmAnimal?> pastureAnimal = new(() => null);
         private readonly PerScreen<Horse?> lastRiddenMount = new(() => null);
         private readonly PerScreen<int> lastMountedTick = new(() => int.MinValue);
@@ -224,6 +233,10 @@ namespace HorseTycoon
 
         private readonly PerScreen<List<long>> ceremonyOrder = new(() => new List<long>());
         private readonly PerScreen<int> ceremonyStep = new(() => 0);
+        // Ready-check id every client shares for the end-of-ceremony barrier, and whether this screen is
+        // currently sitting in it. See CeremonyEndCheckPrefix / WaitForCeremonyEnd.
+        private readonly PerScreen<string?> ceremonyEndBarrierId = new(() => null);
+        private readonly PerScreen<bool> ceremonyEnded = new(() => false);
 
         // NPC racers are the same object list for every screen; spawned once per race via guard flags.
         private readonly List<NpcRacer> npcRacers = new();
@@ -350,7 +363,7 @@ namespace HorseTycoon
         private const string MsgPlayerFinished = "PlayerFinished";
         private const string MsgPlayerDisqualified = "PlayerDisqualified";
         private const string MsgStartCeremony = "StartCeremony";
-        private record StartCeremonyMessage(List<long> RankedPlayerIds);
+        private record StartCeremonyMessage(List<long> RankedPlayerIds, string EndBarrierId);
         private const string MsgNpcSprint = "NpcSprint";
         private record NpcSprintMessage(int NpcIndex, float DurationMs);
 
@@ -1028,8 +1041,12 @@ namespace HorseTycoon
                     break;
                 case Phase.Ceremony:
                     AdvanceHorseAnimations();
+                    this.EnforceCeremonyFacing();
                     this.UpdateCeremony();
-                    if (disqualified.Value)
+                    // Nobody wanders off mid-ceremony. Horse.update re-enables CanMove every tick while
+                    // mounted, so this has to be re-applied rather than set once at StartCeremony. Stops
+                    // at the end so EndFestival's handback of control survives into the walk home.
+                    if (!ceremonyEnded.Value)
                         Game1.player.CanMove = false;
                     break;
             }
@@ -1384,6 +1401,9 @@ namespace HorseTycoon
             this.SpawnSpectators(setupSpectators);
             this.SpawnShopNpcs();
             this.SpawnBookie();
+            // After every Set-Up actor exists — the game's loadActors ones included — so nobody is
+            // left wearing a work outfit or an off-season variant.
+            this.ApplyFestivalAppearances();
             this.SyncBack2WaterTiles(Game1.currentLocation);
 
 
@@ -1472,7 +1492,7 @@ namespace HorseTycoon
             horse.Name = animal.Name;
             horse.displayName = animal.displayName;
             horse.modData[HorseHelper.HorseSkinKey] = HorseTexturePatches.SkinNameFromId(animal.skinID.Value);
-            horse.modData[HorseHelper.OverlaysKey] = HorseHelper.GetOverlaysRaw(animal) ?? "Saddle,Bridle";
+            horse.modData[HorseHelper.OverlaysKey] = HorseHelper.GetOverlaysForAnimal(animal);
             var stats = animal.GetHorseStats();
             horse.modData[HorseHelper.BorrowedSpeedKey] = stats.TotalSpeed.ToString();
             horse.modData[HorseHelper.BorrowedSprintKey] = stats.TotalSprint.ToString();
@@ -1533,7 +1553,8 @@ namespace HorseTycoon
 
             if (e.Type == MsgStartCeremony && RaceFestival != null)
             {
-                this.StartCeremony(e.ReadAs<StartCeremonyMessage>().RankedPlayerIds);
+                var ceremony = e.ReadAs<StartCeremonyMessage>();
+                this.StartCeremony(ceremony.RankedPlayerIds, ceremony.EndBarrierId);
                 return;
             }
 
@@ -1864,15 +1885,59 @@ namespace HorseTycoon
             jasOnHorse.Value = jas;
         }
 
-        private static void AdvanceHorseAnimations()
+        private void AdvanceHorseAnimations()
         {
             GameTime time = Game1.currentGameTime;
+
+            // Re-arm before advancing: animateOnce can only step an animation that already exists, so a
+            // horse whose CurrentAnimation is null is skipped by the loops below and stays frozen on one
+            // frame for the entire race. Vanilla Horse.update normally assigns the gallop frames, but it
+            // does not run for a client-local borrowed horse, so the local mount needs it done here.
+            this.EnsureLocalMountAnimation();
+
+            // A mounted horse is reachable both through location.characters and through Farmer.mount;
+            // dedupe so it advances once per tick rather than at double speed.
+            HashSet<AnimatedSprite> advanced = new();
             foreach (NPC npc in Game1.currentLocation.characters)
-                if (npc is Horse h && h.Sprite?.CurrentAnimation != null)
+                if (npc is Horse h && h.Sprite?.CurrentAnimation != null && advanced.Add(h.Sprite))
                     h.Sprite.animateOnce(time);
             foreach (Farmer farmer in Game1.getOnlineFarmers())
-                if (farmer.mount?.Sprite?.CurrentAnimation != null)
+                if (farmer.mount?.Sprite?.CurrentAnimation != null && advanced.Add(farmer.mount.Sprite))
                     farmer.mount.Sprite.animateOnce(time);
+        }
+
+        /// <summary>
+        /// Keeps the local player's mount on the gallop animation matching its facing direction while
+        /// racing, mirroring what <see cref="UpdateNpcRacers"/> does for NPC racers. This is deliberately
+        /// a no-op whenever the sprite already holds the right animation, so it does not fight vanilla
+        /// Horse.update on the clients where that is working — it only fills in the gap, which makes a
+        /// missing animation self-correcting on the next tick instead of permanent.
+        /// </summary>
+        private void EnsureLocalMountAnimation()
+        {
+            Farmer? player = Game1.player;
+            Horse? mount = player?.mount;
+            if (player == null || mount?.Sprite == null)
+                return;
+
+            if (player.isMoving() && IsInAnyRacingPhase)
+            {
+                int dir = mount.FacingDirection;
+                if (dir != localMountAnimDir.Value || !IsGalloppingAnimation(mount, dir))
+                {
+                    localMountAnimDir.Value = dir;
+                    SetGalloppingAnimation(mount, dir);
+                }
+                return;
+            }
+
+            // Standing still (or not racing yet): leave whatever animation is already playing alone,
+            // but never leave the sprite with none at all.
+            if (mount.Sprite.CurrentAnimation == null)
+            {
+                localMountAnimDir.Value = StoppedAnimDir;
+                HorseAnimations.SetIdle(mount);
+            }
         }
 
         /// <summary>Redraw the sprint/exhausted icon during the race — the buff HUD is suppressed during events.</summary>
@@ -1941,14 +2006,14 @@ namespace HorseTycoon
                 return;
 
             Event? festival = RaceFestival;
-            NPC? pam = festival?.getActorByName("Pam");
+            NPC? pam = FacedPam(festival);
             NPC? lewis = festival?.getActorByName("Lewis");
             NPC? horseSeller = festival?.getActorByName(HorseSellerActorName);
             NPC? studKeeper = festival?.getActorByName(StudShopActorName);
             NPC? itemKeeper = festival?.getActorByName(ItemShopActorName);
             NPC? bookie = festival?.getActorByName(BookieActorName);
 
-            bool nearPam = pam != null && IsPlayerFacing(pam);
+            bool nearPam = pam != null;
             bool nearLewis = lewis != null && IsPlayerFacing(lewis);
             bool nearSeller = horseSeller != null && IsPlayerFacing(horseSeller);
             bool nearStud = studKeeper != null && IsPlayerFacing(studKeeper);
@@ -1984,9 +2049,17 @@ namespace HorseTycoon
                 return;
             }
 
-            // Pam handles betting.
-            if (nearPam && !pamGreeted.Value)
+            // Pam handles betting. She always answers with the book — the button press is suppressed
+            // above, so she never falls through to her ordinary festival/default dialogue.
+            if (nearPam)
             {
+                if (pamGreeted.Value)
+                {
+                    // One bet per festival, so there's nothing left to offer — but still her line, not vanilla's.
+                    Game1.drawObjectDialogue("Your bet's already down, hon. Go on and enjoy the race.");
+                    return;
+                }
+
                 showBettingMoneyBox.Value = true;
                 Response[] betResponses =
                 {
@@ -2165,6 +2238,23 @@ namespace HorseTycoon
         private static bool IsHost =>
             !Game1.IsMultiplayer || Game1.serverHost == null || Game1.player.Equals(Game1.serverHost.Value);
 
+        /// <summary>
+        /// The Pam the player is currently facing, or null. She can reach the festival two ways: as an
+        /// event actor the map's Set-Up layer spawned, or as a plain world character the event draws
+        /// because <c>showWorldCharacters</c> is on. Only the actor lookup used to be checked, so at a
+        /// festival whose map doesn't place her, the world Pam was never recognized and her ordinary
+        /// dialogue answered instead of the betting book.
+        /// </summary>
+        private static NPC? FacedPam(Event? festival)
+        {
+            NPC? actor = festival?.getActorByName("Pam");
+            if (actor != null && IsPlayerFacing(actor))
+                return actor;
+
+            NPC? worldPam = Game1.currentLocation?.getCharacterFromName("Pam");
+            return worldPam != null && IsPlayerFacing(worldPam) ? worldPam : null;
+        }
+
         // Mirrors vanilla's grab-area check: is the player facing this NPC and within reach?
         private static bool IsPlayerFacing(NPC npc)
         {
@@ -2227,7 +2317,17 @@ namespace HorseTycoon
 
         private void LineUp()
         {
-            this.EnsureCompetitorHorse();
+            // Never mint the competitor horse directly here. EnsureCompetitorHorse only constructs the
+            // object; a horse created at this point would skip PlaceHorseInPasture (so its sprite would
+            // have no CurrentAnimation and stay frozen on one frame for the whole race) and skip the
+            // MsgBorrowedHorse broadcast (so no other client would have a proxy for it). Route through
+            // the full assignment path instead, which places, animates, and announces it.
+            if (competitor.Value == null)
+            {
+                Logger.LogVerbose("No competitor horse at lineup — running borrowed-horse assignment now.");
+                this.AssignBorrowedHorse();
+            }
+
             Horse? horse = competitor.Value;
             GameLocation loc = Game1.currentLocation;
             if (horse == null || loc == null)
@@ -2596,20 +2696,25 @@ namespace HorseTycoon
             var orderedIds = FinishOrder
                 .OrderBy(id => DisqualifiedFarmers.Contains(id) ? 1 : 0)
                 .ToList();
+            // Fresh id per ceremony so the end barrier starts un-ready on every client (netReady caches
+            // completed checks by id until the day-start reset — see CeremonyEndCheckPrefix).
+            string endBarrierId = $"{CeremonyEndCheckPrefix}.{Game1.uniqueIDForThisGame}.{Game1.ticks}";
             this.Helper.Multiplayer.SendMessage(
-                new StartCeremonyMessage(orderedIds),
+                new StartCeremonyMessage(orderedIds, endBarrierId),
                 MsgStartCeremony,
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
             // Host handles it locally — SendMessage does not deliver to the sender.
-            this.StartCeremony(orderedIds);
+            this.StartCeremony(orderedIds, endBarrierId);
         }
 
-        private void StartCeremony(List<long> rankedPlayerIds)
+        private void StartCeremony(List<long> rankedPlayerIds, string endBarrierId)
         {
             phase.Value = Phase.Ceremony;
             Game1.changeMusicTrack(Def.PastureMusic, track_interruptable: false, MusicContext.Event);
             ceremonyOrder.Value = new List<long>(rankedPlayerIds);
             ceremonyStep.Value = 0;
+            ceremonyEndBarrierId.Value = endBarrierId;
+            ceremonyEnded.Value = false;
 
             long localId = Game1.player.UniqueMultiplayerID;
             int placement = rankedPlayerIds.IndexOf(localId); // 0-based; -1 if not in list
@@ -2622,28 +2727,22 @@ namespace HorseTycoon
             {
                 Point podium = Def.WinnersCircleTiles[placement];
                 Game1.player.Position = TileToPixels(podium) + ceremonyOffset;
-                Game1.player.faceDirection(Game1.up);
 
                 Horse? horse = competitor.Value;
                 if (horse != null)
-                {
                     horse.Position = TileToPixels(podium) + ceremonyOffset;
-                    horse.faceDirection(Game1.up);
-                }
+                FaceForCeremony(Game1.player, horse, CeremonyFacing);
             }
             else if (placement >= 0)
             {
                 int spectatorSlot = placement - Def.WinnersCircleTiles.Length;
                 Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
                 Game1.player.Position = TileToPixels(spec) + ceremonyOffset;
-                Game1.player.faceDirection(Game1.up);
 
                 Horse? horse = competitor.Value;
                 if (horse != null)
-                {
                     horse.Position = TileToPixels(spec) + ceremonyOffset;
-                    horse.faceDirection(Game1.up);
-                }
+                FaceForCeremony(Game1.player, horse, CeremonyFacing);
             }
 
             // Move NPC racers to their podium or spectator tiles.
@@ -2661,17 +2760,20 @@ namespace HorseTycoon
                 {
                     Point podium = Def.WinnersCircleTiles[i];
                     racer.Horse.Position = TileToPixels(podium) + ceremonyOffset;
-                    racer.Horse.faceDirection(Game1.up);
                 }
                 else
                 {
                     int spectatorSlot = i - Def.WinnersCircleTiles.Length;
                     Point spec = Def.SpectatorTiles[System.Math.Min(spectatorSlot, Def.SpectatorTiles.Length - 1)];
                     racer.Horse.Position = TileToPixels(spec) + ceremonyOffset;
-                    racer.Horse.faceDirection(Game1.up);
                 }
+                FaceForCeremony(null, racer.Horse, CeremonyFacing);
                 if (racer.Rider != null)
+                {
                     SyncRiderToHorse(racer.Rider, racer.Horse);
+                    racer.Rider.Sprite?.StopAnimation();
+                    racer.Rider.faceDirection(CeremonyFacing);
+                }
             }
 
             Game1.player.CanMove = false;
@@ -2700,23 +2802,48 @@ namespace HorseTycoon
         }
 
         private bool prizeMenuWasOpen = false;
+        private int suppressFadeTicks = 0;
+        /// <summary>How long (in ticks) to keep cancelling screen fades after the prize menu closes.</summary>
+        private const int FadeSuppressionTicks = 20;
+
+        /// <summary>Ceremony step after the last of Lewis's lines: the all-players-done barrier.</summary>
+        private const int CeremonyEndStep = 10;
 
         private void UpdateCeremony()
         {
             bool prizeMenuOpen = Game1.activeClickableMenu is ItemGrabMenu;
 
-            // The event system triggers a screen fade when the ItemGrabMenu closes during a festival.
-            // Detect that transition and immediately clear the fade before it renders.
+            // CeremonyPrizeMenu keeps the festival event from advancing when the prize menu closes, which is
+            // what used to start a fade here. Backstop that for a few ticks anyway: a fade can be kicked off
+            // a tick or two after the menu closes, and clearing only on the transition tick left a half-run
+            // fade (fadeIn still set) to animate back in. Never runs once the ceremony has ended, so the
+            // deliberate fade home is untouched.
             if (prizeMenuWasOpen && !prizeMenuOpen)
-            {
-                Game1.fadeToBlack = false;
-                Game1.fadeToBlackAlpha = 0f;
-            }
+                suppressFadeTicks = FadeSuppressionTicks;
             prizeMenuWasOpen = prizeMenuOpen;
+
+            if (suppressFadeTicks > 0)
+            {
+                suppressFadeTicks--;
+                if (!ceremonyEnded.Value)
+                {
+                    Game1.fadeToBlack = false;
+                    Game1.fadeIn = false;
+                    Game1.globalFade = false;
+                    Game1.fadeToBlackAlpha = 0f;
+                }
+            }
 
             // Wait for any open dialogue/menu to be dismissed before advancing.
             if (Game1.activeClickableMenu != null)
                 return;
+
+            // Past the last announcement the ceremony parks on the end barrier rather than stepping on.
+            if (ceremonyStep.Value >= CeremonyEndStep)
+            {
+                this.WaitForCeremonyEnd();
+                return;
+            }
             this.AdvanceCeremonyStep();
         }
 
@@ -2799,10 +2926,45 @@ namespace HorseTycoon
                         "See you next year!");
                     break;
 
-                case 10: // End festival
-                    this.EndFestival();
+                case CeremonyEndStep: // Hold until every player has finished, then all leave together
+                    this.WaitForCeremonyEnd();
                     break;
             }
+        }
+
+        /// <summary>Barrier at the end of the awards ceremony. Players read Lewis's lines and open their
+        /// prize menus at their own pace, so without this the first player to click through would warp home
+        /// while the others were still mid-ceremony. Everyone who reaches the end parks in a non-cancelable
+        /// ReadyCheckDialog (auto-readies each tick, exactly like the race-start barrier) and the festival
+        /// only ends once all online players have arrived — so the whole party leaves at the same moment.</summary>
+        private void WaitForCeremonyEnd()
+        {
+            // EndFestival fades out rather than leaving the Ceremony phase immediately, so UpdateCeremony
+            // keeps ticking through the fade — latch here or the barrier would reopen and re-end.
+            if (ceremonyEnded.Value)
+                return;
+
+            string? barrierId = ceremonyEndBarrierId.Value;
+            if (!Game1.IsMultiplayer || barrierId == null)
+            {
+                ceremonyEnded.Value = true;
+                this.EndFestival();
+                return;
+            }
+
+            // Only reached with no menu open (UpdateCeremony holds while one is up), so if the dialog
+            // was dismissed some other way this re-raises it instead of stranding the player.
+            Logger.LogVerbose($"Ceremony finished locally; waiting on other players at barrier {barrierId}.");
+            Game1.activeClickableMenu = new ReadyCheckDialog(
+                barrierId,
+                allowCancel: false,
+                onConfirm: (_) =>
+                {
+                    Game1.exitActiveMenu();
+                    ceremonyEnded.Value = true;
+                    Logger.LogVerbose("All players finished the ceremony — ending festival.");
+                    this.EndFestival();
+                });
         }
 
         private static string GetFarmerName(long uniqueId)
@@ -2903,8 +3065,47 @@ namespace HorseTycoon
         private static void AwardPrizes(params string[] itemIds)
         {
             var items = itemIds.Select(id => ItemRegistry.Create(id)).ToList<Item>();
-            Game1.activeClickableMenu = new ItemGrabMenu(
-                items, false, true, InventoryMenu.highlightAllItems, null, null);
+            Game1.activeClickableMenu = new CeremonyPrizeMenu(items);
+        }
+
+        /// <summary>The prize menu handed out at the awards ceremony.
+        ///
+        /// Closing a vanilla <see cref="ItemGrabMenu"/> while an event is running bumps that event's
+        /// command pointer — <c>MenuWithInventory.receiveLeftClick</c> (the OK button) and
+        /// <c>ItemGrabMenu.receiveKeyPress</c> (Esc) both do <c>currentEvent.CurrentCommand++</c>, so an
+        /// event script that opened a chest resumes once the player is done with it. Our festival event is
+        /// idle during the ceremony, so that bump instead runs the next set-up command and kicks off a
+        /// screen fade. Snapshot the pointer and put it back inside the same input call, which lands before
+        /// the event updates later in the tick — nothing ever sees the advanced value.</summary>
+        private class CeremonyPrizeMenu : ItemGrabMenu
+        {
+            public CeremonyPrizeMenu(IList<Item> items)
+                : base(items, false, true, InventoryMenu.highlightAllItems, null, null)
+            {
+            }
+
+            private static int CurrentEventCommand => Game1.currentLocation?.currentEvent?.CurrentCommand ?? -1;
+
+            private static void RestoreEventCommand(int command)
+            {
+                Event? ev = Game1.currentLocation?.currentEvent;
+                if (ev != null && command >= 0 && ev.CurrentCommand != command)
+                    ev.CurrentCommand = command;
+            }
+
+            public override void receiveLeftClick(int x, int y, bool playSound = true)
+            {
+                int command = CurrentEventCommand;
+                base.receiveLeftClick(x, y, playSound);
+                RestoreEventCommand(command);
+            }
+
+            public override void receiveKeyPress(Microsoft.Xna.Framework.Input.Keys key)
+            {
+                int command = CurrentEventCommand;
+                base.receiveKeyPress(key);
+                RestoreEventCommand(command);
+            }
         }
 
         private void EndFestival()
@@ -2996,6 +3197,7 @@ namespace HorseTycoon
                     Game1.left,
                     name);
                 actor.EventActor = true;
+                ApplyFestivalAppearance(actor);
                 festLoc.characters.Add(actor);
                 spawnedRiders.Add(actor);
                 Logger.LogVerbose($"Spawned rider actor '{name}' at holding tile {holdTile}.");
@@ -3158,9 +3360,10 @@ namespace HorseTycoon
                 // This leaves the real NPC untouched at home with their normal animation state.
                 var sprite = new AnimatedSprite("Characters/" + p.Name, 0, 16, 32);
                 var actor = new NPC(sprite, TileToPixels(p.Tile), p.Direction, p.Name);
+                actor.EventActor = true;
+                ApplyFestivalAppearance(actor);
                 actor.faceDirection(p.Direction);
                 actor.Sprite.StopAnimation();
-                actor.EventActor = true;
                 if (p.IsAutoFilled)
                 {
                     // Auto-filled NPCs have no festival-specific dialog, so give them a generic line.
@@ -3183,6 +3386,68 @@ namespace HorseTycoon
                 RaceFestival?.actors.Add(actor);
                 spawnedSpectators.Add(actor);
             }
+        }
+
+        /// <summary>
+        /// Give every actor currently in the festival the plain, season-appropriate look from
+        /// Data/Characters — never a location-specific work outfit (e.g. Shane's JojaMart uniform).
+        /// Covers the actors the game's own <c>loadActors Set-Up</c> command created as well as ours.
+        /// </summary>
+        private void ApplyFestivalAppearances()
+        {
+            if (RaceFestival == null) return;
+            foreach (NPC actor in RaceFestival.actors)
+                ApplyFestivalAppearance(actor);
+        }
+
+        /// <summary>
+        /// Pick <paramref name="actor"/>'s appearance as if they were standing on the festival map, then
+        /// freeze it for the rest of the festival.
+        ///
+        /// Event actors never get a <c>currentLocation</c> (neither Event.actors nor Event.update assigns
+        /// one, and the temp festival map is called "Temp" so the game's own addActor can't look it up),
+        /// and <see cref="NPC.ChooseAppearance"/> bails out early when it's null. So an actor keeps
+        /// whatever textures it happened to be constructed with: no portrait at all for the ones we spawn,
+        /// no seasonal variant (e.g. Shane_Winter) for anyone, and any outfit left over from wherever the
+        /// NPC last was — which is how Shane turns up at the festival in his Joja uniform. Point the actor
+        /// at the festival map just long enough for vanilla to pick the entry, then detach it again so
+        /// nothing else treats the actor as living there.
+        ///
+        /// The festival map is outdoors, in the festival's season, and is never JojaMart, so the seasonal
+        /// entries apply and the work-outfit ones can't.
+        /// </summary>
+        private static void ApplyFestivalAppearance(NPC actor)
+        {
+            // Stall keepers deliberately borrow another character's sheet (see SpawnShopNpc), which is
+            // exactly what this would undo — they turn off dynamic appearance to say so.
+            if (!actor.AllowDynamicAppearance)
+                return;
+
+            // Only ever touch throwaway festival copies. The overrides below are permanent, so applying
+            // them to a real villager would pin their outfit for the rest of the save.
+            if (!actor.EventActor)
+                return;
+
+            GameLocation? previous = actor.currentLocation;
+            try
+            {
+                actor.currentLocation = Game1.currentLocation;
+                actor.ChooseAppearance();
+            }
+            catch (System.Exception ex)
+            {
+                Logger.LogVerbose($"Could not choose a festival appearance for '{actor.Name}': {ex.Message}");
+            }
+            finally
+            {
+                actor.currentLocation = previous;
+            }
+
+            // Lock the textures in: TryLoadPortraits/TryLoadSprites become no-ops while these are set, so
+            // nothing (a stray ChooseAppearance, an asset reload) can swap in another outfit mid-festival.
+            actor.portraitOverridden = true;
+            actor.spriteOverridden = true;
+            actor.AllowDynamicAppearance = false;
         }
 
         private void DespawnSpectators()
@@ -3785,6 +4050,80 @@ namespace HorseTycoon
             rider.faceDirection(horse.FacingDirection);
         }
 
+        /// <summary>Direction everyone faces once they're placed for the awards ceremony — up, toward
+        /// Lewis at the announcer tile.</summary>
+        private const int CeremonyFacing = Game1.up;
+
+        /// <summary>Points a rider and their mount in a fixed direction when they're teleported into the
+        /// winner's circle.
+        ///
+        /// faceDirection alone does not do it: AnimatedSprite.faceDirection bails out while
+        /// CurrentAnimation is set, and everyone arrives still carrying the gallop loop from whatever
+        /// direction they finished in — which AdvanceHorseAnimations keeps stepping, so the horse and its
+        /// rider stay visibly turned sideways on the podium. Swap in the standing frame for the target
+        /// direction instead.</summary>
+        private static void FaceForCeremony(Farmer? rider, Horse? horse, int direction)
+        {
+            // Rider first: Farmer.Halt (reached through completelyStopAnimatingOrDoingAction) nulls its
+            // mount's CurrentAnimation, so the horse has to be posed after the farmer is settled.
+            if (rider != null)
+            {
+                rider.completelyStopAnimatingOrDoingAction();
+                rider.faceDirection(direction);
+                // Mounted farmers draw a dedicated riding frame per direction, picked at call time.
+                if (rider.isRidingHorse())
+                    rider.showRiding();
+            }
+
+            if (horse != null)
+            {
+                horse.Halt();
+                horse.faceDirection(direction);
+                HorseAnimations.SetStanding(horse, direction);
+            }
+        }
+
+        /// <summary>Re-asserts the ceremony pose every tick for everyone standing in the winner's circle.
+        ///
+        /// Posing once at placement does not hold: Farmer.Halt clears its mount's CurrentAnimation (and
+        /// StartCeremony itself calls Halt after placing everyone), after which EnsureLocalMountAnimation
+        /// tops the horse back up with the side-on idle — so the rider ends up sideways on the podium.
+        /// Runs after AdvanceHorseAnimations so this is the last word on the frame each tick, and only
+        /// touches what is actually wrong so it costs nothing once everyone is settled.</summary>
+        private void EnforceCeremonyFacing()
+        {
+            // Everyone at the festival raced, so everyone is posed — including anyone missing from
+            // ceremonyOrder (a player who never recorded a finish still stands with the rest).
+            foreach (Farmer farmer in Game1.getOnlineFarmers())
+            {
+                if (farmer.FacingDirection != CeremonyFacing)
+                    farmer.faceDirection(CeremonyFacing);
+                if (farmer.isRidingHorse())
+                    farmer.showRiding();
+                PoseHorseForCeremony(farmer.mount);
+            }
+
+            foreach (NpcRacer racer in npcRacers)
+            {
+                PoseHorseForCeremony(racer.Horse);
+                if (racer.Rider != null && racer.Rider.FacingDirection != CeremonyFacing)
+                {
+                    racer.Rider.Sprite?.StopAnimation();
+                    racer.Rider.faceDirection(CeremonyFacing);
+                }
+            }
+        }
+
+        private static void PoseHorseForCeremony(Horse? horse)
+        {
+            if (horse == null)
+                return;
+            if (horse.FacingDirection != CeremonyFacing)
+                horse.faceDirection(CeremonyFacing);
+            if (!HorseAnimations.IsStanding(horse, CeremonyFacing))
+                HorseAnimations.SetStanding(horse, CeremonyFacing);
+        }
+
         private static bool IsGalloppingAnimation(Horse horse, int dir)
         {
             var anim = horse.Sprite?.CurrentAnimation;
@@ -4051,6 +4390,10 @@ namespace HorseTycoon
             announcementShown.Value = false;
             ceremonyOrder.Value.Clear();
             ceremonyStep.Value = 0;
+            ceremonyEndBarrierId.Value = null;
+            ceremonyEnded.Value = false;
+            prizeMenuWasOpen = false;
+            suppressFadeTicks = 0;
             disqualified.Value = false;
             pamGreeted.Value = false;
             showBettingMoneyBox.Value = false;
