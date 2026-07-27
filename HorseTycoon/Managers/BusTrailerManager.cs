@@ -518,6 +518,49 @@ namespace HorseTycoon
             DrawLoadedHorseHeads(spriteBatch, trailerGlobalPosition, texture, layerDepth);
         }
 
+        /// <summary>How far past the bus body's right edge the hitched trailer reaches, in pixels; 0 with no
+        /// trailer. Departure animations use this so the bus isn't declared off-screen while the trailer it
+        /// is towing is still in frame.</summary>
+        public static float TrailerTailPixels
+        {
+            get
+            {
+                if (!IsBuilt || IsUnderConstruction)
+                    return 0f;
+                Texture2D? texture = TrailerTextureFor(Level);
+                return texture == null ? 0f : TrailerDrawOffset.X + texture.Bounds.Width * 4f;
+            }
+        }
+
+        /// <summary>
+        /// Adds the trailer hitched behind a bus parked at <paramref name="busGlobalPosition"/> as a
+        /// permanent sprite on <paramref name="location"/>, so it sorts with the world instead of being
+        /// drawn over it. Used by the festival's parked bus (the horses have been unloaded by then, so
+        /// no heads are drawn in the windows). No-op without a finished trailer.
+        /// </summary>
+        public static void AddParkedTrailerSprite(GameLocation location, Vector2 busGlobalPosition, float layerDepth)
+        {
+            if (!IsBuilt || IsUnderConstruction)
+                return;
+            Texture2D? texture = TrailerTextureFor(Level);
+            if (texture == null)
+                return;
+
+            location.temporarySprites.Add(new TemporaryAnimatedSprite
+            {
+                texture = texture,
+                sourceRect = texture.Bounds,
+                sourceRectStartingPos = Vector2.Zero,
+                position = busGlobalPosition + TrailerDrawOffset,
+                animationLength = 1,
+                interval = 999999f,
+                totalNumberOfLoops = 9999,
+                holdLastFrame = true,
+                scale = 4f,
+                layerDepth = layerDepth,
+            });
+        }
+
         /// <summary>
         /// Draws the heads of the horses loaded onto the bus (any player's selection, local player's
         /// first) behind the trailer's two transparent windows, so they peek out while the bus waits

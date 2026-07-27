@@ -292,10 +292,10 @@
 			}
 		},
 		{
-			"LogName": "Summer Horse Festival - Festival map (bus stop)",
+			"LogName": "Summer Horse Festival - Festival map (SVE desert)",
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_SummerBusFestival",
-			"FromFile": "assets/maps/Summer-HorseRace.tmx"
+			"FromFile": "assets/maps/Desert-HorseRace.tmx"
 		},
 		{
 			"LogName": "Summer Horse Festival - Leah's saddle shop",

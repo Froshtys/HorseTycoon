@@ -128,6 +128,14 @@ namespace HorseTycoon
         public bool BusArrival;
         public Point BusParkTile = new Point(21, 6);
         public Point BusDropTile = new Point(22, 10);
+        // Tiles that send the player home when they walk onto them (the bus doorway). The bus stays parked
+        // for the whole festival, like the Desert's, and stepping into its door is how you leave.
+        // Null = the drop tile plus the tile directly above it (i.e. the doorway itself).
+        public Point[]? BusExitTiles;
+        // Where the bus drops everyone off on the way home, overriding the vanilla festival exit (the farm).
+        // Defaults to the real Bus Stop's bus door, the same spot the Desert bus returns you to.
+        public string BusReturnLocation = "BusStop";
+        public Point BusReturnTile = new Point(22, 10);
 
         // --- Optional start-of-festival heads-up (opt-in) ---
         // For "away" festivals that are NOT registered in Data/Festivals/FestivalDates (so they don't close
@@ -412,6 +420,10 @@ namespace HorseTycoon
             LocationName = "Custom_HorseTycoon_SummerFestival",
             MapAssetKey = "CP.HorseTycoon_SummerBusFestival",
             BusArrival = true,
+            // The map is SVE's Desert, so the vanilla Desert bus tiles line up with the art (and the
+            // map's own collision under the bus). Matches summer19.json's farmer start tile, 18 27.
+            BusParkTile = new Point(17, 24),
+            BusDropTile = new Point(18, 27),
             HeadsUpMessage = "The bus to the Summer Horse Festival is now boarding.",
 
             AnnouncementMailId = "HorseTycoon.SummerFestivalNotice",
@@ -424,7 +436,10 @@ namespace HorseTycoon
                 + "^   -The Horse Racing Committee",
             AnnouncementRequiresBusAccess = true,
 
-            // Layout authored for Summer-HorseRace.tmx (65x85): a festival plaza (rows 30-49)
+            // STALE: layout below was authored for the old Summer-HorseRace.tmx (65x85) and still needs
+            // re-tuning for Desert-HorseRace.tmx (SVE's Desert, 60x156) with ht_race_tile. Only the bus
+            // tiles and StartStall have been moved so far.
+            // Old layout: a festival plaza (rows 30-49)
             // holding the market shops + for-sale paddock and the horse pens, above a large
             // fenced oval track (rows 50-82). The race runs along the top "home straight"
             // (lane rows 51-59) west->east. Fine-tune tiles in-game with ht_race_tile.
@@ -442,8 +457,10 @@ namespace HorseTycoon
             PenHorseTile = null,
 
             // Starting stalls at the west end of the home straight; horses break east.
-            StartStall = new Point(6, 52),
-            StallFenceId = "322",
+            // Centered so a full 8-horse field puts the topmost stall at (9, 65): rows 65..79 (odd slots
+            // below center, even above), with the enclosing fence spanning y 64..80 and x 8..10.
+            StartStall = new Point(9, 71),
+            StallFenceId = "323", // stone, to suit the desert venue
             // Finish band at the east end of the home straight.
             FinishMin = new Point(56, 51),
             FinishMax = new Point(56, 59),

@@ -100,7 +100,7 @@ namespace HorseTycoon
         // Lineup: riders are positioned in their stalls and Lewis gives his pre-race announcement; players
         // are held (no NPC movement, no finish checks) until every client clicks through and the "go" barrier
         // releases, at which point Racing begins with the countdown. Mirrors the Egg Festival cutscene→barrier.
-        private enum Phase { None, Arrival, Pasture, Lineup, Racing, Finished, Ceremony }
+        private enum Phase { None, Arrival, Pasture, Lineup, Racing, Finished, Ceremony, Departure }
         private enum AiMode { Normal, Match }
 
         private class NpcRacer
@@ -149,7 +149,9 @@ namespace HorseTycoon
             public Point? LastJumpApproachTile;
         }
 
-        private static readonly bool DebugAllStalls = false;
+        /// <summary>Build the full 8-stall gate regardless of how many racers there actually are, so the
+        /// starting line can be laid out and eyeballed at its full size.</summary>
+        private static readonly bool DebugAllStalls = true;
 
         private readonly IModHelper Helper;
         private readonly IMonitor Monitor;
@@ -225,6 +227,14 @@ namespace HorseTycoon
         private readonly PerScreen<Vector2> busArrivalMotion = new(() => Vector2.Zero);
         private readonly PerScreen<TemporaryAnimatedSprite?> busDoorSprite = new(() => null);
         private readonly PerScreen<float> busArrivalDoorTimer = new(() => -1f);
+
+        // Parked bus (after the arrival cinematic). The bus stays for the whole festival like the Desert's:
+        // its sprites live on the festival location so they sort with the world, and stepping into its
+        // doorway offers to end the festival. busExitArmed stops the drop tile from firing on arrival —
+        // it only arms once the player has stepped off the doorway, mirroring vanilla touch actions.
+        private readonly PerScreen<bool> busParked = new(() => false);
+        private readonly PerScreen<bool> busExitArmed = new(() => false);
+        private readonly PerScreen<List<TemporaryAnimatedSprite>> parkedBusSprites = new(() => new List<TemporaryAnimatedSprite>());
 
         // Set true while re-invoking warpFarmer from the "Yes" path so our prefix doesn't re-intercept it.
         private static bool SkipHorseWarning = false;
@@ -436,6 +446,12 @@ namespace HorseTycoon
             harmony.Patch(
                 original: AccessTools.Method(typeof(StardewValley.Locations.BusStop), "busLeftToDesert"),
                 prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(BusLeftToDesert_Prefix)));
+
+            // At a bus festival the only way home is the bus, so suppress vanilla's "leave the festival?"
+            // prompt at the map edge (the player just bumps the boundary instead).
+            harmony.Patch(
+                original: AccessTools.Method(typeof(Event), nameof(Event.TryStartEndFestivalDialogue)),
+                prefix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(TryStartEndFestivalDialogue_Prefix)));
 
 
             this.Helper.ConsoleCommands.Add(
@@ -969,6 +985,23 @@ namespace HorseTycoon
             return false;
         }
 
+        /// <summary>
+        /// Fires before <see cref="Event.TryStartEndFestivalDialogue"/>, vanilla's "leave the festival?"
+        /// prompt when a player walks off the edge of the festival map. At a bus festival the bus is the
+        /// only ride home (and vanilla's prompt would drop them at the farm without the departure
+        /// cinematic or the horse handback), so this suppresses it — the map edge just blocks.
+        /// </summary>
+        private static bool TryStartEndFestivalDialogue_Prefix(Event __instance, ref bool __result)
+        {
+            if (DefinitionForEvent(__instance)?.BusArrival != true)
+                return true;
+
+            Game1.player.Halt();
+            Game1.player.Position = Game1.player.lastPosition;
+            __result = true; // "handled": stops the caller from falling through to other exit handling
+            return false;
+        }
+
         // ======================== End Summer Festival Bus Ticket ========================
 
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
@@ -1013,6 +1046,9 @@ namespace HorseTycoon
                     break;
                 case Phase.Arrival:
                     this.UpdateBusArrival(festival);
+                    break;
+                case Phase.Departure:
+                    this.UpdateBusDeparture(festival);
                     break;
                 case Phase.Pasture:
                     this.UpdatePasture();
@@ -1226,11 +1262,13 @@ namespace HorseTycoon
                 busArrivalMotion.Value = Vector2.Zero;
                 if (door != null)
                 {
-                    // Swap to the opening-door animation.
-                    door.sourceRect = new Rectangle(288, 1311, 16, 38);
+                    // Swap to the opening-door animation. The strip runs shut (frame 5) -> open (frame 0),
+                    // so it plays backwards from the last frame, like the Desert's arrival.
+                    door.sourceRect = new Rectangle(288 + 5 * 16, 1311, 16, 38);
                     door.sourceRectStartingPos = new Vector2(288f, 1311f);
-                    door.currentParentTileIndex = 0;
+                    door.currentParentTileIndex = 5;
                     door.animationLength = 6;
+                    door.pingPong = true;
                     door.interval = 70f;
                     door.holdLastFrame = true;
                     door.timer = 0f;
@@ -1255,6 +1293,7 @@ namespace HorseTycoon
         private void FinishBusArrival(Event festival)
         {
             FestivalDefinition def = Def;
+            this.ParkBus(Game1.currentLocation);
             busDoorSprite.Value = null;
             busArrivalDoorTimer.Value = -1f;
             busArrivalMotion.Value = Vector2.Zero;
@@ -1271,10 +1310,11 @@ namespace HorseTycoon
             this.EnterPasture(festival);
         }
 
-        /// <summary>Draws the driving-in bus + door over the world during <see cref="Phase.Arrival"/>.</summary>
+        /// <summary>Draws the moving bus + door over the world during the arrival and departure cinematics.
+        /// Once parked, the bus is a sprite on the location instead (see <see cref="ParkBus"/>).</summary>
         private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
         {
-            if (phase.Value != Phase.Arrival)
+            if (phase.Value != Phase.Arrival && phase.Value != Phase.Departure)
                 return;
 
             Vector2 screen = Game1.GlobalToLocal(Game1.viewport, busArrivalPos.Value);
@@ -1282,6 +1322,208 @@ namespace HorseTycoon
                 SpriteEffects.None, 1f);
             BusTrailerManager.DrawTrailerBehindBus(e.SpriteBatch, busArrivalPos.Value, 1f);
             busDoorSprite.Value?.draw(e.SpriteBatch);
+        }
+
+        /// <summary>
+        /// Leaves the bus parked at the drop-off for the rest of the festival, the way the Desert's bus
+        /// waits for you. The cinematic's mod-drawn bus can't stay: it's drawn in RenderedWorld, so it
+        /// paints over the player. Instead the bus body, its open door and the hitched trailer become
+        /// sprites on the festival location itself, at the vanilla Desert's layer depths, so the world
+        /// sorts them and the player walks in front of the bus rather than behind it.
+        /// </summary>
+        private void ParkBus(GameLocation location)
+        {
+            Vector2 pos = busArrivalPos.Value;
+            float depth = (pos.Y + 192f) / 10000f;
+
+            var body = new TemporaryAnimatedSprite("LooseSprites\\Cursors", BusBodySource, pos,
+                flipped: false, 0f, Color.White)
+            {
+                interval = 999999f,
+                animationLength = 1,
+                holdLastFrame = true,
+                layerDepth = depth,
+                scale = 4f,
+            };
+            // Frame 0 of the door strip is the open door (frame 5 is shut) — the same sprite the Desert
+            // leaves standing while its bus waits for you.
+            var door = new TemporaryAnimatedSprite("LooseSprites\\Cursors", new Rectangle(288, 1311, 16, 38),
+                pos + new Vector2(16f, 26f) * 4f, flipped: false, 0f, Color.White)
+            {
+                interval = 999999f,
+                animationLength = 1,
+                holdLastFrame = true,
+                layerDepth = depth + 1E-05f,
+                scale = 4f,
+            };
+
+            location.temporarySprites.Add(body);
+            location.temporarySprites.Add(door);
+            parkedBusSprites.Value.Add(body);
+            parkedBusSprites.Value.Add(door);
+
+            int trailerCount = location.temporarySprites.Count;
+            BusTrailerManager.AddParkedTrailerSprite(location, pos, depth);
+            if (location.temporarySprites.Count > trailerCount)
+                parkedBusSprites.Value.Add(location.temporarySprites[^1]);
+
+            busParked.Value = true;
+            busExitArmed.Value = false;
+        }
+
+        /// <summary>Removes the parked bus sprites. The temp map is discarded when the festival ends, but
+        /// this keeps the sprites from lingering if the location outlives the festival.</summary>
+        private void UnparkBus()
+        {
+            if (parkedBusSprites.Value.Count > 0)
+            {
+                GameLocation? loc = Game1.currentLocation;
+                foreach (TemporaryAnimatedSprite sprite in parkedBusSprites.Value)
+                    loc?.temporarySprites.Remove(sprite);
+                parkedBusSprites.Value.Clear();
+            }
+            busParked.Value = false;
+            busExitArmed.Value = false;
+        }
+
+        /// <summary>The tiles that count as the parked bus's doorway.</summary>
+        private static IEnumerable<Point> BusExitTiles(FestivalDefinition def) =>
+            def.BusExitTiles ?? new[] { def.BusDropTile, new Point(def.BusDropTile.X, def.BusDropTile.Y - 1) };
+
+        /// <summary>
+        /// Walking into the parked bus's door is how you leave the festival. Vanilla's touch actions are
+        /// suppressed during an event, so this polls the player's tile instead, and only fires once they
+        /// have stepped off the doorway (otherwise the drop tile would prompt the moment they arrive).
+        /// </summary>
+        private void CheckBusDoorExit()
+        {
+            if (!busParked.Value || Game1.activeClickableMenu != null || RaceFestival == null)
+                return;
+
+            Point tile = Game1.player.TilePoint;
+            if (!BusExitTiles(Def).Contains(tile))
+            {
+                busExitArmed.Value = true;
+                return;
+            }
+            if (!busExitArmed.Value)
+                return;
+
+            busExitArmed.Value = false;
+            this.PromptLeaveOnBus();
+        }
+
+        /// <summary>Asks whether to board the bus home, then ends the festival. Mirrors vanilla's
+        /// leave-the-festival prompt: a confirmation in single player, and a ready check in multiplayer
+        /// so the whole party rides back together.</summary>
+        private void PromptLeaveOnBus()
+        {
+            Game1.player.Halt();
+
+            void Board(Farmer _)
+            {
+                Game1.exitActiveMenu();
+                this.StartBusDeparture();
+            }
+
+            if (!Game1.IsMultiplayer)
+            {
+                Game1.activeClickableMenu = new ConfirmationDialog(
+                    "Take the bus back home?", Board);
+                return;
+            }
+
+            Game1.netReady.SetLocalReady("festivalEnd", ready: true);
+            Game1.activeClickableMenu = new ReadyCheckDialog("festivalEnd", allowCancel: true, Board,
+                (_) =>
+                {
+                    Game1.netReady.SetLocalReady("festivalEnd", ready: false);
+                    Game1.exitActiveMenu();
+                });
+        }
+
+        /// <summary>
+        /// Everyone agreed to go home: the reverse of the arrival. The parked bus goes back to being
+        /// mod-drawn (so it can move again), the door shuts with the player hidden inside, and the bus
+        /// pulls away west while the camera holds still — the vanilla Desert's departure.
+        /// </summary>
+        private void StartBusDeparture()
+        {
+            Vector2 pos = busArrivalPos.Value;
+            this.UnparkBus();
+            phase.Value = Phase.Departure;
+
+            // Everyone boards: the rider dismounts and every horse they brought is loaded back into the
+            // trailer, so nothing is left standing on the festival map as the bus pulls away.
+            this.ReleaseFestivalMount();
+            this.StowBusHorses();
+
+            Game1.player.CanMove = false;
+            Game1.player.Halt();
+            Game1.displayFarmer = false;
+            Game1.changeMusicTrack("silence", track_interruptable: true);
+
+            // Frames 0 -> 5 is the door swinging shut.
+            busDoorSprite.Value = new TemporaryAnimatedSprite("LooseSprites\\Cursors",
+                new Rectangle(288, 1311, 16, 38), pos + new Vector2(16f, 26f) * 4f,
+                flipped: false, 0f, Color.White)
+            {
+                interval = 70f,
+                animationLength = 6,
+                holdLastFrame = true,
+                layerDepth = 1f,
+                scale = 4f,
+            };
+            busArrivalMotion.Value = Vector2.Zero;
+            busArrivalDoorTimer.Value = 6 * 70f + 200f;
+            Game1.playSound("trashcanlid");
+
+            // The camera stays with the stop while the bus drives out of frame, like the Desert's.
+            Game1.viewportFreeze = true;
+        }
+
+        /// <summary>Shuts the door, then accelerates the bus off the west edge of the screen and ends the
+        /// festival once it's out of sight.</summary>
+        private void UpdateBusDeparture(Event festival)
+        {
+            TemporaryAnimatedSprite? door = busDoorSprite.Value;
+            Game1.player.CanMove = false;
+            Game1.player.freezePause = 100;
+            door?.update(Game1.currentGameTime);
+
+            // Ride along with the door. Game1.displayFarmer is ignored while a festival event is drawing
+            // the location's farmers, so without this the player is left standing at the stop, visibly
+            // watching their own bus leave. The camera is frozen, so they simply travel out of frame.
+            Game1.displayFarmer = false;
+            if (door != null)
+                Game1.player.Position = door.Position;
+
+            // Door still closing.
+            if (busArrivalDoorTimer.Value > 0f)
+            {
+                busArrivalDoorTimer.Value -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+                if (busArrivalDoorTimer.Value <= 0f)
+                    Game1.playSound("busDriveOff");
+                return;
+            }
+
+            // Vanilla's departure acceleration.
+            Vector2 motion = busArrivalMotion.Value;
+            motion.X -= 0.075f;
+            busArrivalMotion.Value = motion;
+            busArrivalPos.Value += motion;
+            if (door != null)
+                door.Position += motion;
+
+            // Fully out of frame (the bus body is 512px wide, plus whatever the trailer adds behind it)
+            // — end the festival and ride home.
+            if (busArrivalPos.Value.X + 512f + BusTrailerManager.TrailerTailPixels < Game1.viewport.X)
+            {
+                busDoorSprite.Value = null;
+                busArrivalMotion.Value = Vector2.Zero;
+                Game1.viewportFreeze = false;
+                this.EndFestival();
+            }
         }
 
         // ======================== End Bus Arrival Cinematic ========================
@@ -1767,6 +2009,8 @@ namespace HorseTycoon
 
         private void UpdatePasture()
         {
+            this.CheckBusDoorExit();
+
             if (pendingRaceReadyCheckId.Value != null && RaceFestival != null && !readyCheckOpen.Value)
             {
                 string id = pendingRaceReadyCheckId.Value;
@@ -3148,37 +3392,76 @@ namespace HorseTycoon
             Game1.viewportFreeze = false;
             Game1.player.CanMove = true;
 
-            // Dismount the player before the festival warp so they arrive home on foot.
-            Horse? mount = Game1.player.mount;
-            if (mount != null)
-            {
-                bool isBorrowed = borrowedFestivalHorse.Value == mount;
-
-                mount.rider = null;
-                mount.dismounting.Value = false;
-                mount.mounting.Value = false;
-                mount.controller = null;
-                Game1.player.mount = null;
-
-                if (isBorrowed)
-                {
-                    // Borrowed horse: pull it from the festival location; Reset() clears the ref.
-                    mount.currentLocation?.characters.Remove(mount);
-                    borrowedFestivalHorse.Value = null;
-                }
-                else
-                {
-                    // Player's own horse: return it to its stable on the farm.
-                    ReturnHorseToStable(mount);
-                }
-            }
+            this.ReleaseFestivalMount();
 
             // Do NOT despawn NPCs here — the temp map is still active during the fade and
             // they must stay visible until the screen is fully black. Reset() clears the
             // lists once the player has warped back to the real Forest.
             Event? festival = RaceFestival;
             if (festival != null)
+            {
                 festival.endBehaviors(new[] { "end" }, Game1.currentLocation);
+
+                // Festivals normally spit you out at the farmhouse door. A bus festival is a round trip,
+                // so the bus drops everyone back where it picked them up. exitEvent (run by endBehaviors)
+                // has already set the farm exit at this point, so this has to override it afterwards.
+                FestivalDefinition? def = activeDef.Value;
+                if (def?.BusArrival == true)
+                    festival.setExitLocation(def.BusReturnLocation, def.BusReturnTile.X, def.BusReturnTile.Y);
+            }
+        }
+
+        /// <summary>
+        /// Loads the player's horses back onto the bus: temporary bus horses are despawned and unridden
+        /// stable horses are sent home, so nothing is left grazing on the festival map. Called when the
+        /// bus doors shut (they visibly board while the trailer shows their heads) and again from
+        /// <see cref="Reset"/> as the catch-all for every other way the festival can end.
+        /// </summary>
+        private void StowBusHorses()
+        {
+            foreach (Horse busHorse in busFestivalHorses.Value)
+            {
+                if (HorseHelper.IsManagedStableHorse(busHorse))
+                {
+                    if (busHorse.rider == null)
+                        Game1.getFarm().buildings.OfType<Stable>()
+                            .FirstOrDefault(s => s.HorseId == busHorse.HorseId)?.grabHorse();
+                }
+                else
+                {
+                    busHorse.currentLocation?.characters.Remove(busHorse);
+                }
+            }
+            busFestivalHorses.Value.Clear();
+        }
+
+        /// <summary>Dismounts the player and sends whatever they were riding back where it belongs, so
+        /// nothing is left standing on the festival map. Safe to call twice.</summary>
+        private void ReleaseFestivalMount()
+        {
+            Horse? mount = Game1.player.mount;
+            if (mount == null)
+                return;
+
+            bool isBorrowed = borrowedFestivalHorse.Value == mount;
+
+            mount.rider = null;
+            mount.dismounting.Value = false;
+            mount.mounting.Value = false;
+            mount.controller = null;
+            Game1.player.mount = null;
+
+            if (isBorrowed)
+            {
+                // Borrowed horse: pull it from the festival location; Reset() clears the ref.
+                mount.currentLocation?.characters.Remove(mount);
+                borrowedFestivalHorse.Value = null;
+            }
+            else
+            {
+                // Player's own horse: return it to its stable on the farm.
+                ReturnHorseToStable(mount);
+            }
         }
 
         private static void ReturnHorseToStable(Horse horse)
@@ -4365,22 +4648,7 @@ namespace HorseTycoon
                 borrowedFestivalHorse.Value.currentLocation?.characters.Remove(borrowedFestivalHorse.Value);
                 borrowedFestivalHorse.Value = null;
             }
-            // Bus horses: despawn temporary ones; send unridden stable horses home so they aren't
-            // stranded when the festival's temporary map is discarded.
-            foreach (Horse busHorse in busFestivalHorses.Value)
-            {
-                if (HorseHelper.IsManagedStableHorse(busHorse))
-                {
-                    if (busHorse.rider == null)
-                        Game1.getFarm().buildings.OfType<Stable>()
-                            .FirstOrDefault(s => s.HorseId == busHorse.HorseId)?.grabHorse();
-                }
-                else
-                {
-                    busHorse.currentLocation?.characters.Remove(busHorse);
-                }
-            }
-            busFestivalHorses.Value.Clear();
+            this.StowBusHorses();
             // Release this player's bus claims (locally and on every client) so the horses can board
             // a later bus today now that they're back home.
             if (SummerBusHorseIds.Count > 0)
@@ -4402,10 +4670,12 @@ namespace HorseTycoon
             SummerBusHorseIds.Clear();
             phase.Value = Phase.None;
             // Bus drive-in cinematic cleanup (safety net if the festival ended mid-arrival).
+            this.UnparkBus();
             busDoorSprite.Value = null;
             busArrivalDoorTimer.Value = -1f;
             busArrivalMotion.Value = Vector2.Zero;
             Game1.displayFarmer = true;
+            Game1.viewportFreeze = false;
             activeDef.Value = null;
             shuffledPenSlots.Value = null;
             competitor.Value = null;
