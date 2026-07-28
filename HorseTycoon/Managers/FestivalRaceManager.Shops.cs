@@ -110,7 +110,7 @@ namespace HorseTycoon
         private void OpenHorseSellerShop(NPC seller)
         {
             SnapMoneyDial();
-            if (HorseMarket.GetSaleOffers().All(o => o.Purchased))
+            if (!HorseMarket.GetSaleOffers().Any(o => o.IsAvailable))
             {
                 this.Speak(seller, "Sold out! Come back at the next festival.");
                 return;
@@ -130,7 +130,7 @@ namespace HorseTycoon
         private void ShowHorseSaleMenu()
         {
             var offers = HorseMarket.GetSaleOffers();
-            if (offers.All(o => o.Purchased))
+            if (!offers.Any(o => o.IsAvailable))
             {
                 Game1.drawObjectDialogue("Sold out! Come back at the next festival.");
                 return;
@@ -246,6 +246,11 @@ namespace HorseTycoon
                                 "It doesn't look like you brought a mare today. Bring one along next time!");
                             return;
                         }
+                        if (!HorseMarket.GetStudOffers().Any(o => o.IsAvailable))
+                        {
+                            Game1.afterDialogues = () => this.Speak(studKeeper, AllStudsHiredLine);
+                            return;
+                        }
                         Game1.afterDialogues = this.ShowStudMenu;
                         break;
 
@@ -264,9 +269,19 @@ namespace HorseTycoon
             });
         }
 
+        /// <summary>Shown when the player has hired every stallion on the list (each one only serves
+        /// a given player once per festival).</summary>
+        private const string AllStudsHiredLine = "That's every one of my stallions spoken for by you today. Come see me at the next festival!";
+
         private void ShowStudMenu()
         {
-            Game1.activeClickableMenu = new HorseShopMenu("Stud services", HorseMarket.GetStudOffers(), this.ConfirmStudService,
+            var studs = HorseMarket.GetStudOffers();
+            if (!studs.Any(o => o.IsAvailable))
+            {
+                Game1.drawObjectDialogue(AllStudsHiredLine);
+                return;
+            }
+            Game1.activeClickableMenu = new HorseShopMenu("Stud services", studs, this.ConfirmStudService,
                 Def.StudShopSprite, "Take your pick. Every one of my stallions is a proven champion.");
         }
 

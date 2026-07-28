@@ -137,8 +137,14 @@ namespace HorseTycoon
             Manager.SubscribeToUpdate();
         }
 
-        // Returns true if any tile from 1..(toDistance-1) along (ox,oy) has the "NoJumpOver"
-        // property in the Buildings layer, set on the specific festival track barrier tiles in the TMX.
+        // Tilesheets whose Buildings-layer tiles are never jumpable during a festival, matched on the
+        // tilesheet id / image source. "Fence2" is the stone fence sheet: the venues are fenced in with
+        // it, and it should stop a jump exactly like the marked track barriers do.
+        private static readonly string[] NoJumpTilesheetHints = { "Fence2" };
+
+        // Returns true if any tile from 1..(toDistance-1) along (ox,oy) is a festival barrier: either the
+        // "NoJumpOver" property in the Buildings layer (set on specific barrier tiles in the TMX) or a tile
+        // drawn from one of the NoJumpTilesheetHints sheets.
         private static bool HasNoJumpBarrierInPath(GameLocation location, int ox, int oy, int toDistance)
         {
             Vector2 horseTile = Game1.player.mount!.Tile;
@@ -147,6 +153,28 @@ namespace HorseTycoon
                 int tx = (int)(horseTile.X + ox * i);
                 int ty = (int)(horseTile.Y + oy * i);
                 if (location.doesTileHaveProperty(tx, ty, "NoJumpOver", "Buildings") != null)
+                    return true;
+                if (IsNoJumpTilesheetTile(location, tx, ty))
+                    return true;
+            }
+            return false;
+        }
+
+        // True when the Buildings-layer tile at (x,y) is drawn from a tilesheet that can't be jumped over.
+        private static bool IsNoJumpTilesheetTile(GameLocation location, int x, int y)
+        {
+            var layer = location.map?.GetLayer("Buildings");
+            if (layer == null || x < 0 || y < 0 || x >= layer.LayerWidth || y >= layer.LayerHeight)
+                return false;
+
+            var sheet = layer.Tiles[x, y]?.TileSheet;
+            if (sheet == null)
+                return false;
+
+            foreach (string hint in NoJumpTilesheetHints)
+            {
+                if ((sheet.Id != null && sheet.Id.Contains(hint, StringComparison.OrdinalIgnoreCase))
+                    || (sheet.ImageSource != null && sheet.ImageSource.Contains(hint, StringComparison.OrdinalIgnoreCase)))
                     return true;
             }
             return false;

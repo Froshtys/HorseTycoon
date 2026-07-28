@@ -40,7 +40,7 @@ namespace HorseTycoon.Menus
             : base(PriceColumnWidth)
         {
             this.title = title;
-            this.Offers = offers.Where(o => !o.Purchased).ToList();
+            this.Offers = offers.Where(o => o.IsAvailable).ToList();
             this.OnSelected = onSelected;
 
             this.Portrait = LoadPortrait(portraitName);

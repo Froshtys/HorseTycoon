@@ -1,5 +1,15 @@
 {
 	"name": "Summer Horse Festival",
 	"conditions": "Custom_HorseTycoon_SummerFestival/1200 1800",
-	"set-up": "event1/18 27/farmer 18 27 2/changeToTemporaryMap CP.HorseTycoon_SummerBusFestival/viewport -1000 -1000/loadActors Set-Up/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear"
+	"set-up": "event1/18 27/farmer 18 27 2/changeToTemporaryMap CP.HorseTycoon_SummerBusFestival/viewport -1000 -1000/loadActors Set-Up/playerControl horseFestival/viewport player clamp true unfreeze/globalFadeToClear",
+
+	// ---- Attendee festival dialogue ----
+	// Key = NPC internal name. Dialog lines are joined with #$e# so the player must talk to the NPC
+	// AGAIN to see each next line; #$b# gives click-through pages in one talk. Trailing $n = portrait
+	// (0 neutral, 1 happy, 2 sad, 3 unique/blush).
+	//
+	// Sandy hosts this race, so she has no entry here: talking to her is intercepted in C# and opens
+	// the race-start conversation instead (FestivalDefinition.SummerBusStop).
+
+	"Lewis": "Don't look for me at the starting line, @. I'm just a guest today. This race is Sandy's to run. $0#$e#And between you and me, it's a real pleasure to stand in the shade and let somebody else do the announcing.$1"
 }

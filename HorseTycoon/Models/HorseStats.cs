@@ -73,10 +73,11 @@ namespace HorseTycoon.Models
         public const float WarriorEnergyMinBonus = 1f;
         public const float WarriorEnergyMaxBonus = 5f;
 
-        /// <summary>Additive Warrior Energy speed bonus for a total Speed stat: (100 - speed) / 10,
-        /// clamped to 1..5: the slower the horse, the more the pickup is worth.</summary>
+        /// <summary>Additive Warrior Energy speed bonus for a total Speed stat: +0.5 per 10 points below 90,
+        /// clamped to 1..5 (90+ = 1.0, 80 = 1.5, 70 = 2.0, ... 10 and below = 5.0): the slower the horse,
+        /// the more the pickup is worth.</summary>
         public static float WarriorEnergyBonus(int totalSpeed) =>
-            Math.Clamp((STAT_MAX - totalSpeed) / 10f, WarriorEnergyMinBonus, WarriorEnergyMaxBonus);
+            Math.Clamp((STAT_MAX + 10 - totalSpeed) / 20f, WarriorEnergyMinBonus, WarriorEnergyMaxBonus);
 
         // --- Jump Distance (Total Max 100) ---
         public int JumpIV { get => GetStat(JumpIVKey, isIV: true); set => SetStat(JumpIVKey, value, isIV: true); }

@@ -16,7 +16,14 @@ namespace HorseTycoon
         public int SprintIV;
         public int JumpIV;
         public int Price;
+        /// <summary>Sale offers: bought by someone, so it's off the market for everyone (synced).</summary>
         public bool Purchased;
+        /// <summary>Stud offers: the local player already paid this stallion's fee today, so he's off
+        /// their list. Deliberately not synced — other players can still hire him.</summary>
+        public bool UsedByLocalPlayer;
+
+        /// <summary>Whether the local player can still pick this offer in a shop menu.</summary>
+        public bool IsAvailable => !Purchased && !UsedByLocalPlayer;
 
         /// <summary>Total IV segments (each segment = 10 stat points); drives pricing.</summary>
         public int IvPoints => (SpeedIV + SprintIV + JumpIV) / 10;
@@ -193,6 +200,8 @@ namespace HorseTycoon
         public static void PurchaseStudService(HorseOffer stud, FarmAnimal mare)
         {
             Game1.player.Money -= stud.Price;
+            // One service per stallion per player per festival; other players' lists are untouched.
+            stud.UsedByLocalPlayer = true;
             Game1.playSound("purchase");
             Game1.dayTimeMoneyBox.moneyShakeTimer = 800;
 

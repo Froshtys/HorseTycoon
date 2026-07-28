@@ -54,11 +54,51 @@ namespace HorseTycoon
         // --- Ceremony layout (tiles) ---
         // Winner's circle tiles (1st, 2nd, 3rd place left-to-right).
         public Point[] WinnersCircleTiles = null!;
-        // Where Lewis stands in the TMX Set-Up layer (pre-race). Player warps 1 tile south of this on restart.
-        public Point LewisStartTile;
-        public Point LewisAnnouncerTile;
+        // Where the race starter stands in the TMX Set-Up layer (pre-race). Player warps 1 tile south of
+        // this on restart. Must match the character tile placed for them on that layer.
+        public Point StarterStartTile;
+        public Point StarterAnnouncerTile;
         // Tiles for racers who didn't make the podium, spread south of the winners circle.
         public Point[] SpectatorTiles = null!;
+
+        // --- Race starter / announcer ---
+        // The NPC the player walks up to in order to start the race. They also give the pre-race
+        // announcement, the disqualification line and the awards commentary. Mayor Lewis hosts the
+        // valley's own races; an away festival has its own host (Sandy runs the desert race), so this
+        // name must match a character tile on the map's Set-Up layer.
+        public string StarterName = "Lewis";
+        // Display name used in the starter's closing ceremony line.
+        public string FestivalDisplayName = "Horse Festival";
+        // Small talk the starter makes the first time the player approaches them, before the "ready?"
+        // question. Pages are separated with "#$b#" (click-through inside one conversation); trailing
+        // "$0".."$3" picks the portrait for that page. Null = go straight to the question.
+        public string? StarterGreeting;
+        // The question that starts the race (host) and the line non-hosts get instead.
+        public string StarterReadyQuestion = "Ready to start the race?";
+        // Asked instead when the player turned up without a horse. The host's version starts the race
+        // as soon as they accept, so its wording says so.
+        public string StarterNoHorseQuestionHost =
+            "It looks like you don't have a horse! Marnie has some available to borrow. Ready to ride one and start the race?";
+        public string StarterNoHorseQuestion =
+            "It looks like you don't have a horse! Marnie has some available to borrow for the race. Would you like to ride one?";
+        public string StarterWaitingForHostLine = "We're just waiting on the host to start the race!";
+        // Pre-race announcement, shown once every rider is in the stalls. Same "#$b#" page format.
+        public string RaceAnnouncement =
+            "What a beautiful day for a race! The weather is perfect, and the crowd is buzzing with excitement."
+            + "#$b#"
+            + "The horses look fit and ready, raring to run."
+            + "#$b#"
+            + "Let the race begin!$h";
+        // Shown when the player rides off the course. Leading "$a" keeps the starter's angry portrait.
+        public string StarterDqLine =
+            "$a You've gone off the track! I'm afraid you are disqualified from this race.";
+        // Awards ceremony commentary. "{0}" is the racer's name where one is announced.
+        public string CeremonyOpeningLine = "What a spectacular race! Let's see how our riders placed!";
+        public string CeremonyThirdPlaceLine = "In 3rd place... {0}! Congratulations!";
+        public string CeremonySecondPlaceLine = "In 2nd place... {0}! Well done!";
+        public string CeremonyFirstPlaceLine =
+            "And the winner is... {0}! What a ride! You've earned the champion's trophy and a prize ticket!";
+        public string CeremonyClosingLine = "Thank you all for participating in the {0}! See you next year!";
 
         // --- NPC racers + routes ---
         // NPC racers ride in the race as AI opponents. Speed stat drives tiles/sec via 5 + (speed / 20).
@@ -213,8 +253,9 @@ namespace HorseTycoon
                 new Point(56, 12), // 2nd place
                 new Point(54, 12), // 3rd place
             },
-            LewisStartTile = new Point(87, 18),
-            LewisAnnouncerTile = new Point(56, 9),
+            StarterStartTile = new Point(87, 18),
+            StarterAnnouncerTile = new Point(56, 9),
+            FestivalDisplayName = "Spring Horse Festival",
             SpectatorTiles = new[]
             {
                 new Point(56, 15), // 4th: center
@@ -335,8 +376,9 @@ namespace HorseTycoon
             {
                 new Point(58, 12), new Point(56, 12), new Point(54, 12),
             },
-            LewisStartTile = new Point(24, 6),
-            LewisAnnouncerTile = new Point(56, 9),
+            StarterStartTile = new Point(24, 6),
+            StarterAnnouncerTile = new Point(56, 9),
+            FestivalDisplayName = "Fall Horse Festival",
             SpectatorTiles = new[]
             {
                 new Point(56, 15), // 4th: center
@@ -404,13 +446,13 @@ namespace HorseTycoon
 
         /// <summary>
         /// TESTING ONLY: same Spring 19 Forest festival as <see cref="Forest"/>, but also triggerable on
-        /// Spring 3 so it can be reached quickly without fast-forwarding. Remove when done testing.
+        /// Spring 9 so it can be reached quickly without fast-forwarding. Remove when done testing.
         /// </summary>
         public static FestivalDefinition ForestSpringTest()
         {
             FestivalDefinition def = Forest();
-            def.EventId = "festival_spring3";
-            def.Day = 3;
+            def.EventId = "festival_spring9";
+            def.Day = 9;
             // The real Spring 19 festival already sends the advance notice; a second copy of the same
             // letter (and a negative notice day) makes no sense for the test slot.
             def.AnnouncementMailId = null;
@@ -474,20 +516,55 @@ namespace HorseTycoon
             // below center, even above), with the enclosing fence spanning y 64..80 and x 8..10.
             StartStall = new Point(9, 71),
             StallFenceId = "323", // stone, to suit the desert venue
-            // Finish band at the east end of the home straight.
-            FinishMin = new Point(56, 51),
-            FinishMax = new Point(56, 59),
+            // Finish band: vertical line at x=9, spanning y 81..91 (just south of the starting stalls).
+            FinishMin = new Point(9, 81),
+            FinishMax = new Point(9, 91),
             DqZoneNorthOfY = -1,
             DqZoneEastOfX = -1,
             DqZoneWestOfX = -1,
-            DqArrivalTile = new Point(50, 55),
+            // Run-off area west of the finish line, inside the finish chamber.
+            DqArrivalTile = new Point(5, 86),
 
             WinnersCircleTiles = new[]
             {
                 new Point(30, 54), new Point(32, 54), new Point(34, 54),
             },
-            LewisStartTile = new Point(32, 48),
-            LewisAnnouncerTile = new Point(28, 54),
+            // Sandy hosts the desert race: she's the one you walk up to to start it, she calls the
+            // riders to the gate and she runs the awards. Her tile matches the Sandy character tile on
+            // the map's Set-Up layer. Lewis is here too, but only as a guest (see data/summer19.json).
+            StarterName = "Sandy",
+            StarterStartTile = new Point(20, 60),
+            StarterAnnouncerTile = new Point(28, 54),
+            FestivalDisplayName = "Summer Horse Race",
+
+            StarterGreeting =
+                "Well, look who found their way out to the desert! I was hoping you'd come.$1"
+                + "#$b#"
+                + "Folks think there's nothing out here but sand and cactus. One day a year I get to prove them wrong.$0"
+                + "#$b#"
+                + "The traders came in on the early to set up and the race track sand has been raked smooth.$1",
+            StarterReadyQuestion = "So, are you ready to start the race?",
+            StarterWaitingForHostLine = "Hold your horses, sugar! We're still waiting on the rest of your party.",
+            StarterNoHorseQuestionHost =
+                "Sugar, you can't run a race on foot! There are a few spares in the paddock. Want to take one out and get us started?",
+            StarterNoHorseQuestion =
+                "Sugar, you can't run a race on foot! There are a few spares in the paddock. Want to take one out?",
+
+            RaceAnnouncement =
+                "Welcome, everyone, to the Summer Horse Race! I am so glad you all made the trip out."
+                + "#$b#"
+                + "It's a hot one today, and this course is a long one. Sand, switchbacks, and not a lick of shade."
+                + "#$b#"
+                + "Riders, take up your reins and let them run!$h",
+            StarterDqLine =
+                "$a Sugar, you're way off the course! I'm afraid that's a disqualification. Get yourself some water.",
+            CeremonyOpeningLine = "What a race! I don't think this old desert has ever seen anything like it!",
+            CeremonyThirdPlaceLine = "Third place goes to... {0}! You rode a tight race out there.",
+            CeremonySecondPlaceLine = "And in second... {0}! So close, sugar. So close!",
+            CeremonyFirstPlaceLine =
+                "Your winner, out here in the sand and the heat... {0}! Come get your trophy, champion!",
+            CeremonyClosingLine =
+                "Thank you all for coming out to the {0}!",
             SpectatorTiles = new[]
             {
                 new Point(30, 57), new Point(32, 57), new Point(34, 57),
@@ -514,12 +591,68 @@ namespace HorseTycoon
             NpcRiderSprints = new[] { 20, 35, 45, 45 },
             NpcRiderJumps = new[] { 20, 45, 65, 80 },
             NpcJumpMinSkill = 50,
+            // The desert course is a serpentine, not an oval: east along the top straight, down the
+            // x42-57 corridor, back north up x59-67, east into the x69-77 corridor and all the way
+            // south to the bottom straight, then north again through the four switchback rooms
+            // (rows 126-135, 120-124, 113-118, 105-111) into the finish chamber (rows 81-91), where
+            // the line at x=9 is crossed heading west. Each route is the same course on its own lane,
+            // so the four fields run abreast; all four are ~500 tiles long, within 3% of each other.
+            // Every leg was checked against the map's Buildings collision, so A* never has to
+            // improvise between waypoints. Ends past the line at x=4 so the crossing registers.
             NpcRaceRoutes = new[]
             {
-                new[] { new Point(12, 52), new Point(56, 52) },
-                new[] { new Point(12, 54), new Point(56, 54) },
-                new[] { new Point(12, 56), new Point(56, 56) },
-                new[] { new Point(12, 58), new Point(56, 58) },
+                new[]
+                {
+                    new Point(20, 74), new Point(48, 74),                        // top straight, east
+                    new Point(53, 78), new Point(53, 94),                        // down the x42-57 corridor
+                    new Point(61, 99), new Point(61, 84), new Point(61, 76),     // east, then back north up x59-67
+                    new Point(73, 76), new Point(73, 90), new Point(73, 120), new Point(73, 137), // south down the east corridor
+                    new Point(5, 137), new Point(5, 130),                        // bottom straight west, up through the row-136 gap
+                    new Point(30, 132), new Point(63, 132), new Point(63, 121),  // east, up through the row-125 gap
+                    new Point(24, 121), new Point(24, 114),                      // west, up through the row-119 gap
+                    new Point(61, 114), new Point(61, 106),                      // east, up through the row-112 gap
+                    new Point(32, 106), new Point(32, 96), new Point(32, 86),    // west, up through the row-104 and row-92 gaps
+                    new Point(4, 86),                                            // west across the finish line
+                },
+                new[]
+                {
+                    new Point(20, 75), new Point(48, 75),
+                    new Point(54, 78), new Point(54, 94),
+                    new Point(63, 99), new Point(63, 84), new Point(63, 76),
+                    new Point(74, 76), new Point(74, 90), new Point(74, 120), new Point(74, 138),
+                    new Point(6, 138), new Point(6, 130),
+                    new Point(30, 133), new Point(64, 133), new Point(64, 122),
+                    new Point(25, 122), new Point(25, 115),
+                    new Point(62, 115), new Point(62, 107),
+                    new Point(34, 107), new Point(34, 96), new Point(34, 87),
+                    new Point(4, 87),
+                },
+                new[]
+                {
+                    new Point(20, 76), new Point(48, 76),
+                    new Point(55, 78), new Point(55, 94),
+                    new Point(65, 99), new Point(65, 84), new Point(65, 76),
+                    new Point(75, 76), new Point(75, 90), new Point(75, 120), new Point(75, 139),
+                    new Point(7, 139), new Point(7, 130),
+                    new Point(30, 134), new Point(65, 134), new Point(65, 123),
+                    new Point(26, 123), new Point(26, 116),
+                    new Point(63, 116), new Point(63, 108),
+                    new Point(36, 108), new Point(36, 96), new Point(36, 88),
+                    new Point(4, 88),
+                },
+                new[]
+                {
+                    new Point(20, 77), new Point(48, 77),
+                    new Point(57, 78), new Point(57, 94),
+                    new Point(67, 99), new Point(67, 84), new Point(67, 76),
+                    new Point(76, 76), new Point(76, 90), new Point(76, 120), new Point(76, 140),
+                    new Point(8, 140), new Point(8, 130),
+                    new Point(30, 135), new Point(66, 135), new Point(66, 124),
+                    new Point(27, 124), new Point(27, 117),
+                    new Point(64, 117), new Point(64, 109),
+                    new Point(38, 109), new Point(38, 96), new Point(38, 89),
+                    new Point(4, 89),
+                },
             },
 
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },

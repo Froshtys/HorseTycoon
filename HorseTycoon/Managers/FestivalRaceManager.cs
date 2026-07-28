@@ -24,7 +24,7 @@ namespace HorseTycoon
 {
     /// <summary>
     /// Drives the Spring 21 Horse Festival race in Cindersap Forest.
-    /// The host starts the race by talking to Pam (for betting) then Lewis, which raises a <see cref="ReadyCheckDialog"/> on every
+    /// The host starts the race by talking to Pam (for betting) then the festival's host, which raises a <see cref="ReadyCheckDialog"/> on every
     /// client; once everyone accepts, each player is lined up in a fenced starting stall, a start sound plays,
     /// and when it finishes the gates open. Horses run east to the finish band, which ends the race.
     /// Local state is PerScreen; multiplayer sync uses Game1.netReady and explicit mod messages.
@@ -58,7 +58,7 @@ namespace HorseTycoon
         private const string ReadyCheckPrefix = "Froshty.HorseTycoon.horseRaceStart";
 
         // Prefix for the ceremony-end ready check, which holds every player at the awards until all of
-        // them have clicked through Lewis's lines so nobody is warped home mid-ceremony. Same unique-suffix
+        // them have clicked through the host's lines so nobody is warped home mid-ceremony. Same unique-suffix
         // rule as ReadyCheckPrefix: the id is minted once by the host and shipped in StartCeremonyMessage.
         private const string CeremonyEndCheckPrefix = "Froshty.HorseTycoon.horseRaceEnd";
 
@@ -108,7 +108,7 @@ namespace HorseTycoon
         // Hard cap on total racers (players + NPCs). NPC slots are filled first-come, first-dropped.
         private const int MaxRacers = 8;
 
-        // Lineup: riders are positioned in their stalls and Lewis gives his pre-race announcement; players
+        // Lineup: riders are positioned in their stalls and the host gives the pre-race announcement; players
         // are held (no NPC movement, no finish checks) until every client clicks through and the "go" barrier
         // releases, at which point Racing begins with the countdown. Mirrors the Egg Festival cutscene→barrier.
         private enum Phase { None, Arrival, Pasture, Lineup, Racing, Finished, Ceremony, Departure }
@@ -207,12 +207,12 @@ namespace HorseTycoon
         // fresh netReady check: a reused id stays IsReady=true after its first completion and would make
         // the dialog confirm instantly. See <see cref="OpenRaceReadyCheck"/>.
         private readonly PerScreen<string?> pendingRaceReadyCheckId = new(() => null);
-        // Id for the second "all clicked through Lewis's announcement" barrier (see OpenCountdownBarrier),
+        // Id for the second "all clicked through the host's announcement" barrier (see OpenCountdownBarrier),
         // derived from the start barrier's id so every client agrees without another broadcast.
         private readonly PerScreen<string?> goBarrierId = new(() => null);
         // True once this screen has opened its go barrier for the current lineup, so UpdateLineup only opens it once.
         private readonly PerScreen<bool> goBarrierOpened = new(() => false);
-        // True once Lewis's announcement dialogue has been shown this lineup; gates the UpdateLineup fallback so
+        // True once the host's announcement dialogue has been shown this lineup; gates the UpdateLineup fallback so
         // it can't fire during the fade-in before the dialogue appears.
         private readonly PerScreen<bool> announcementShown = new(() => false);
         // Counts consecutive ticks the screen has been stuck fully black during festival entry.
@@ -257,6 +257,9 @@ namespace HorseTycoon
         private static bool SkipHorseWarning = false;
 
         private readonly PerScreen<bool> pamGreeted = new(() => false);
+        // True once this player has heard the host's small talk, so later approaches go straight to
+        // the "ready to race?" question.
+        private readonly PerScreen<bool> starterGreeted = new(() => false);
         private readonly PerScreen<long?> betTargetFarmerId = new(() => null);
         private readonly PerScreen<string?> betTargetNpcName = new(() => null);
         private readonly PerScreen<int> betAmount = new(() => 0);
@@ -281,6 +284,9 @@ namespace HorseTycoon
         private readonly List<Horse> penNpcHorses = new();
         // Decorative generated horses in Marnie's background pasture.
         private readonly List<Horse> decorativeHorses = new();
+        // Subset of decorativeHorses standing in for a market offer at festivals with shops; the
+        // horse is removed from the paddock once its offer is no longer available to this player.
+        private readonly Dictionary<Horse, HorseOffer> marketPastureHorses = new();
 
         // Fresh event-actor NPCs spawned for the Racing / AwardsEvent phases.
         private readonly List<NPC> spawnedSpectators = new();
@@ -2220,6 +2226,7 @@ namespace HorseTycoon
         private void UpdatePasture()
         {
             this.CheckBusDoorExit();
+            this.RefreshMarketPastureHorses();
 
             if (pendingRaceReadyCheckId.Value != null && RaceFestival != null && !readyCheckOpen.Value)
             {
@@ -2333,15 +2340,32 @@ namespace HorseTycoon
             penNpcHorses.Clear();
         }
 
+        /// <summary>Fills the paddock beside the market stalls. At festivals with shops the horses
+        /// shown are the ones actually on offer today (the Horse Seller's sale list first, then the
+        /// Stud Shop's stallions) so their skins match the shop menus; any offers past the last
+        /// paddock tile just aren't shown. They're untacked, and a horse leaves the paddock once its
+        /// offer is no longer available to this player (see <see cref="RefreshMarketPastureHorses"/>).
+        /// Festivals without shops fall back to random-skin background horses.</summary>
         private void SpawnDecorativeHorses()
         {
             GameLocation loc = Game1.currentLocation;
             var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays) + 1);
-            foreach (Point tile in Def.PastureBgSlots)
+            List<HorseOffer> offers = Def.HorseSellerTile != null || Def.StudShopTile != null
+                ? HorseMarket.GetSaleOffers().Concat(HorseMarket.GetStudOffers()).Where(o => o.IsAvailable).ToList()
+                : new List<HorseOffer>();
+
+            for (int i = 0; i < Def.PastureBgSlots.Length; i++)
             {
+                Point tile = Def.PastureBgSlots[i];
+                HorseOffer? offer = i < offers.Count ? offers[i] : null;
                 var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
                 horse.Name = "DecorativeHorse";
-                horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
+                // HorseOffer uses "" for the base skin, which is "Roan" as a horse skin id.
+                horse.modData[HorseHelper.HorseSkinKey] = offer != null
+                    ? (string.IsNullOrEmpty(offer.SkinId) ? "Roan" : offer.SkinId)
+                    : AllSkins[rng.Next(AllSkins.Length)];
+                if (offer != null)
+                    marketPastureHorses[horse] = offer;
                 horse.currentLocation = loc;
                 horse.Position = TileToPixels(tile);
                 horse.Halt();
@@ -2360,6 +2384,23 @@ namespace HorseTycoon
             foreach (Horse h in decorativeHorses)
                 loc?.characters.Remove(h);
             decorativeHorses.Clear();
+            marketPastureHorses.Clear();
+        }
+
+        /// <summary>Removes a paddock horse once the local player can no longer buy/hire it (sold to
+        /// anyone for sale offers, hired by this player for studs), so the paddock matches the menus.</summary>
+        private void RefreshMarketPastureHorses()
+        {
+            if (marketPastureHorses.Count == 0)
+                return;
+
+            foreach (var pair in marketPastureHorses.Where(p => !p.Value.IsAvailable).ToList())
+            {
+                Game1.currentLocation?.characters.Remove(pair.Key);
+                decorativeHorses.Remove(pair.Key);
+                marketPastureHorses.Remove(pair.Key);
+                Logger.LogVerbose($"Removed market paddock horse '{pair.Value.Name}' (offer no longer available).");
+            }
         }
 
         private void LockJasOnHorse(GameLocation loc)
@@ -2510,21 +2551,21 @@ namespace HorseTycoon
 
             Event? festival = RaceFestival;
             NPC? pam = FacedPam(festival);
-            NPC? lewis = festival?.getActorByName("Lewis");
+            NPC? starter = RaceStarter;
             NPC? horseSeller = festival?.getActorByName(HorseSellerActorName);
             NPC? studKeeper = festival?.getActorByName(StudShopActorName);
             NPC? itemKeeper = festival?.getActorByName(ItemShopActorName);
             NPC? bookie = festival?.getActorByName(BookieActorName);
 
             bool nearPam = pam != null;
-            bool nearLewis = lewis != null && IsPlayerFacing(lewis);
+            bool nearStarter = starter != null && IsPlayerFacing(starter);
             bool nearSeller = horseSeller != null && IsPlayerFacingKeeper(horseSeller);
             bool nearStud = studKeeper != null && IsPlayerFacingKeeper(studKeeper);
             bool nearItemShop = itemKeeper != null && IsPlayerFacingKeeper(itemKeeper);
             bool nearBookie = bookie != null && IsPlayerFacingKeeper(bookie);
             bool nearTrader = this.IsFacingDesertTrader();
 
-            if (!nearPam && !nearLewis && !nearSeller && !nearStud && !nearItemShop && !nearBookie && !nearTrader)
+            if (!nearPam && !nearStarter && !nearSeller && !nearStud && !nearItemShop && !nearBookie && !nearTrader)
                 return;
 
             this.Helper.Input.Suppress(e.Button);
@@ -2657,9 +2698,9 @@ namespace HorseTycoon
                 return;
             }
 
-            // Lewis handles race start.
-            if (nearLewis)
-                this.ShowLewisRaceDialog();
+            // The festival's host (Lewis at home, Sandy in the desert) handles the race start.
+            if (nearStarter)
+                this.ShowStarterRaceDialog();
         }
 
         private Response[] BuildBetRacerResponses()
@@ -2689,9 +2730,45 @@ namespace HorseTycoon
                 betTargetNpcName.Value = answer.Substring(4);
         }
 
-        private void ShowLewisRaceDialog()
+        /// <summary>The festival's host: the NPC who starts the race, announces it, and runs the awards.
+        /// A plain Set-Up actor (Lewis at the valley's own races, Sandy at the desert one), so this is
+        /// null until the festival event has loaded its actors.</summary>
+        private NPC? RaceStarter => RaceFestival?.getActorByName(Def.StarterName);
+
+        /// <summary>
+        /// The host's race-start conversation. When the festival gives them small talk
+        /// (<see cref="FestivalDefinition.StarterGreeting"/>) the first approach plays that first and
+        /// only then asks the question; later approaches go straight to the question, so a player who
+        /// says "no" and comes back isn't made to sit through the chat again.
+        /// </summary>
+        private void ShowStarterRaceDialog()
         {
-            NPC? lewis = RaceFestival?.getActorByName("Lewis");
+            NPC? starter = RaceStarter;
+            string? greeting = Def.StarterGreeting;
+
+            if (greeting != null && !starterGreeted.Value)
+            {
+                starterGreeted.Value = true;
+                if (starter != null)
+                {
+                    starter.CurrentDialogue.Push(new Dialogue(starter, null, greeting));
+                    Game1.drawDialogue(starter);
+                }
+                else
+                    Game1.drawObjectDialogue(greeting);
+
+                Game1.afterDialogues = this.AskStarterToBegin;
+                return;
+            }
+
+            this.AskStarterToBegin();
+        }
+
+        /// <summary>The host's actual "ready to race?" question (or the equivalent for a player who
+        /// turned up without a horse, or the please-wait line for a farmhand).</summary>
+        private void AskStarterToBegin()
+        {
+            NPC? starter = RaceStarter;
             Response[] yesNo =
             {
                 new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
@@ -2703,7 +2780,7 @@ namespace HorseTycoon
                 if (IsHost)
                 {
                     Game1.currentLocation.createQuestionDialogue(
-                        "It looks like you don't have a horse! Marnie has some available to borrow. Ready to ride one and start the race?",
+                        Def.StarterNoHorseQuestionHost,
                         yesNo,
                         (_, answer) =>
                         {
@@ -2712,12 +2789,12 @@ namespace HorseTycoon
                             this.AssignBorrowedHorse();
                             Game1.drawObjectDialogue($"Great! {competitor.Value!.Name} here will treat you well!");
                             Game1.afterDialogues = this.BeginRace;
-                        }, lewis);
+                        }, starter);
                 }
                 else
                 {
                     Game1.currentLocation.createQuestionDialogue(
-                        "It looks like you don't have a horse! Marnie has some available to borrow for the race. Would you like to ride one?",
+                        Def.StarterNoHorseQuestion,
                         yesNo,
                         (_, answer) =>
                         {
@@ -2725,7 +2802,7 @@ namespace HorseTycoon
                             if (answer != "Yes") return;
                             this.AssignBorrowedHorse();
                             Game1.drawObjectDialogue($"Great! {competitor.Value!.Name} here will treat you well!");
-                        }, lewis);
+                        }, starter);
                 }
                 return;
             }
@@ -2733,17 +2810,17 @@ namespace HorseTycoon
             if (!IsHost)
             {
                 showBettingMoneyBox.Value = false;
-                Game1.drawObjectDialogue("We're just waiting on the host to start the race!");
+                Game1.drawObjectDialogue(Def.StarterWaitingForHostLine);
                 return;
             }
 
-            Game1.currentLocation.createQuestionDialogue("Ready to start the race?", yesNo,
+            Game1.currentLocation.createQuestionDialogue(Def.StarterReadyQuestion, yesNo,
                 (_, answer) =>
                 {
                     showBettingMoneyBox.Value = false;
                     if (answer == "Yes")
                         this.BeginRace();
-                }, lewis);
+                }, starter);
         }
 
         private static bool IsHost =>
@@ -2828,7 +2905,7 @@ namespace HorseTycoon
         /// netReady check that starts un-ready (see <see cref="ReadyCheckPrefix"/>).
         ///
         /// This mirrors the vanilla Egg Festival's <c>waitForOtherPlayers startContest</c> barrier: after the host
-        /// confirms with Lewis, every client hits a non-cancelable ready check that auto-readies on arrival and
+        /// confirms with the host, every client hits a non-cancelable ready check that auto-readies on arrival and
         /// holds until all clients are present, then the race begins simultaneously. <c>allowCancel: false</c>
         /// matches that barrier: once the host says go it's a committed sync point, so no client can flash past
         /// or back out and desync the start.</summary>
@@ -2869,7 +2946,7 @@ namespace HorseTycoon
             if (horse == null || loc == null)
                 return;
 
-            // Lineup (not Racing yet): riders are placed in stalls and Lewis announces; the countdown, music,
+            // Lineup (not Racing yet): riders are placed in stalls and the host announces; the countdown, music,
             // and NPC movement wait until every client clears his dialogue and the go barrier releases.
             phase.Value = Phase.Lineup;
             goBarrierOpened.Value = false;
@@ -2917,14 +2994,14 @@ namespace HorseTycoon
             this.DespawnPenNpcHorses();
             this.SpawnNpcRacers(loc, System.Math.Max(1, Game1.getOnlineFarmers().Count()));
 
-            // Silence the pasture music for Lewis's announcement; the start cue/race music begin with the
+            // Silence the pasture music for the host's announcement; the start cue/race music begin with the
             // countdown once everyone has clicked through (see StartRaceCountdown).
             Game1.changeMusicTrack("none", track_interruptable: false, MusicContext.Event);
         }
 
         /// <summary>Transitions from the pasture to the starting stalls with a slow fade: fade to black, reposition
         /// riders into their stalls while the screen is dark (<see cref="LineUp"/>), then fade back in and let
-        /// Lewis give his announcement. Runs per client; the later go barrier re-syncs everyone before the start.</summary>
+        /// the host give their announcement. Runs per client; the later go barrier re-syncs everyone before the start.</summary>
         private void FadeToRace()
         {
             // Enter Lineup up front so the rider is held (CanMove off) through both fades, before repositioning.
@@ -2939,28 +3016,23 @@ namespace HorseTycoon
             }, RaceFadeSpeed);
         }
 
-        /// <summary>Lewis's pre-race announcement, shown on each client once its rider is in the stall. When the
+        /// <summary>The host's pre-race announcement, shown on each client once its rider is in the stall. When the
         /// player clicks through it, <see cref="OpenCountdownBarrier"/> holds them until every client has done the
         /// same, then the countdown begins, mirroring the Egg Festival's cutscene-then-waitForOtherPlayers.</summary>
         private void AnnounceRace()
         {
             // Page breaks must use the delimited form "#$b#": Dialogue.parseDialogueString splits on '#'
             // first, so a bare "$b" stays embedded in the text and never becomes a break. A page with no
-            // emotion token shows Lewis's neutral portrait; "$h" on the last page switches him to happy.
-            const string announcement =
-                       "What a beautiful day for a race! The weather is perfect, and the crowd is buzzing with excitement."
-                       + "#$b#"
-                       + "The horses look fit and ready, raring to run."
-                       + "#$b#"
-                       + "Let the race begin!$h";
+            // emotion token shows the host's neutral portrait; "$h" switches them to happy.
+            string announcement = Def.RaceAnnouncement;
 
             announcementShown.Value = true;
 
-            NPC? lewis = RaceFestival?.getActorByName("Lewis");
-            if (lewis != null)
+            NPC? starter = RaceStarter;
+            if (starter != null)
             {
-                lewis.CurrentDialogue.Push(new Dialogue(lewis, null, announcement));
-                Game1.drawDialogue(lewis);
+                starter.CurrentDialogue.Push(new Dialogue(starter, null, announcement));
+                Game1.drawDialogue(starter);
             }
             else
             {
@@ -2969,7 +3041,7 @@ namespace HorseTycoon
             Game1.afterDialogues = this.OpenCountdownBarrier;
         }
 
-        /// <summary>After Lewis's announcement, hold this client on a non-cancelable barrier until every player
+        /// <summary>After the host's announcement, hold this client on a non-cancelable barrier until every player
         /// has clicked through, then start the countdown together. In single player it starts immediately.</summary>
         private void OpenCountdownBarrier()
         {
@@ -3007,7 +3079,7 @@ namespace HorseTycoon
             this.raceMusicStarted.Value = false;
         }
 
-        /// <summary>Holds riders in their stalls during Lewis's announcement and the go barrier. No NPC movement
+        /// <summary>Holds riders in their stalls during the host's announcement and the go barrier. No NPC movement
         /// or finish checks run here, so the race can't advance until <see cref="StartRaceCountdown"/> fires.</summary>
         private void UpdateLineup()
         {
@@ -3183,18 +3255,16 @@ namespace HorseTycoon
                 dqHorse.Halt();
             }
 
-            NPC? lewis = RaceFestival?.getActorByName("Lewis");
-            lewis?.doEmote(12);
-            if (lewis != null)
+            NPC? starter = RaceStarter;
+            starter?.doEmote(12);
+            if (starter != null)
             {
-                lewis.CurrentDialogue.Clear();
-                lewis.CurrentDialogue.Push(new Dialogue(lewis, "HorseTycoon.DQ",
-                    "$a You've gone off the track! I'm afraid you are disqualified from this race."));
-                Game1.drawDialogue(lewis);
+                starter.CurrentDialogue.Clear();
+                starter.CurrentDialogue.Push(new Dialogue(starter, "HorseTycoon.DQ", Def.StarterDqLine));
+                Game1.drawDialogue(starter);
             }
             else
-                Game1.drawObjectDialogue(
-                    "Lewis: You've gone off the track! I'm afraid you are disqualified from this race.");
+                Game1.drawObjectDialogue($"{Def.StarterName}: {StripDialogueTokens(Def.StarterDqLine)}");
 
 
             if (IsHost)
@@ -3322,12 +3392,12 @@ namespace HorseTycoon
             Game1.viewport.X = System.Math.Max(0, center.X * 64 - Game1.viewport.Width / 2);
             Game1.viewport.Y = System.Math.Max(0, center.Y * 64 - Game1.viewport.Height / 2);
 
-            // Move Lewis to the announcer tile.
-            NPC? lewis = RaceFestival?.getActorByName("Lewis");
-            if (lewis != null)
+            // Move the host to the announcer tile.
+            NPC? starter = RaceStarter;
+            if (starter != null)
             {
-                lewis.Position = TileToPixels(Def.LewisAnnouncerTile);
-                lewis.faceDirection(Game1.down);
+                starter.Position = TileToPixels(Def.StarterAnnouncerTile);
+                starter.faceDirection(Game1.down);
             }
 
             this.SetLayerVisible("Racing", false);
@@ -3343,7 +3413,7 @@ namespace HorseTycoon
         /// <summary>How long (in ticks) to keep cancelling screen fades after the prize menu closes.</summary>
         private const int FadeSuppressionTicks = 20;
 
-        /// <summary>Ceremony step after the last of Lewis's lines: the all-players-done barrier.</summary>
+        /// <summary>Ceremony step after the last of the host's lines: the all-players-done barrier.</summary>
         private const int CeremonyEndStep = 10;
 
         private void UpdateCeremony()
@@ -3384,6 +3454,24 @@ namespace HorseTycoon
             this.AdvanceCeremonyStep();
         }
 
+        /// <summary>Formats one of the host's ceremony lines, prefixed with their name. These are drawn as
+        /// plain object dialogue (no portrait) because the host is standing across the winner's circle from
+        /// the camera, so any dialogue tokens in the text are stripped rather than parsed.</summary>
+        private string CeremonyLine(string line, string? arg = null)
+        {
+            string text = arg == null ? line : string.Format(line, arg);
+            return $"{Def.StarterName}: {StripDialogueTokens(text)}";
+        }
+
+        /// <summary>Drops the Dialogue control codes (page breaks, portrait/mood tokens) from a line that's
+        /// about to be shown as plain object dialogue, which renders them literally.</summary>
+        private static string StripDialogueTokens(string text)
+        {
+            text = text.Replace("#$b#", " ").Replace("#$e#", " ");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\$[a-zA-Z0-9]", "");
+            return text.Trim();
+        }
+
         private void AdvanceCeremonyStep()
         {
             ceremonyStep.Value++;
@@ -3394,14 +3482,13 @@ namespace HorseTycoon
             switch (ceremonyStep.Value)
             {
                 case 1: // Opening line
-                    Game1.drawObjectDialogue(
-                        "Lewis: What a spectacular race! Let's see how our riders placed!");
+                    Game1.drawObjectDialogue(this.CeremonyLine(Def.CeremonyOpeningLine));
                     break;
 
                 case 2: // Announce 3rd place
                     if (order.Count >= 3)
                         Game1.drawObjectDialogue(
-                            $"Lewis: In 3rd place... {this.GetRacerName(order[2])}! Congratulations!");
+                            this.CeremonyLine(Def.CeremonyThirdPlaceLine, this.GetRacerName(order[2])));
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -3416,7 +3503,7 @@ namespace HorseTycoon
                 case 4: // Announce 2nd place
                     if (order.Count >= 2)
                         Game1.drawObjectDialogue(
-                            $"Lewis: In 2nd place... {this.GetRacerName(order[1])}! Well done!");
+                            this.CeremonyLine(Def.CeremonySecondPlaceLine, this.GetRacerName(order[1])));
                     else
                         this.AdvanceCeremonyStep();
                     break;
@@ -3432,8 +3519,7 @@ namespace HorseTycoon
                     if (order.Count >= 1)
                     {
                         Game1.drawObjectDialogue(
-                            $"Lewis: And the winner is... {this.GetRacerName(order[0])}! " +
-                            "What a ride! You've earned the champion's trophy and a prize ticket!");
+                            this.CeremonyLine(Def.CeremonyFirstPlaceLine, this.GetRacerName(order[0])));
                         Game1.playSound("achievement");
                     }
                     else
@@ -3458,9 +3544,7 @@ namespace HorseTycoon
                     break;
 
                 case 9: // Closing line
-                    Game1.drawObjectDialogue(
-                        "Lewis: Thank you all for participating in the Spring Horse Festival! " +
-                        "See you next year!");
+                    Game1.drawObjectDialogue(this.CeremonyLine(Def.CeremonyClosingLine, Def.FestivalDisplayName));
                     break;
 
                 case CeremonyEndStep: // Hold until every player has finished, then all leave together
@@ -3469,7 +3553,7 @@ namespace HorseTycoon
             }
         }
 
-        /// <summary>Barrier at the end of the awards ceremony. Players read Lewis's lines and open their
+        /// <summary>Barrier at the end of the awards ceremony. Players read the host's lines and open their
         /// prize menus at their own pace, so without this the first player to click through would warp home
         /// while the others were still mid-ceremony. Everyone who reaches the end parks in a non-cancelable
         /// ReadyCheckDialog (auto-readies each tick, exactly like the race-start barrier) and the festival
@@ -3681,9 +3765,12 @@ namespace HorseTycoon
             {
                 if (HorseHelper.IsManagedStableHorse(busHorse))
                 {
+                    // Send this exact character home instead of Stable.grabHorse(): the festival runs on
+                    // a temporary map that Utility.findHorse can't see, so grabHorse decides the horse has
+                    // gone missing and spawns a fresh blank one — losing the skin and tack modData, which
+                    // leaves the horse standing in its stable with the vanilla brown texture.
                     if (busHorse.rider == null)
-                        Game1.getFarm().buildings.OfType<Stable>()
-                            .FirstOrDefault(s => s.HorseId == busHorse.HorseId)?.grabHorse();
+                        ReturnHorseToStable(busHorse);
                 }
                 else
                 {
@@ -4631,7 +4718,7 @@ namespace HorseTycoon
         }
 
         /// <summary>Direction everyone faces once they're placed for the awards ceremony: up, toward
-        /// Lewis at the announcer tile.</summary>
+        /// the host at the announcer tile.</summary>
         private const int CeremonyFacing = Game1.up;
 
         /// <summary>Points a rider and their mount in a fixed direction when they're teleported into the
@@ -4862,7 +4949,7 @@ namespace HorseTycoon
                 int slot = PastureSlotFor(Game1.player);
                 PlaceHorseInPasture(horse, slot);
                 activeDef.Value = null;
-                Game1.player.Position = TileToPixels(new Point(def.LewisStartTile.X, def.LewisStartTile.Y + 1));
+                Game1.player.Position = TileToPixels(new Point(def.StarterStartTile.X, def.StarterStartTile.Y + 1));
                 Game1.player.faceDirection(Game1.up);
                 lastRiddenMount.Value = horse;
                 lastMountedTick.Value = Game1.ticks;
@@ -4870,12 +4957,12 @@ namespace HorseTycoon
 
             if (def != null)
             {
-                NPC? lewis = RaceFestival?.getActorByName("Lewis");
-                if (lewis != null)
+                NPC? starter = RaceFestival?.getActorByName(def.StarterName);
+                if (starter != null)
                 {
-                    lewis.Position = TileToPixels(def.LewisStartTile);
-                    lewis.faceDirection(Game1.down);
-                    lewis.Halt();
+                    starter.Position = TileToPixels(def.StarterStartTile);
+                    starter.faceDirection(Game1.down);
+                    starter.Halt();
                 }
             }
 
@@ -4914,6 +5001,10 @@ namespace HorseTycoon
                 borrowedFestivalHorse.Value = null;
             }
             this.StowBusHorses();
+            // Catch-all: if anything did respawn a blank stable Horse while we were away, rebuild its
+            // appearance from the barn horse now rather than leaving it vanilla until the next day start.
+            if (Context.IsMainPlayer)
+                HorseHelper.SyncStableHorseAppearance();
             // Release this player's bus claims (locally and on every client) so the horses can board
             // a later bus today now that they're back home.
             if (SummerBusHorseIds.Count > 0)
@@ -4967,6 +5058,7 @@ namespace HorseTycoon
             suppressFadeTicks = 0;
             disqualified.Value = false;
             pamGreeted.Value = false;
+            starterGreeted.Value = false;
             showBettingMoneyBox.Value = false;
             betTargetFarmerId.Value = null;
             betTargetNpcName.Value = null;

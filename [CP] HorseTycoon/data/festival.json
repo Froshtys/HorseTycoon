@@ -23,23 +23,23 @@
 			}
 		},
 		{
-			"LogName": "TESTING ONLY - Horse Festival also on Spring 3 (remove when done testing)",
+			"LogName": "TESTING ONLY - Horse Festival also on Spring 9 (remove when done testing)",
 			"Action": "EditData",
 			"Target": "Data/Festivals/FestivalDates",
 			"Entries": {
-				"spring3": "{{i18n:SpringHorseFestival_Name}}"
+				"spring9": "{{i18n:SpringHorseFestival_Name}}"
 			}
 		},
 		{
-			"LogName": "TESTING ONLY - Horse Festival data (spring 3, remove when done testing)",
+			"LogName": "TESTING ONLY - Horse Festival data (spring 9, remove when done testing)",
 			"Action": "Load",
-			"Target": "Data/Festivals/spring3",
+			"Target": "Data/Festivals/spring9",
 			"FromFile": "data/spring19.json"
 		},
 		{
-			"LogName": "TESTING ONLY - Localize festival name (spring 3, remove when done testing)",
+			"LogName": "TESTING ONLY - Localize festival name (spring 9, remove when done testing)",
 			"Action": "EditData",
-			"Target": "Data/Festivals/spring3",
+			"Target": "Data/Festivals/spring9",
 			"Entries": {
 				"name": "{{i18n:SpringHorseFestival_Name}}"
 			}

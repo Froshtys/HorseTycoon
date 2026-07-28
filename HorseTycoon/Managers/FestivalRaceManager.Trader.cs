@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI.Utilities;
 using StardewValley;
+using StardewValley.Buildings;
+using StardewValley.Menus;
 
 namespace HorseTycoon
 {
@@ -12,14 +15,48 @@ namespace HorseTycoon
     /// <c>temporarySprites</c> and fakes the collision with a hard-coded bounds rectangle), so the same
     /// art is rebuilt here relative to <see cref="FestivalDefinition.DesertTraderTile"/>: sprites for the
     /// look, invisible <see cref="CaravanBlocker"/> objects for the footprint, and the two counter tiles
-    /// at the front open the vanilla "DesertTrade" shop (trade Omni Geodes etc. for desert goods).
+    /// at the front open his trade.
+    /// <para>He doesn't bring his usual desert wares to the festival; he has exactly one thing to sell,
+    /// and it depends on the player's mods. With SVE installed that's a camel (SVE's farm animal) for
+    /// a Gold Horseshoe, and he haggles down to three Iron Horseshoes if the first price is refused.
+    /// (Horseshoes only drop from the player's own horses, and the gold ones need 800 friendship, so
+    /// even these prices are a season or two of care — see data/horses.json.)
+    /// Without SVE he offers one mystery saddle a day, haggling the same way.</para>
     /// Everything is local to each client (like the starting stalls, none of it is net-synced), and it
     /// is torn down when the race starts, alongside the other stalls.
     /// </summary>
     public partial class FestivalRaceManager
     {
-        /// <summary>Vanilla's Data/Shops key for the desert trader (Game1.shop_desertTrader).</summary>
-        private const string DesertTradeShopId = "DesertTrade";
+        /// <summary>SVE's content pack, which defines the camel (Data/FarmAnimals) and its art.</summary>
+        private const string SveModId = "FlashShifter.StardewValleyExpandedCP";
+        private const string CamelAnimalId = "FlashShifter.StardewValleyExpandedCP_Camel";
+
+        // The merchant's two asking prices for a camel, and what the saddle costs when there's no camel
+        // to sell. Both horseshoes are the mod's own items (CP pack, data/items.json).
+        private const string GoldHorseshoeItemId = "(O)HorseTycoon.ShoeGold";
+        private const string IronHorseshoeItemId = "(O)HorseTycoon.ShoeIron";
+        private const int CamelPriceInGoldShoes = 1;
+        private const int CamelPriceInIronShoes = 3;
+        private const int SaddlePriceInGoldShoes = 1;
+        private const int SaddlePriceInIronShoes = 3;
+
+        /// <summary>The saddles the merchant's mystery saddle can turn out to be. Deliberately an
+        /// allow-list rather than "everything except X": the pride flag saddles and the Rainbow one
+        /// aren't random-loot material, the Ice one is excluded, and Brown is what every horse already
+        /// wears by default (<see cref="HorseHelper.DefaultSaddleId"/>).</summary>
+        private static readonly string[] TraderSaddleIds =
+        {
+            "HorseTycoon.SaddleWhite",
+            "HorseTycoon.SaddleBlack",
+            "HorseTycoon.SaddleRed",
+            "HorseTycoon.SaddleOrange",
+            "HorseTycoon.SaddleTeal",
+            "HorseTycoon.SaddleLavender",
+        };
+
+        /// <summary>Whether the local player has already bought the merchant's one saddle today.
+        /// Declining doesn't count: he keeps the same saddle on the table until it's sold.</summary>
+        private bool traderSaddleSold;
 
         // Source rects on LooseSprites\temporary_sprites_1 and their offsets (in world pixels) from the
         // top-left corner of DesertTraderTile, all copied from Desert.resetLocalState so the caravan
@@ -61,6 +98,8 @@ namespace HorseTycoon
             Point? anchor = Def.DesertTraderTile;
             if (loc == null || anchor == null || this.caravanSprites.Value.Count > 0)
                 return;
+
+            this.traderSaddleSold = false;
 
             Vector2 anchorPixels = new Vector2(anchor.Value.X, anchor.Value.Y) * 64f;
             Texture2D sheet = Game1.temporaryContent.Load<Texture2D>("LooseSprites\\temporary_sprites_1");
@@ -145,11 +184,178 @@ namespace HorseTycoon
             return target.Y == counterY && (target.X == counterX || target.X == counterX + 1);
         }
 
+        /// <summary>Talks to the merchant. He has one thing to sell: a camel if SVE is installed,
+        /// otherwise a mystery saddle.</summary>
         private void OpenDesertTraderShop()
         {
-            SnapMoneyDial();
-            if (!Utility.TryOpenShopMenu(DesertTradeShopId, Game1.currentLocation))
-                Logger.LogVerbose($"Failed to open the desert trader shop '{DesertTradeShopId}'.");
+            // No gold changes hands here (he only takes horseshoes), so the money dial is left alone.
+            if (this.SellsCamel)
+                this.OfferCamel();
+            else
+                this.OfferSaddle();
+        }
+
+        /// <summary>The camel is SVE's farm animal, so it's only for sale when SVE is installed.</summary>
+        private bool SellsCamel => this.Helper.ModRegistry.IsLoaded(SveModId);
+
+        // ====================================================================================
+        // Camel (SVE installed)
+        // ====================================================================================
+
+        /// <summary>Opens with the gold-horseshoe price; a refusal gets the iron-horseshoe counter-offer.</summary>
+        private void OfferCamel()
+        {
+            this.AskForCamel(
+                $"Fancy a well bred Camel? She's a fine gal. How about for {Shoes(CamelPriceInGoldShoes, "gold")}.",
+                GoldHorseshoeItemId, CamelPriceInGoldShoes,
+                declined: () => this.AskForCamel(
+                    $"Fine, fine... how about {Shoes(CamelPriceInIronShoes, "iron")} instead?",
+                    IronHorseshoeItemId, CamelPriceInIronShoes,
+                    declined: () => Game1.drawObjectDialogue("Your loss. The camel stays with me.")));
+        }
+
+        /// <summary>"1 gold horseshoe" / "3 iron horseshoes", so the asking prices read naturally
+        /// whatever the constants above are set to.</summary>
+        private static string Shoes(int count, string metal) =>
+            $"{count} {metal} horseshoe{(count == 1 ? "" : "s")}";
+
+        /// <summary>One camel asking price: confirm, take the horseshoes, deliver the animal.</summary>
+        private void AskForCamel(string question, string priceItemId, int priceAmount, Action declined)
+        {
+            Response[] yesNo =
+            {
+                new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
+                new("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
+            };
+            Game1.currentLocation.createQuestionDialogue(question, yesNo, (_, answer) =>
+            {
+                if (answer != "Yes")
+                {
+                    Game1.afterDialogues = () => declined();
+                    return;
+                }
+
+                if (!Game1.player.Items.ContainsId(priceItemId, priceAmount))
+                {
+                    Game1.afterDialogues = () => Game1.drawObjectDialogue(
+                        $"The merchant counts your horseshoes and shakes their head. Come back when you have {priceAmount} horse shoes.");
+                    return;
+                }
+
+                // Built up front so CanLiveIn picks the housing the same way Marnie's shop does.
+                var camel = new FarmAnimal(CamelAnimalId, Game1.Multiplayer.getNewID(), Game1.player.UniqueMultiplayerID);
+                Building? home = FindHomeFor(camel);
+                if (home == null)
+                {
+                    Game1.afterDialogues = () => Game1.drawObjectDialogue(
+                        "A camel needs a roof of its own. Come back when you have room in a barn.");
+                    return;
+                }
+
+                Game1.afterDialogues = () => this.NameAndDeliverCamel(camel, home, priceItemId, priceAmount);
+            });
+        }
+
+        private void NameAndDeliverCamel(FarmAnimal camel, Building home, string priceItemId, int priceAmount)
+        {
+            Game1.activeClickableMenu = new NamingMenu(
+                name =>
+                {
+                    // Re-checked here because the horseshoes are only taken once the naming is done.
+                    if (Game1.player.Items.ReduceId(priceItemId, priceAmount) < priceAmount)
+                    {
+                        Game1.exitActiveMenu();
+                        Game1.drawObjectDialogue("You no longer have enough horseshoes.");
+                        return;
+                    }
+
+                    camel.Name = name;
+                    camel.displayName = name;
+                    ((AnimalHouse)home.GetIndoors()).adoptAnimal(camel);
+
+                    Game1.exitActiveMenu();
+                    Game1.playSound("purchase");
+                    Game1.drawObjectDialogue($"{name} has been sent along to your farm. Take good care of them!");
+                    Logger.LogVerbose($"Bought camel '{name}' from the festival desert trader for {priceAmount}x {priceItemId}; housed in {home.buildingType.Value}.");
+                },
+                title: "Name your new camel:",
+                defaultName: "Callie");
+        }
+
+        // ====================================================================================
+        // Mystery saddle (no SVE)
+        // ====================================================================================
+
+        /// <summary>One saddle a day, sight unseen, with the same gold-then-iron haggle as the camel.
+        /// Declining costs nothing — the same saddle is still under the counter next time the player
+        /// comes by — but once it's bought he's done for the day.</summary>
+        private void OfferSaddle()
+        {
+            if (this.traderSaddleSold)
+            {
+                Game1.drawObjectDialogue("That was the only one I had, friend. Try me at the next festival.");
+                return;
+            }
+
+            this.AskForSaddle(
+                $"Tack, hand-made, great leather. I won't say the color. {Shoes(SaddlePriceInGoldShoes, "gold")}.",
+                GoldHorseshoeItemId, SaddlePriceInGoldShoes,
+                declined: () => this.AskForSaddle(
+                    $"Fine, fine... how about {Shoes(SaddlePriceInIronShoes, "iron")} instead?",
+                    IronHorseshoeItemId, SaddlePriceInIronShoes,
+                    declined: () => Game1.drawObjectDialogue("Your loss. It stays under my counter.")));
+        }
+
+        /// <summary>One saddle asking price: confirm, take the horseshoes, hand over the mystery tack.</summary>
+        private void AskForSaddle(string question, string priceItemId, int priceAmount, Action declined)
+        {
+            Response[] yesNo =
+            {
+                new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
+                new("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
+            };
+            Game1.currentLocation.createQuestionDialogue(question, yesNo, (_, answer) =>
+            {
+                if (answer != "Yes")
+                {
+                    Game1.afterDialogues = () => declined();
+                    return;
+                }
+
+                if (!Game1.player.Items.ContainsId(priceItemId, priceAmount))
+                {
+                    Game1.afterDialogues = () => Game1.drawObjectDialogue(
+                        $"The merchant looks over your bag. Come back when you have {priceAmount} horse shoes.");
+                    return;
+                }
+
+                Game1.player.Items.ReduceId(priceItemId, priceAmount);
+                this.traderSaddleSold = true;
+
+                Item saddle = ItemRegistry.Create($"(O){this.PickTraderSaddleId()}");
+                Game1.playSound("purchase");
+                Logger.LogVerbose($"Bought mystery saddle '{saddle.ItemId}' from the festival desert trader for {priceAmount}x {priceItemId}.");
+                Game1.afterDialogues = () =>
+                {
+                    Game1.drawObjectDialogue($"You unwrap the tack: {saddle.DisplayName}!");
+                    Game1.player.addItemByMenuIfNecessary(saddle);
+                };
+            });
+        }
+
+        /// <summary>Which saddle today's wrapped bundle turns out to hold. Seeded per day and save so
+        /// every player at the festival is offered the same one, and it changes at the next festival.</summary>
+        private string PickTraderSaddleId()
+        {
+            System.Random rng = Utility.CreateDaySaveRandom(7841.0);
+            return TraderSaddleIds[rng.Next(TraderSaddleIds.Length)];
+        }
+
+        /// <summary>The first building on the farm the animal can live in that isn't full.</summary>
+        private static Building? FindHomeFor(FarmAnimal animal)
+        {
+            return Game1.getFarm().buildings.FirstOrDefault(b =>
+                animal.CanLiveIn(b) && b.GetIndoors() is AnimalHouse house && !house.isFull());
         }
     }
 
