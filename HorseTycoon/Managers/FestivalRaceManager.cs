@@ -69,6 +69,17 @@ namespace HorseTycoon
         private const float SprintCooldownMs = 10000f;
         private enum SprintPhase { Ready, Sprinting, Exhausted }
 
+        /// <summary>How long Warrior Energy lasts after crossing the legendary sword shrine tile.</summary>
+        private const float WarriorEnergyMs = 5000f;
+
+        /// <summary>Warrior Energy's speed bonus scales off the ridden horse's Speed stat (see
+        /// <see cref="HorseStats.WarriorEnergyBonus"/>). It's applied before the festival's overall speed
+        /// penalty, and is entirely independent of the horse sprint (no cooldown, no exhaustion).</summary>
+        private readonly PerScreen<float> warriorEnergyBonus = new(() => 0f);
+
+        /// <summary>The "Back" layer TouchAction value marking the shrine tile that grants Warrior Energy.</summary>
+        private const string WarriorEnergyTouchAction = "legendarySword";
+
         // Biased facing direction pool: left/right first, up/down less common.
         private static readonly int[] HorseFacingPool =
         {
@@ -219,6 +230,12 @@ namespace HorseTycoon
         private readonly PerScreen<List<Buff>> suppressedBuffs = new(() => new List<Buff>());
         private readonly PerScreen<SprintPhase> sprintPhase = new(() => SprintPhase.Ready);
         private readonly PerScreen<float> sprintTimer = new(() => 0f);
+
+        // Warrior Energy: separate from the sprint state on purpose — it never blocks or consumes a sprint.
+        private readonly PerScreen<float> warriorEnergyTimer = new(() => 0f);
+        // Last tile checked for the shrine, so crossing it fires once per entry instead of every tick.
+        private readonly PerScreen<Vector2> lastWarriorEnergyTile = new(() => -Vector2.One);
+
         private readonly PerScreen<System.TimeSpan> raceStartTime = new(() => System.TimeSpan.Zero);
         private readonly PerScreen<bool> disqualified = new(() => false);
 
@@ -462,6 +479,22 @@ namespace HorseTycoon
                     LogLevel.Info));
 
             this.Helper.ConsoleCommands.Add(
+                "ht_run_state",
+                "Dumps every field that decides whether the player runs or walks (for the festival walking bug).",
+                (_, _) =>
+                {
+                    Farmer p = Game1.player;
+                    Event? ev = Game1.currentLocation?.currentEvent;
+                    this.Monitor.Log(
+                        $"location={Game1.currentLocation?.Name} | event={ev?.id} isFestival={ev?.isFestival} playerControlSeq={ev?.playerControlSequence}\n"
+                        + $"running={p.running} speed={p.Speed} addedSpeed={p.addedSpeed} moveSpeed={p.getMovementSpeed()}\n"
+                        + $"canOnlyWalk={p.canOnlyWalk} CanMove={p.CanMove} mount={(p.mount != null)} stamina={p.stamina}\n"
+                        + $"options.autoRun={Game1.options.autoRun} runButton={string.Join(",", Game1.options.runButton)} gamepad={Game1.options.gamepadControls}\n"
+                        + $"eventUp={Game1.eventUp} freezeControls={Game1.freezeControls} phase={phase.Value} lastBail={lastRunStateBail ?? "(none)"}",
+                        LogLevel.Info);
+                });
+
+            this.Helper.ConsoleCommands.Add(
                 "ht_race_restart",
                 "Restarts the horse festival race from the pasture phase. Works from any race phase.",
                 (_, _) => this.RestartRace());
@@ -546,10 +579,20 @@ namespace HorseTycoon
         /// <summary>True whenever the horse festival is in any of the racing phases).</summary>
         public static bool IsInAnyRacingPhase => Instance?.phase.Value is Phase.Racing or Phase.Finished;
 
-        private static void GetMovementSpeed_Postfix(ref float __result)
+        /// <summary>True while the local player is carrying the Warrior Energy pickup.</summary>
+        public static bool HasWarriorEnergy => Instance != null && Instance.warriorEnergyTimer.Value > 0f;
+
+        private static void GetMovementSpeed_Postfix(Farmer __instance, ref float __result)
         {
+            // Added before the festival penalty below, so the pickup is worth its full raw speed.
+            if (__instance.IsLocalPlayer && HasWarriorEnergy)
+                __result += Instance!.warriorEnergyBonus.Value;
+
+            // Going is applied AFTER the festival penalty so it lands as a true flat +1/-1 on the speed
+            // the rider actually gets. It reads __instance rather than Game1.player because this also
+            // runs for remote farmers via NetPosition.UpdateExtrapolation.
             if (IsInAnyRacingPhase)
-                __result *= 0.75f;
+                __result = System.Math.Max(MinRaceSpeed, __result * 0.75f + GoingSpeedBonusAt(__instance.Tile));
         }
 
         private static IEnumerable<CodeInstruction> GetMovementSpeed_Transpiler(IEnumerable<CodeInstruction> instructions)
@@ -1035,6 +1078,8 @@ namespace HorseTycoon
                 return;
             }
             entryBlackTicks.Value = 0;
+            MaintainRunState();
+            this.UpdateWarriorEnergy();
 
             switch (phase.Value)
             {
@@ -1062,6 +1107,7 @@ namespace HorseTycoon
                     this.UpdateStartCountdown();
                     // animateOnce is gated on !Game1.eventUp, so we advance all horses ourselves.
                     AdvanceHorseAnimations();
+                    this.UpdateHoofSounds();
                     // Check player finish first so the player wins any same-tick tie with an NPC.
                     this.CheckFinish();
                     this.CheckDisqualification();
@@ -1069,6 +1115,7 @@ namespace HorseTycoon
                     break;
                 case Phase.Finished:
                     AdvanceHorseAnimations();
+                    this.UpdateHoofSounds();
                     this.UpdateNpcRacers();
                     if (disqualified.Value)
                     {
@@ -1104,6 +1151,157 @@ namespace HorseTycoon
 
             if (RaceRidingActive)
                 this.UpdateSprint();
+        }
+
+        /// <summary>Keeps the on-foot player's run state alive for the length of the festival.
+        /// Farmer.setMoving (0x40) clears Farmer.running on every full stop, and inside one long festival
+        /// event none of vanilla's restore points fire again (GameLocation.resetLocalState only runs on
+        /// location entry; Game1.checkForRunButton only on a run-key press/release edge), so with Auto-Run
+        /// on the player silently drops to a walk. Mounted riders are unaffected — riding speed and the
+        /// riding pose don't read Farmer.running at all.</summary>
+        private static void MaintainRunState()
+        {
+            Farmer player = Game1.player;
+            if (player.mount != null || !player.CanMove || player.stamina <= 0f)
+            {
+                LogRunStateBail(player.mount != null ? "mounted" : (!player.CanMove ? "CanMove=false" : "stamina<=0"));
+                return;
+            }
+
+            // Defensive: the string-script Event ctor sets this for cutscenes. Festivals load through the
+            // parameterless ctor so it should already be false, but it hard-blocks setRunning if ever set.
+            if (player.canOnlyWalk && !player.bathingClothes.Value)
+            {
+                Logger.LogVerbose("MaintainRunState: clearing canOnlyWalk");
+                player.canOnlyWalk = false;
+            }
+            if (player.canOnlyWalk)
+            {
+                LogRunStateBail("canOnlyWalk (bathing clothes)");
+                return;
+            }
+
+            bool runKeyHeld =
+                Game1.isOneOfTheseKeysDown(Game1.GetKeyboardState(), Game1.options.runButton)
+                || (Game1.options.gamepadControls && !Game1.options.autoRun
+                    && System.Math.Abs(Vector2.Distance(Game1.input.GetGamePadState().ThumbSticks.Left, Vector2.Zero)) > 0.9f);
+            bool shouldRun = Game1.options.autoRun != runKeyHeld;
+
+            if (player.running == shouldRun)
+            {
+                LogRunStateBail(null);
+                return;
+            }
+
+            player.setRunning(shouldRun);
+
+            // If setRunning was rejected, Farmer.running is still wrong — say so, with the fields that gate it.
+            if (player.running != shouldRun)
+            {
+                LogRunStateBail($"setRunning({shouldRun}) REJECTED — speed={player.Speed}, isEating={player.isEating}, " +
+                    $"UsingTool={player.UsingTool}, pauseAnim={((FarmerSprite)player.Sprite).PauseForSingleAnimation}, " +
+                    $"playerControlSeq={Game1.currentLocation?.currentEvent?.playerControlSequence}");
+            }
+            else
+            {
+                Logger.LogVerbose($"MaintainRunState: restored running={shouldRun} (speed={player.Speed})");
+                lastRunStateBail = null;
+            }
+        }
+
+        /// <summary>Logs why MaintainRunState did nothing, but only when the reason changes — it runs every tick.</summary>
+        private static void LogRunStateBail(string? reason)
+        {
+            if (reason == lastRunStateBail)
+                return;
+            lastRunStateBail = reason;
+            if (reason != null)
+                Logger.LogVerbose($"MaintainRunState: skipped — {reason}");
+        }
+
+        private static string? lastRunStateBail;
+
+        /// <summary>Ticks the Warrior Energy timer down and re-grants it whenever the player crosses the
+        /// legendary sword shrine tile. Vanilla's own touch-action dispatch is unreliable inside an event,
+        /// so we read the tile property ourselves the same way GameLocation does.</summary>
+        private void UpdateWarriorEnergy()
+        {
+            // Race-only pickup: nothing to collect (or keep) while on foot or outside the race itself.
+            if (!RaceRidingActive)
+            {
+                warriorEnergyTimer.Value = 0f;
+                warriorEnergyBonus.Value = 0f;
+                lastWarriorEnergyTile.Value = -Vector2.One;
+                return;
+            }
+
+            if (warriorEnergyTimer.Value > 0f)
+            {
+                warriorEnergyTimer.Value -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+                if (warriorEnergyTimer.Value < 0f)
+                    warriorEnergyTimer.Value = 0f;
+            }
+
+            Vector2 tile = Game1.player.Tile;
+            if (tile == lastWarriorEnergyTile.Value)
+                return;
+            lastWarriorEnergyTile.Value = tile;
+
+            string? touchAction = Game1.currentLocation?.doesTileHaveProperty((int)tile.X, (int)tile.Y, "TouchAction", "Back");
+            if (touchAction != WarriorEnergyTouchAction)
+                return;
+
+            // Scaled off the ridden horse — a slower horse gets more out of the shrine.
+            // RaceRidingActive above guarantees there is a mount.
+            int totalSpeed = HorseHelper.GetRaceSpeedStat(Game1.player.mount);
+
+            warriorEnergyTimer.Value = WarriorEnergyMs;
+            warriorEnergyBonus.Value = HorseStats.WarriorEnergyBonus(totalSpeed);
+            PlayWarriorEnergyTeleportEffect();
+            Logger.LogVerbose($"Warrior Energy granted at tile {tile}: horse speed={totalSpeed}, +{warriorEnergyBonus.Value} speed for {WarriorEnergyMs}ms");
+        }
+
+        /// <summary>The vanilla return-scepter teleport flourish (sparkles, warp beam, flash, "wand" sound),
+        /// minus everything that stops the player — they keep racing straight through it.</summary>
+        private static void PlayWarriorEnergyTeleportEffect()
+        {
+            GameLocation? location = Game1.currentLocation;
+            if (location == null)
+                return;
+
+            Farmer player = Game1.player;
+
+            // Sparkle burst scattered around the rider.
+            for (int i = 0; i < 12; i++)
+            {
+                location.temporarySprites.Add(new TemporaryAnimatedSprite(
+                    354,
+                    Game1.random.Next(25, 75),
+                    6,
+                    1,
+                    new Vector2(
+                        Game1.random.Next((int)player.position.X - 256, (int)player.position.X + 192),
+                        Game1.random.Next((int)player.position.Y - 256, (int)player.position.Y + 192)),
+                    flicker: false,
+                    Game1.random.Next(2) == 0));
+            }
+
+            // Warp beam sweeping along the player's tile row.
+            Point tile = player.TilePoint;
+            int step = 0;
+            for (int x = tile.X + 8; x >= tile.X - 8; x--)
+            {
+                location.temporarySprites.Add(new TemporaryAnimatedSprite(6, new Vector2(x, tile.Y) * 64f, Color.White, 8, flipped: false, 50f)
+                {
+                    layerDepth = 1f,
+                    delayBeforeAnimationStart = step * 25,
+                    motion = new Vector2(-0.25f, 0f)
+                });
+                step++;
+            }
+
+            Game1.flashAlpha = 1f;
+            Game1.playSound("wand");
         }
 
         private void UpdateSprint()
@@ -1179,6 +1377,11 @@ namespace HorseTycoon
 
         /// <summary>Bus body source rect on Game1.mouseCursors (matches the vanilla Desert/BusStop bus).</summary>
         private static readonly Rectangle BusBodySource = new(288, 1247, 128, 64);
+        /// <summary>Milliseconds per frame of the bus door's 6-frame open/shut strip.</summary>
+        private const float BusDoorFrameMs = 70f;
+        /// <summary>How long the door sits fully open before the player steps off the bus.</summary>
+        private const float BusDoorOpenHoldMs = 150f;
+
         /// <summary>How far right of the rest tile the bus starts, in pixels (≈ one screen of drive-in).</summary>
         private static int BusArrivalLeadPixels => System.Math.Max(960, Game1.viewport.Width);
 
@@ -1233,11 +1436,19 @@ namespace HorseTycoon
             Game1.player.CanMove = false;
             Game1.player.freezePause = 100;
 
-            // Parked: short delay while the door opens, then start the pasture phase.
+            // Parked: swing the door open, hold it, then start the pasture phase. The frame is driven
+            // straight off the timer rather than by TemporaryAnimatedSprite.update: the strip runs
+            // shut(5) -> open(0), and the only way to play a strip backwards is pingPong, which bounces
+            // and shuts the door again the instant it finishes opening.
             if (busArrivalDoorTimer.Value >= 0f)
             {
-                door?.update(Game1.currentGameTime);
                 busArrivalDoorTimer.Value -= Game1.currentGameTime.ElapsedGameTime.Milliseconds;
+                if (door != null)
+                {
+                    int frame = (int)System.Math.Clamp(
+                        (busArrivalDoorTimer.Value - BusDoorOpenHoldMs) / BusDoorFrameMs, 0f, 5f);
+                    door.sourceRect = new Rectangle(288 + frame * 16, 1311, 16, 38);
+                }
                 if (busArrivalDoorTimer.Value <= 0f)
                     this.FinishBusArrival(festival);
                 return;
@@ -1262,20 +1473,18 @@ namespace HorseTycoon
                 busArrivalMotion.Value = Vector2.Zero;
                 if (door != null)
                 {
-                    // Swap to the opening-door animation. The strip runs shut (frame 5) -> open (frame 0),
-                    // so it plays backwards from the last frame, like the Desert's arrival.
+                    // Hand the door over to the timer-driven open above: park it on the shut frame and
+                    // stop it animating itself.
                     door.sourceRect = new Rectangle(288 + 5 * 16, 1311, 16, 38);
                     door.sourceRectStartingPos = new Vector2(288f, 1311f);
-                    door.currentParentTileIndex = 5;
-                    door.animationLength = 6;
-                    door.pingPong = true;
-                    door.interval = 70f;
+                    door.currentParentTileIndex = 0;
+                    door.animationLength = 1;
+                    door.interval = 999999f;
                     door.holdLastFrame = true;
-                    door.timer = 0f;
                     door.Position = pos + new Vector2(16f, 26f) * 4f;
                 }
                 Game1.playSound("trashcanlid");
-                busArrivalDoorTimer.Value = 700f;
+                busArrivalDoorTimer.Value = 6 * BusDoorFrameMs + BusDoorOpenHoldMs;
                 return;
             }
 
@@ -2219,30 +2428,44 @@ namespace HorseTycoon
             }
         }
 
-        /// <summary>Redraw the sprint/exhausted icon during the race — the buff HUD is suppressed during events.</summary>
+        /// <summary>Redraw our buff icons during the race — the buff HUD is suppressed during events.</summary>
         private void OnRenderedHud(object? sender, RenderedHudEventArgs e)
         {
             if (showBettingMoneyBox.Value)
                 Game1.dayTimeMoneyBox.draw(e.SpriteBatch);
 
-            if (!RaceRidingActive || sprintPhase.Value == SprintPhase.Ready)
-                return;
+            int slot = 0;
 
-            bool sprinting = sprintPhase.Value == SprintPhase.Sprinting;
-            // Vanilla buff sheet indices: Speed = 9, Exhausted = 25.
-            int sheetIndex = sprinting ? 9 : 25;
-            string label = sprinting ? "Horse Sprint" : "Horse Exhausted";
-            int secondsLeft = (int)System.Math.Ceiling(sprintTimer.Value / 1000f);
-            string timeText = (secondsLeft / 60) + ":" + (secondsLeft % 60).ToString("00");
+            if (RaceRidingActive && sprintPhase.Value != SprintPhase.Ready)
+            {
+                bool sprinting = sprintPhase.Value == SprintPhase.Sprinting;
+                // Vanilla buff sheet indices: Speed = 9, Exhausted = 25.
+                this.DrawFestivalBuff(e.SpriteBatch, slot++, sprintTimer.Value,
+                    sprinting ? "Horse Sprint" : "Horse Exhausted",
+                    sprinting ? 9 : 25,
+                    sprinting ? sprintBuffIcon : null);
+            }
 
-            SpriteBatch b = e.SpriteBatch;
+            if (warriorEnergyTimer.Value > 0f)
+            {
+                // Vanilla buff sheet index 21 = Yoba's Blessing (the sheet is indexed by Buff id).
+                this.DrawFestivalBuff(e.SpriteBatch, slot++, warriorEnergyTimer.Value,
+                    $"Warrior Energy (+{warriorEnergyBonus.Value:0.#} speed)", 21, null);
+            }
+        }
+
+        /// <summary>Draws one festival buff icon with its remaining time, stacked down the top-right corner.</summary>
+        private void DrawFestivalBuff(SpriteBatch b, int slot, float msLeft, string label, int sheetIndex, Texture2D? icon)
+        {
             const int iconSize = 64;
             int x = Game1.uiViewport.Width - iconSize - 24;
-            int y = 24;
+            int y = 24 + slot * (iconSize + 12);
+            int secondsLeft = (int)System.Math.Ceiling(msLeft / 1000f);
+            string timeText = (secondsLeft / 60) + ":" + (secondsLeft % 60).ToString("00");
 
-            if (sprinting && sprintBuffIcon != null)
+            if (icon != null)
             {
-                b.Draw(sprintBuffIcon, new Rectangle(x, y, iconSize, iconSize), Color.White);
+                b.Draw(icon, new Rectangle(x, y, iconSize, iconSize), Color.White);
             }
             else
             {
@@ -3876,6 +4099,7 @@ namespace HorseTycoon
                 r.MatchLeader = true;
 
             this.LoadNpcJumpZonesFromMap(loc);
+            this.LoadGoingFromMap(loc);
         }
 
         // Layer names used to author NPC jump zones in Tiled. Place approach-marker tiles on
@@ -4224,7 +4448,8 @@ namespace HorseTycoon
                     if (r.HoofSoundTimer <= 0f)
                     {
                         r.HoofSoundTimer += 64f; // one beat per tile
-                        loc.localSound("thudStep");
+                        // Same surface-dependent cue the player hears (was a flat "thudStep").
+                        PlayHoofstep(loc, r.Horse.Tile);
                     }
                 }
 
@@ -4305,6 +4530,8 @@ namespace HorseTycoon
             // Same additive bonus the player gets, so NPCs speed up equally. See HorseStats.SprintSpeedBonus.
             if (r.NpcSprintPhase == SprintPhase.Sprinting)
                 tilesPerSec += HorseStats.SprintSpeedBonus(r.TotalSprint);
+            // Same ground the player feels, so mud and grass read the same way for everyone.
+            tilesPerSec = System.Math.Max(MinRaceSpeed, tilesPerSec + GoingSpeedBonusAt(r.Horse.Tile));
             return tilesPerSec * 64f / 1000f;
         }
 
@@ -4628,6 +4855,9 @@ namespace HorseTycoon
             this.raceMusicStarted.Value = false;
             sprintPhase.Value = SprintPhase.Ready;
             sprintTimer.Value = 0f;
+            warriorEnergyTimer.Value = 0f;
+            warriorEnergyBonus.Value = 0f;
+            lastWarriorEnergyTile.Value = -Vector2.One;
             if (penHorse.Value != null)
             {
                 penHorse.Value.currentLocation?.characters.Remove(penHorse.Value);
@@ -4724,6 +4954,9 @@ namespace HorseTycoon
                 r.Horse.currentLocation?.characters.Remove(r.Horse);
             }
             npcRacers.Clear();
+            goingByTile.Clear();
+            this.hoofSoundTimer.Value = 0f;
+            this.lastHoofPos.Value = null;
             npcRacersSpawned = false;
             nextNpcFakeId = -1L;
             this.DespawnNpcRiders(); // safety net if EndFestival wasn't reached

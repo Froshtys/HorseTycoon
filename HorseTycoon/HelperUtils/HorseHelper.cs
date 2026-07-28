@@ -211,6 +211,17 @@ namespace HorseTycoon
             return (speed / 40f, sprint);
         }
 
+        /// <summary>Returns the raw total Speed stat (IV + EV) for a mounted horse, using the same
+        /// borrowed-stat fallback as <see cref="GetRaceStats"/>.</summary>
+        public static int GetRaceSpeedStat(Horse mount)
+        {
+            var animal = GetFarmAnimalForHorse(mount);
+            if (animal != null)
+                return animal.GetHorseStats().TotalSpeed;
+
+            return mount.modData.TryGetValue(BorrowedSpeedKey, out string sv) && int.TryParse(sv, out int s) ? s : 0;
+        }
+
         // The "this" keyword is what makes it an extension method!
         public static HorseStats GetHorseStats(this FarmAnimal animal)
         {

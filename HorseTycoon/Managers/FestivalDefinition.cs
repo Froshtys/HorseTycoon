@@ -81,6 +81,13 @@ namespace HorseTycoon
         // (arc to LandingTile); otherwise they do an in-place blocked hop and lose time.
         public System.Collections.Generic.Dictionary<Point, NpcJumpZone> NpcJumpZones = new();
 
+        // --- Going (ground) ---
+        // Flat speed change applied on grass (fast) and mud (heavy) tiles during the race, in
+        // getMovementSpeed units (~1 tile/sec per point, same scale as HorseStats.SprintSpeedBonus).
+        // The tiles themselves are read straight off the map art — see FestivalRaceManager.Going.cs.
+        public float GoingFastBonus = 1f;
+        public float GoingHeavyBonus = -1f;
+
         // --- Economy / rewards ---
         // Offered bet amounts. Any amount >= 1000 is only offered from year 2 onward (matches Pam's book).
         public int[] BetAmounts = { 250, 500, 1000 };

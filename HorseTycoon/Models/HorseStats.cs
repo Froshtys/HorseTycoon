@@ -69,6 +69,15 @@ namespace HorseTycoon.Models
         public static float SprintSpeedBonus(int totalSprint) =>
             1f + (totalSprint / 10 * 0.1f);
 
+        // --- Warrior Energy formula (festival shrine pickup) ---
+        public const float WarriorEnergyMinBonus = 1f;
+        public const float WarriorEnergyMaxBonus = 5f;
+
+        /// <summary>Additive Warrior Energy speed bonus for a total Speed stat: (100 - speed) / 10,
+        /// clamped to 1..5 — the slower the horse, the more the pickup is worth.</summary>
+        public static float WarriorEnergyBonus(int totalSpeed) =>
+            Math.Clamp((STAT_MAX - totalSpeed) / 10f, WarriorEnergyMinBonus, WarriorEnergyMaxBonus);
+
         // --- Jump Distance (Total Max 100) ---
         public int JumpIV { get => GetStat(JumpIVKey, isIV: true); set => SetStat(JumpIVKey, value, isIV: true); }
         public int JumpEV { get => GetStat(JumpEVKey, isIV: false); set => SetStat(JumpEVKey, value, isIV: false); }
