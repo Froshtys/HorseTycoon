@@ -49,7 +49,7 @@ namespace HorseTycoon
 
             if (current >= HorseStats.IV_MAX)
             {
-                Game1.drawObjectDialogue($"{animal.displayName}'s natural {stat.ToLower()} is already at its peak — the potion would be wasted.");
+                Game1.drawObjectDialogue($"{animal.displayName}'s natural {stat.ToLower()} is already at its peak. The potion would be wasted.");
                 return true;
             }
 

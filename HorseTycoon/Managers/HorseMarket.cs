@@ -6,7 +6,7 @@ using StardewValley.Buildings;
 
 namespace HorseTycoon
 {
-    /// <summary>One horse offered by a festival shop NPC — either for sale or for stud services.</summary>
+    /// <summary>One horse offered by a festival shop NPC, either for sale or for stud services.</summary>
     public sealed class HorseOffer
     {
         public string Name = null!;
@@ -18,7 +18,7 @@ namespace HorseTycoon
         public int Price;
         public bool Purchased;
 
-        /// <summary>Total IV segments (each segment = 10 stat points) — drives pricing.</summary>
+        /// <summary>Total IV segments (each segment = 10 stat points); drives pricing.</summary>
         public int IvPoints => (SpeedIV + SprintIV + JumpIV) / 10;
     }
 
@@ -227,7 +227,7 @@ namespace HorseTycoon
                 return;
             }
 
-            // The remaining messages are delivery requests from farmhands — host only.
+            // The remaining messages are delivery requests from farmhands, so host only.
             if (!IsHost)
                 return;
 

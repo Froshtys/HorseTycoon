@@ -38,8 +38,8 @@ namespace HorseTycoon
             horse.Sprite.setCurrentAnimation(frames);
         }
 
-        /// <summary>Static standing frame for a specific facing. The horse sheet is 7 frames per row —
-        /// row 0 down, row 1 right (flipped for left), row 2 up — so the standing frame is the first of
+        /// <summary>Static standing frame for a specific facing. The horse sheet is 7 frames per row:
+        /// row 0 down, row 1 right (flipped for left), row 2 up. The standing frame is the first of
         /// the matching row. Assigned as a one-frame animation rather than by clearing CurrentAnimation:
         /// AnimatedSprite.faceDirection is a no-op while an animation is set, and callers that top up
         /// missing animations would otherwise refill this with the side-on idle.</summary>

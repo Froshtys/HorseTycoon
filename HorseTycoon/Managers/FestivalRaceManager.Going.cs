@@ -7,7 +7,7 @@ using StardewValley;
 namespace HorseTycoon
 {
     /// <summary>
-    /// "Going" — per-tile ground that changes a racer's speed. Unlike the jump zones, this is authored
+    /// "Going": per-tile ground that changes a racer's speed. Unlike the jump zones, this is authored
     /// purely by painting the map: the visible art IS the data. Mud patches slow a horse down, grass
     /// patches speed it up, for the player and the NPC racers alike, and only while the race is running.
     /// </summary>
@@ -69,7 +69,7 @@ namespace HorseTycoon
                         else if (GoingSheetIds.Contains(tile.TileSheet.Id) && GoingFastTiles.Contains(tile.TileIndex))
                             goingByTile[point] = Def.GoingFastBonus;
                         else
-                            goingByTile.Remove(point); // covered by other art — plain ground again
+                            goingByTile.Remove(point); // covered by other art, plain ground again
                     }
             }
 
@@ -87,7 +87,7 @@ namespace HorseTycoon
 
         /// <summary>
         /// Additive speed bonus for the ground at <paramref name="tile"/> in getMovementSpeed units
-        /// (~1 tile/sec per point), or 0 outside the race / off a going tile. Must never throw — it feeds
+        /// (~1 tile/sec per point), or 0 outside the race / off a going tile. Must never throw, since it feeds
         /// getMovementSpeed, which drives position extrapolation.
         /// </summary>
         private static float GoingSpeedBonusAt(Vector2 tile)
@@ -99,7 +99,7 @@ namespace HorseTycoon
 
         /// <summary>
         /// Plays one hoofbeat for the ground at <paramref name="tile"/>. The beat itself is always
-        /// vanilla's mounted hoof sound, mirroring Horse.PerformDefaultHorseFootstep — "thudStep" on
+        /// vanilla's mounted hoof sound, mirroring Horse.PerformDefaultHorseFootstep: "thudStep" on
         /// everything but stone and wood. (The farmer's own footsteps, "sandyStep"/"grassyStep", are a
         /// soft shuffle and don't read as hooves.) The going then layers its character on top: a splash
         /// through mud, a swish through grass, so you hear the surface without losing the hoofbeat.
@@ -124,7 +124,7 @@ namespace HorseTycoon
         /// <summary>
         /// Hoofbeats for the local rider, one per tile travelled. Vanilla plays these from frame
         /// callbacks on the mounted-gallop animation (Horse.OnMountFootstep), but the race drives the
-        /// horse sprite itself via SetGalloppingAnimation, which has no such callbacks — hence silence.
+        /// horse sprite itself via SetGalloppingAnimation, which has no such callbacks, hence the silence.
         /// Driving them off distance travelled instead also matches the NPC racers' cadence exactly.
         /// </summary>
         private void UpdateHoofSounds()

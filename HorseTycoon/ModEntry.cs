@@ -134,7 +134,7 @@ namespace HorseTycoon
         {
             this.InitializeNewHorseStats();
 
-            // Stable conversion mutates host-owned building/animal data — host only.
+            // Stable conversion mutates host-owned building/animal data, so host only.
             if (!Context.IsMainPlayer) return;
 
             foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
@@ -340,7 +340,7 @@ namespace HorseTycoon
                 HorseHelper.SyncStableHorseAppearance();
 
             // Data/Mail may have been cached before the save loaded, without the spring-festival
-            // winner's name from farm modData — drop it so the next read re-resolves with the name.
+            // winner's name from farm modData, so drop it and let the next read re-resolve with the name.
             this.Helper.GameContent.InvalidateCache("Data/Mail");
         }
 
@@ -634,8 +634,8 @@ namespace HorseTycoon
                     ApplyExhaustion();
                 }
                 WasSprintingLastCheck = false;
-                // Clear the distance anchor while unmounted so the first tick after (re)mounting — possibly
-                // in a new location or the next morning — doesn't credit the gap since the last dismount.
+                // Clear the distance anchor while unmounted so the first tick after (re)mounting (possibly
+                // in a new location or the next morning) doesn't credit the gap since the last dismount.
                 lastPosition.Value = Vector2.Zero;
                 return;
             }

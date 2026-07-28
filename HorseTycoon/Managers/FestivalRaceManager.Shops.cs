@@ -120,7 +120,7 @@ namespace HorseTycoon
             {
                 this.horseSellerIntroSeen = true;
                 this.Speak(seller,
-                    "Welcome! Finest horses this side of the valley — festival-grade, every one of 'em. Take a look!",
+                    "Welcome! Finest horses in Ferngill, every one of them. Take a look!",
                     this.ShowHorseSaleMenu);
                 return;
             }
@@ -160,7 +160,7 @@ namespace HorseTycoon
                     // Another player may have bought this offer while the confirm dialogue was open.
                     if (offer.Purchased)
                     {
-                        this.SayThenReturnToSaleMenu("Sorry — that horse was just sold to someone else!");
+                        this.SayThenReturnToSaleMenu("Sorry, that horse was just sold to someone else!");
                         return;
                     }
 
@@ -176,7 +176,7 @@ namespace HorseTycoon
                     }
                     if (HorseHelper.GetBarnWithHorseSpace() == null)
                     {
-                        this.SayThenReturnToSaleMenu("Your barn is full! Make some room — or build another stable — and come see me again.");
+                        this.SayThenReturnToSaleMenu("Your barn is full! Make some room or build another stable and come see me again.");
                         return;
                     }
 
@@ -203,10 +203,10 @@ namespace HorseTycoon
 
         private void OpenItemShop(NPC keeper)
         {
-            // No intro — straight to shopping. The shop's Data/Shops Owners entry provides
+            // No intro, straight to shopping. The shop's Data/Shops Owners entry provides
             // Jadu's portrait and greeting inside the menu itself.
             if (!Utility.TryOpenShopMenu(ItemShopId, ownerName: null))
-                Logger.LogVerbose($"Failed to open festival item shop '{ItemShopId}' — missing Data/Shops entry?");
+                Logger.LogVerbose($"Failed to open festival item shop '{ItemShopId}'. Missing Data/Shops entry?");
         }
 
         // ====================================================================================
@@ -220,7 +220,7 @@ namespace HorseTycoon
             {
                 this.studShopIntroSeen = true;
                 this.Speak(studKeeper,
-                    "Looking to breed a champion? My stallions' fees are based on their pedigree — or if you've got a promising sire of your own, I'll pay good money for his services.",
+                    "Looking to breed a champion? My stallion fees are based on their pedigree. If you've got a promising sire of your own, I'll pay good money for his services.",
                     () => this.ShowStudShopChoices(studKeeper));
                 return;
             }
@@ -243,7 +243,7 @@ namespace HorseTycoon
                         if (this.GetBroughtBreedableHorses().Count == 0)
                         {
                             Game1.afterDialogues = () => this.Speak(studKeeper,
-                                "My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today. Bring one along next time!");
+                                "It doesn't look like you brought a mare today. Bring one along next time!");
                             return;
                         }
                         Game1.afterDialogues = this.ShowStudMenu;
@@ -254,7 +254,7 @@ namespace HorseTycoon
                         if (studs.Count == 0)
                         {
                             Game1.afterDialogues = () => this.Speak(studKeeper,
-                                "I'd pay well for a grown stallion's services, but it doesn't look like you own one. Come see me when you do!");
+                                "I'd pay well for a good stallion's services, but it doesn't look like you own one.");
                             return;
                         }
                         Game1.afterDialogues = () =>
@@ -267,7 +267,7 @@ namespace HorseTycoon
         private void ShowStudMenu()
         {
             Game1.activeClickableMenu = new HorseShopMenu("Stud services", HorseMarket.GetStudOffers(), this.ConfirmStudService,
-                Def.StudShopSprite, "Take your pick — every one of my stallions is a proven runner.");
+                Def.StudShopSprite, "Take your pick. Every one of my stallions is a proven champion.");
         }
 
         private void ConfirmStudService(HorseOffer stud)
@@ -291,7 +291,7 @@ namespace HorseTycoon
                     var mares = this.GetBroughtBreedableHorses();
                     if (mares.Count == 0)
                     {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("My stallions will need a mare that isn't already expecting, and it doesn't look like you brought one today.");
+                        Game1.afterDialogues = () => Game1.drawObjectDialogue("It doesn't look like you brought a mare today. Bring one along next time!");
                         return;
                     }
 
@@ -310,8 +310,8 @@ namespace HorseTycoon
                                 }
                                 HorseMarket.PurchaseStudService(stud, mare);
                                 Game1.drawObjectDialogue(
-                                    $"{mare.Name} and {stud.Name} hit it off! {mare.Name} is now pregnant — " +
-                                    $"the foal is due in {BreedingManager.GestationDays} days.");
+                                    $"{mare.Name} and {stud.Name} hit it off! {mare.Name} is now pregnant. " +
+                                    $"The foal is due in {BreedingManager.GestationDays} days.");
                                 Game1.afterDialogues = this.ShowStudMenu;
                             });
                 });
@@ -328,7 +328,7 @@ namespace HorseTycoon
         }
 
         /// <summary>The local player's horses at this festival that can be bred with a stud: the mares
-        /// loaded onto the bus — stallions, babies, and already-pregnant mares are excluded (same sex
+        /// loaded onto the bus. Stallions, babies, and already-pregnant mares are excluded (same sex
         /// rules as barn breeding, see <see cref="BreedingManager.GetEligibleSires"/>).</summary>
         private List<FarmAnimal> GetBroughtBreedableHorses()
         {

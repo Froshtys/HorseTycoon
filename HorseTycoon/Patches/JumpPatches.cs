@@ -88,7 +88,7 @@ namespace HorseTycoon
         {
             // Must never throw: getMovementSpeed feeds NetPosition.UpdateExtrapolation in
             // Farmer.Update, and an exception there skips the reset of the synced 'moving'
-            // flag — remote clients then see this player's horse gallop in place forever.
+            // flag, and remote clients then see this player's horse gallop in place forever.
             try
             {
                 if (__instance.isRidingHorse() && __instance.mount != null)

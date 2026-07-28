@@ -10,9 +10,9 @@ namespace HorseTycoon.Patches
     /// Draws a horse-face marker on the Billboard calendar for every registered horse festival.
     ///
     /// The at-home races (Spring 19 / Fall 19) ARE registered in Data/Festivals/FestivalDates, so vanilla
-    /// already draws its animated festival flag on them — we swap that for the horse icon. The away race
+    /// already draws its animated festival flag on them, and we swap that for the horse icon. The away race
     /// (Summer 19) is deliberately NOT in FestivalDates (so it doesn't close the town, like the Desert
-    /// Festival), which means vanilla shows nothing there — so we add the marker ourselves. In both cases
+    /// Festival), which means vanilla shows nothing there, so we add the marker ourselves. In both cases
     /// the icon is drawn in <see cref="Billboard.draw"/> so it can coexist with a birthday portrait sharing
     /// the same day (e.g. Demetrius' birthday is Summer 19).
     /// </summary>

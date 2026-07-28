@@ -48,7 +48,7 @@ namespace HorseTycoon
         public int DqZoneNorthOfY;   // player.Tile.Y < this value
         public int DqZoneEastOfX;    // player.Tile.X > this value; -1 = disabled
         public int DqZoneWestOfX = -1; // player.Tile.X < this value; -1 = disabled
-        // Where a DQ'd player (and their horse) is teleported — just past the finish in the spectator area.
+        // Where a DQ'd player (and their horse) is teleported: just past the finish in the spectator area.
         public Point DqArrivalTile;
 
         // --- Ceremony layout (tiles) ---
@@ -84,7 +84,7 @@ namespace HorseTycoon
         // --- Going (ground) ---
         // Flat speed change applied on grass (fast) and mud (heavy) tiles during the race, in
         // getMovementSpeed units (~1 tile/sec per point, same scale as HorseStats.SprintSpeedBonus).
-        // The tiles themselves are read straight off the map art — see FestivalRaceManager.Going.cs.
+        // The tiles themselves are read straight off the map art (see FestivalRaceManager.Going.cs).
         public float GoingFastBonus = 1f;
         public float GoingHeavyBonus = -1f;
 
@@ -128,6 +128,11 @@ namespace HorseTycoon
         // FestivalRaceManager.Bookie.cs).
         public Point? BookieTile;
         public int BookieFacing = 2;
+        // Top-left tile of the vanilla desert merchant's caravan (the trader who trades for Omni
+        // Geodes in Calico Desert); null = no caravan. Drawn from the same LooseSprites sheet the
+        // Desert uses, occupies a 14x5 collision footprint, and the two counter tiles at the front
+        // open the vanilla "DesertTrade" shop (see FestivalRaceManager.Trader.cs).
+        public Point? DesertTraderTile;
 
         // --- Bus arrival cinematic (opt-in) ---
         // When true, the festival opens with the vanilla-style bus driving in from the right before the
@@ -377,7 +382,7 @@ namespace HorseTycoon
 
             // Jump zones authored in code, not the TMX. The map's NpcJumpApproach/NpcJumpLanding loader
             // pairs tiles by scan order (top→bottom, left→right), which can't express this curving track's
-            // vertical and westward chained jumps — the pairs would cross-match. MinSkill 45 = Leah's jump
+            // vertical and westward chained jumps; the pairs would cross-match. MinSkill 45 = Leah's jump
             // skill, so she clears every zone on her recorded line. Recorded via ht_record_jumps.
             NpcJumpZones = JumpZones(45,
                 (47, 21, 50, 21), (53, 16, 53, 14), (53, 14, 55, 14), (55, 14, 57, 14),
@@ -450,16 +455,17 @@ namespace HorseTycoon
             // holding the market shops + for-sale paddock and the horse pens, above a large
             // fenced oval track (rows 50-82). The race runs along the top "home straight"
             // (lane rows 51-59) west->east. Fine-tune tiles in-game with ht_race_tile.
+            // Grazing spots inside the contestants' pasture, west of the road.
             PenSlots = new[]
             {
-                new Point(8, 40), new Point(11, 40), new Point(14, 40), new Point(17, 40),
-                new Point(8, 44), new Point(11, 44), new Point(14, 44), new Point(17, 44),
+                new Point(1, 40), new Point(4, 41), new Point(1, 44), new Point(4, 44),
+                new Point(2, 46), new Point(3, 48), new Point(3, 50), new Point(1, 52),
             },
             // Decorative "horses for sale" shown in the fenced paddock beside the shops.
             PastureBgSlots = new[]
             {
-                new Point(47, 40), new Point(50, 40), new Point(53, 40),
-                new Point(48, 44), new Point(51, 44), new Point(54, 44),
+                new Point(24, 48), new Point(28, 47), new Point(31, 49),
+                new Point(30, 50), new Point(27, 51), new Point(23, 51),
             },
             PenHorseTile = null,
 
@@ -488,17 +494,20 @@ namespace HorseTycoon
                 new Point(28, 57), new Point(36, 57),
             },
 
-            // Away-festival market stalls: horse seller + stud shop, in the plaza beside the
-            // for-sale paddock (summer festival only).
-            HorseSellerTile = new Point(40, 42),
+            // Away-festival market stalls (summer festival only). Jadu's item stall sits on the way
+            // down from the bus; the stud master and horse seller stand together above the track.
+            HorseSellerTile = new Point(28, 58),
             HorseSellerFacing = 2,
-            StudShopTile = new Point(43, 42),
+            StudShopTile = new Point(26, 58),
             StudShopFacing = 2,
-            ItemShopTile = new Point(37, 42),
+            ItemShopTile = new Point(9, 36),
             ItemShopFacing = 2,
-            // The Bouncer runs the betting book at away races, at the west end of the shop row.
-            BookieTile = new Point(34, 42),
+            // The Bouncer runs the betting book at away races, at the east end of the shop row.
+            BookieTile = new Point(44, 58),
             BookieFacing = 2,
+            // The desert merchant's caravan parks north of the road, roughly where it stands in the
+            // vanilla Desert. The tile is the top-left corner of the 14-wide wagon art.
+            DesertTraderTile = new Point(33, 18),
 
             NpcRiderNames = new[] { "Marnie", "Leah", "Abigail", "Sebastian" },
             NpcRiderSpeeds = new[] { 5, 10, 15, 20 },

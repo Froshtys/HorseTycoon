@@ -38,7 +38,7 @@ namespace HorseTycoon.Patches
         internal static IReadOnlyCollection<string> AvailableOverlayNames => _overlayDict.Keys;
 
 
-        /// <summary>Base skin texture (no overlays) for a Data/FarmAnimals skin id — used by shop
+        /// <summary>Base skin texture (no overlays) for a Data/FarmAnimals skin id, used by shop
         /// menus that display horses which don't exist as FarmAnimals yet.</summary>
         internal static Texture2D? GetTextureForSkinId(string? skinId) =>
             GetSkinTexture(SkinNameFromId(skinId), "");
@@ -210,7 +210,7 @@ namespace HorseTycoon.Patches
             bool noTack = __instance.modData.TryGetValue(HorseHelper.NoTackKey, out string? noTackVal) && noTackVal == "true";
             if (noTack)
                 overlaysValue = "";
-            // Horses from saves before the saddle system lack OverlaysKey — default to brown.
+            // Horses from saves before the saddle system lack OverlaysKey, so default to brown.
             else if (string.IsNullOrEmpty(overlaysValue))
                 overlaysValue = "Saddle_Brown,Bridle_Brown";
 

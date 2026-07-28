@@ -10,7 +10,7 @@ using StardewValley.Menus;
 namespace HorseTycoon
 {
     /// <summary>
-    /// The bus horse trailer: a farm-wide upgrade purchased from Robin (like a house upgrade — no
+    /// The bus horse trailer: a farm-wide upgrade purchased from Robin (like a house upgrade, with no
     /// placement menu) that appears behind the bus at the Bus Stop once built. It's required to haul
     /// horses to away festivals (e.g. the Summer Horse Festival). Robin offers it once the bus is
     /// repaired (<c>ccVault</c> mail), then offers two further upgrades (Big and Deluxe trailers)
@@ -396,7 +396,7 @@ namespace HorseTycoon
         /// Called from the <c>BusStop.busLeftToDesert</c> prefix when the drive-off animation thinks the
         /// bus has left the screen. Vanilla fires the departure warp as soon as the bus body clears the
         /// west edge (<c>busPosition.X + 512 &lt; 10</c>), but the trailer hitched 512px behind it is
-        /// still mid-screen at that point — so this un-sets the private <c>leaving</c> flag, which makes
+        /// still mid-screen at that point, so this un-sets the private <c>leaving</c> flag, which makes
         /// <c>UpdateWhenCurrentLocation</c> keep the bus accelerating and re-fire <c>busLeftToDesert</c>
         /// each tick until the trailer's right edge has cleared the screen too. Returns true while the
         /// departure should be held back.

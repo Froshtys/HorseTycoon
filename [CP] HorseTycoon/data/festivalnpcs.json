@@ -1,12 +1,12 @@
 {
 	/*
-	  Festival stall keeper sprites — Alesia (Horse Trader), Isaac (Stud Master), and
+	  Festival stall keeper sprites: Alesia (Horse Trader), Isaac (Stud Master), and
 	  Jadu (item stall) from Stardew Valley Expanded.
 
 	  When SVE is installed it already loads these character sheets (Characters/Alesia etc.),
 	  so we do nothing. Without SVE we load bundled copies of the same overworld sprites to
 	  the same targets, so the C# spawner (FestivalRaceManager.Shops) can always build the
-	  event actors from "Characters/<Name>". No Data/Characters entries are added — these
+	  event actors from "Characters/<Name>". No Data/Characters entries are added; these
 	  are event-actor-only sprites, not real villagers.
 	*/
 	"Changes": [

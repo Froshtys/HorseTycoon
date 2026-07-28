@@ -74,7 +74,7 @@ namespace HorseTycoon.Menus
                 MenuDrawingHelper.DrawPixelSegments(b, startX + textWidth, startY - 3 + 100, stats.JumpIV, stats.JumpEV, 3f);
                 Utility.drawTextWithShadow(b, "Jump", Game1.smallFont, new Vector2(startX, startY + 100 - 2), Game1.textColor, 1f);
 
-                // Training checkboxes — 10 segments × 24px = 240px wide, 20px gap
+                // Training checkboxes: 10 segments × 24px = 240px wide, 20px gap
                 Rectangle emptyBoxSource = new Rectangle(227, 425, 9, 9);
                 Rectangle checkedBoxSource = new Rectangle(236, 425, 9, 9);
                 float checkboxScale = 3f;

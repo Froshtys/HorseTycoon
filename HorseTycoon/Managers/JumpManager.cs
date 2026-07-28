@@ -135,11 +135,11 @@ namespace HorseTycoon
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
             // The jump is over when the synchronized jump has fully landed (velocity and offset
-            // both zero — synchronizedJump sets them non-zero synchronously, so this can't trigger
+            // both zero; synchronizedJump sets them non-zero synchronously, so this can't trigger
             // on the subscribe tick) or was cancelled externally (dismount, warp, or anything
             // calling completelyStopAnimating zeroes both mid-air). Checking only the landing
             // descent (velocity crossing negative → zero) missed the cancel case, leaving this
-            // handler subscribed forever and rewriting the player's position every tick — remote
+            // handler subscribed forever and rewriting the player's position every tick, so remote
             // clients then saw the horse gallop in place whenever this player stood still mounted.
             bool jumpOver = Game1.player.yJumpVelocity == 0f && Game1.player.yJumpOffset == 0;
             if (jumpOver || Game1.player.mount == null)

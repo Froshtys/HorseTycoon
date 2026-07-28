@@ -1,6 +1,6 @@
 {
 	/*
-	  Horse Breeding Pen — a 6x4 fenced pen built by Robin (3 days), no interior.
+	  Horse Breeding Pen: a 6x4 fenced pen built by Robin (3 days), no interior.
 	  Right-click assigns a mare + stallion (handled in C#); feeding both a Gold Carrot
 	  starts a 3-day timer after which the mare becomes pregnant.
 
@@ -11,7 +11,7 @@
 	  The penned horses draw via Character.drawOnTop (see BreedingPenManager.SpawnProxy),
 	  so they always render above the fence regardless of Y-sort.
 
-	  The BreedingPen.png here is a placeholder — swap in final art at the same size
+	  The BreedingPen.png here is a placeholder. Swap in final art at the same size
 	  (96x64 base; make the PNG taller than 64px if the pen should draw above its footprint,
 	  and bump SourceRect.Height to match).
 	*/

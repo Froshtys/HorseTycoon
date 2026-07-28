@@ -74,7 +74,7 @@ namespace HorseTycoon.Models
         public const float WarriorEnergyMaxBonus = 5f;
 
         /// <summary>Additive Warrior Energy speed bonus for a total Speed stat: (100 - speed) / 10,
-        /// clamped to 1..5 — the slower the horse, the more the pickup is worth.</summary>
+        /// clamped to 1..5: the slower the horse, the more the pickup is worth.</summary>
         public static float WarriorEnergyBonus(int totalSpeed) =>
             Math.Clamp((STAT_MAX - totalSpeed) / 10f, WarriorEnergyMinBonus, WarriorEnergyMaxBonus);
 

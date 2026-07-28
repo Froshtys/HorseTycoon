@@ -15,7 +15,7 @@ namespace HorseTycoon
         public const int GestationDays = 7;
 
         /// <summary>
-        /// Adult male horses sharing the mare's home barn — only these can sire a barn pregnancy.
+        /// Adult male horses sharing the mare's home barn; only these can sire a barn pregnancy.
         /// Stable-hidden males count (hiding doesn't change their home barn).
         /// </summary>
         public static List<FarmAnimal> GetEligibleSires(FarmAnimal mare)
@@ -121,7 +121,7 @@ namespace HorseTycoon
             FarmAnimal mare = dueMares[index];
             if (mare.home?.GetIndoors() is not AnimalHouse interior)
             {
-                // Home barn is gone — postpone one day rather than losing the foal.
+                // Home barn is gone, so postpone one day rather than losing the foal.
                 mare.modData[HorseHelper.PregnancyDaysLeftKey] = "1";
                 DeliverFoals(dueMares, index + 1);
                 return;

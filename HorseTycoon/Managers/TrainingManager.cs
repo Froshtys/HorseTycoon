@@ -243,7 +243,7 @@ namespace HorseTycoon
             }
 
             // Notify the rider who earned the gain. If that's the host, show it locally; otherwise send
-            // a message so the farmhand on the horse — not the host applying the data — sees the result.
+            // a message so the farmhand on the horse, not the host applying the data, sees the result.
             if (riderId == Game1.player.UniqueMultiplayerID)
             {
                 ShowTrainingMessage(horse.Name, statName);

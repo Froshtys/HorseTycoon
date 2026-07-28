@@ -10,8 +10,8 @@ namespace HorseTycoon
     /// <summary>
     /// The away-festival betting book, run by the vanilla Bouncer. Unlike Pam's flat
     /// winner-takes-double book at the walk-in festivals, the Bouncer posts fractional odds per
-    /// racer (5/1, 1/2, ...) computed from horse stats — NPC racers use their
-    /// <see cref="FestivalDefinition"/> stat arrays, players use the best horse they brought — and
+    /// racer (5/1, 1/2, ...) computed from horse stats. NPC racers use their
+    /// <see cref="FestivalDefinition"/> stat arrays, players use the best horse they brought. The book
     /// pays out stake + stake × odds on a win. Spawned during the pasture phase on festivals whose
     /// definition sets <see cref="FestivalDefinition.BookieTile"/>; clicks route here from
     /// <c>OnButtonPressed</c>. Payout is delivered through the same ceremony/quest flow as Pam's
@@ -22,7 +22,7 @@ namespace HorseTycoon
         private const string BookieActorName = "HorseTycoonBookie";
         private const string BookieSpriteName = "Bouncer";
 
-        // Odds the local player's bet was taken at. Denominator 0 means "no odds bet" — either no
+        // Odds the local player's bet was taken at. Denominator 0 means "no odds bet": either no
         // bet at all, or a Pam bet (flat double). Set when the Bouncer takes a bet.
         private readonly PerScreen<int> betOddsNumerator = new(() => 0);
         private readonly PerScreen<int> betOddsDenominator = new(() => 0);
@@ -63,7 +63,7 @@ namespace HorseTycoon
         {
             if (pamGreeted.Value)
             {
-                // Bet already placed — the book is closed for this player, but the board stays up.
+                // Bet already placed, so the book is closed for this player, but the board stays up.
                 this.ShowOddsBoard("Your bet's locked in. The board, in case you forgot:", thenReturnTo: null);
                 return;
             }
@@ -75,7 +75,7 @@ namespace HorseTycoon
                 new("leave", "Not right now"),
             };
             Game1.currentLocation.createQuestionDialogue(
-                "I run the book here. Odds are on the board, winners get paid on the nose. What'll it be?",
+                "You here to place a bet or what? I've got the Odds here what are you willing to risk?",
                 options,
                 (_, answer) =>
                 {
@@ -121,7 +121,7 @@ namespace HorseTycoon
                 .Select(o => new Response(o.Answer, $"{o.DisplayName} ({o.Numerator}/{o.Denominator})"))
                 .ToArray();
             Game1.currentLocation.createQuestionDialogue(
-                "Pick your horse. Can't bet on yourself — house rule.",
+                "Pick your horse. Can't bet on yourself.",
                 racerResponses,
                 (_, racerAnswer) =>
                 {

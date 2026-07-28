@@ -1,4 +1,4 @@
-# EScharacterSheet.png — GID Reference
+# EScharacterSheet.png: GID Reference
 # Format: 128x592px, 8 cols x 37 rows of 16x16 tiles
 # Tile layout per character: up(0), right(1), down(2), left(3)
 # GIDs below assume firstgid=1 for this tileset.

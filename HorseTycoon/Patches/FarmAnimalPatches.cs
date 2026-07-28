@@ -82,7 +82,7 @@ namespace HorseTycoon
 
         private static bool Update_Prefix(FarmAnimal __instance, GameTime time, GameLocation location)
         {
-            // Pregnant mares rest in place — skip AI so they don't wander or head outside.
+            // Pregnant mares rest in place: skip AI so they don't wander or head outside.
             return !HorseHelper.IsHidden(__instance) && !HorseHelper.IsPregnant(__instance);
         }
 
@@ -145,7 +145,7 @@ namespace HorseTycoon
 
         public static bool Horse_checkAction_Prefix(Horse __instance)
         {
-            // Breeding-pen proxy horses are decorative only — never mountable/interactable.
+            // Breeding-pen proxy horses are decorative only, never mountable/interactable.
             if (__instance.modData.TryGetValue(HorseHelper.NoTackKey, out string? noTack) && noTack == "true")
                 return false;
 
@@ -176,7 +176,7 @@ namespace HorseTycoon
                 return false;
             }
 
-            // IV potion: player holds a potion while not mounted — give it to the linked barn animal.
+            // IV potion: player holds a potion while not mounted, so give it to the linked barn animal.
             if (Game1.player.mount != __instance && IVPotionManager.IsIVPotion(Game1.player.CurrentItem))
             {
                 FarmAnimal? potionTarget = HorseHelper.GetFarmAnimalForHorse(__instance);
@@ -199,7 +199,7 @@ namespace HorseTycoon
                     ApplyPetting(animal);
                     __instance.doEmote(20);
                     Game1.playSound("CP.HorseTycoon_Neigh");
-                    return false; // don't mount yet — let the player interact again to ride
+                    return false; // don't mount yet; let the player interact again to ride
                 }
             }
 

@@ -3,10 +3,10 @@
 	  IV potions + Isaac's festival shop.
 
 	  Three potions, one per IV stat (Speed / Sprint / Jump). Giving one to a horse raises
-	  that stat's IV by one grade (+10, handled in C# — see IVPotionManager). They are sold
+	  that stat's IV by one grade (+10, handled in C#; see IVPotionManager). They are sold
 	  only at Isaac's stall at the Summer Horse Festival: the shop stocks the Gold Carrot
 	  Seeds (2 per player) plus exactly ONE of the three potions, picked at random per
-	  festival day (SYNCED_CHOICE — same pick for every player) with quantity 1 per player.
+	  festival day (SYNCED_CHOICE, same pick for every player) with quantity 1 per player.
 	  The shop menu is opened from C# via Utility.TryOpenShopMenu (FestivalRaceManager.Shops).
 	*/
 	"Changes": [
@@ -86,9 +86,7 @@
 								{
 									"Id": "Default",
 									"RandomDialogue": [
-										"Welcome! Rare seeds and horse tonics — gathered from all over the valley.",
-										"Looking for something special for your horses? You've come to the right stall.",
-										"The tonics are one-of-a-kind — once they're gone, they're gone 'til next festival!"
+										"The potions are personally crafted by me. I hope you like them."
 									]
 								}
 							]

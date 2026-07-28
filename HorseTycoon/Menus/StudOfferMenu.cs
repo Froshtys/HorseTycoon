@@ -16,7 +16,7 @@ namespace HorseTycoon.Menus
     {
         private static readonly string[] SaleLines =
         {
-            "{0}, eh? A fine sire — here's {1}g for his services.",
+            "{0}, eh? A fine sire! Here's {1}g for his services.",
             "I'll put {0} straight to work. {1}g, as agreed.",
             "Now that's a pedigree! {1}g for {0}'s services.",
         };
@@ -41,7 +41,7 @@ namespace HorseTycoon.Menus
             this.Studs = studs;
             this.SoldIds = soldIds;
             this.Portrait = LoadPortrait(portraitName);
-            this.SetPortraitDialogue("Let's see what you've brought. I pay by pedigree — proven blood earns proven gold.");
+            this.SetPortraitDialogue("Let's see what you've brought. I pay by pedigree. Proven blood earns proven gold.");
         }
 
         private void SetPortraitDialogue(string text) =>

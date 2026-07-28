@@ -412,7 +412,7 @@ namespace HorseTycoon
             // 4. Assign to Barn (bypassing capacity)
             RegisterHorseInBarn(newHorse, barn);
 
-            // Force sprite to reflect adult age — the constructor loads the baby sprite at age 0,
+            // Force sprite to reflect adult age: the constructor loads the baby sprite at age 0,
             // so reload() must be called after age and home are set.
             newHorse.reload(barn);
 
@@ -425,7 +425,7 @@ namespace HorseTycoon
 
         /// <summary>
         /// Moves a horse into a barn as a registered resident. This is <see cref="AnimalHouse.adoptAnimal"/>
-        /// without its capacity assumptions — we add horses directly so a stable's capacity bonus can
+        /// without its capacity assumptions. We add horses directly so a stable's capacity bonus can
         /// overflow the barn (see <see cref="GetBarnWithHorseSpace"/>).
         /// <para>Registering in <c>animalsThatLiveHere</c> matters: vanilla reassigns each resident's
         /// <c>homeInterior</c> from that list when a barn is moved or upgraded, so an unregistered
@@ -447,7 +447,7 @@ namespace HorseTycoon
         }
 
         /// <summary>
-        /// Re-registers barn horses that predate <see cref="RegisterHorseInBarn"/> — earlier versions
+        /// Re-registers barn horses that predate <see cref="RegisterHorseInBarn"/>. Earlier versions
         /// added them to a barn's animal list only, leaving them off its resident list.
         /// </summary>
         public static void RepairBarnResidency()
@@ -548,7 +548,7 @@ namespace HorseTycoon
             if (sourceAnimal != null)
             {
                 // The animal is the authority. Never leave the previous occupant's tack on the
-                // character — a stable reuses one Horse across swaps.
+                // character: a stable reuses one Horse across swaps.
                 MigrateSaddleToAnimal(horse, sourceAnimal);
                 horse.modData[EquippedSaddleKey] =
                     sourceAnimal.modData.TryGetValue(EquippedSaddleKey, out string? id) ? id : DefaultSaddleId;
@@ -556,7 +556,7 @@ namespace HorseTycoon
             }
             else if (!horse.modData.ContainsKey(EquippedSaddleKey))
             {
-                // New horse with no barn record yet — default to brown saddle.
+                // New horse with no barn record yet, so default to brown saddle.
                 EquipSaddle(horse, DefaultSaddleId);
             }
 
@@ -565,7 +565,7 @@ namespace HorseTycoon
 
         /// <summary>
         /// Copies saddle state from a stable's <see cref="Horse"/> character down onto its barn horse
-        /// for saves written before the animal became the authority. Only fills gaps — an animal that
+        /// for saves written before the animal became the authority. Only fills gaps: an animal that
         /// already has a saddle recorded wins.
         /// </summary>
         private static void MigrateSaddleToAnimal(Horse horse, FarmAnimal animal)
@@ -590,8 +590,8 @@ namespace HorseTycoon
 
         /// <summary>
         /// Re-applies each stable horse's skin and tack from its barn horse. The <see cref="Horse"/>
-        /// character is transient — <c>Stable.grabHorse</c> spawns a fresh one (with empty modData)
-        /// whenever the old character has gone missing, e.g. overnight or after a festival — so its
+        /// character is transient: <c>Stable.grabHorse</c> spawns a fresh one (with empty modData)
+        /// whenever the old character has gone missing, e.g. overnight or after a festival, so its
         /// appearance is rebuilt from the persistent record on every load and day start.
         /// </summary>
         public static void SyncStableHorseAppearance()

@@ -138,7 +138,7 @@ namespace HorseTycoon
         }
 
         // Returns true if any tile from 1..(toDistance-1) along (ox,oy) has the "NoJumpOver"
-        // property in the Buildings layer — set on the specific festival track barrier tiles in the TMX.
+        // property in the Buildings layer, set on the specific festival track barrier tiles in the TMX.
         private static bool HasNoJumpBarrierInPath(GameLocation location, int ox, int oy, int toDistance)
         {
             Vector2 horseTile = Game1.player.mount!.Tile;

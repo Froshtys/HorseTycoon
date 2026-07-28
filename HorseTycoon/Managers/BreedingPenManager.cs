@@ -162,7 +162,7 @@ namespace HorseTycoon
             FarmAnimal? animal = GetPennedAnimal(pen, wasMare);
             pen.modData.Remove(wasMare ? MareIdKey : StallionIdKey);
             pen.modData.Remove(wasMare ? MareFedKey : StallionFedKey);
-            pen.modData.Remove(BreedDaysLeftKey); // pair broken — cancel breeding countdown
+            pen.modData.Remove(BreedDaysLeftKey); // pair broken, cancel breeding countdown
 
             if (animal != null)
             {
@@ -234,7 +234,7 @@ namespace HorseTycoon
         }
 
         // ---------------------------------------------------------------------
-        // Daily tick (host only) — advance / complete breeding
+        // Daily tick (host only): advance / complete breeding
         // ---------------------------------------------------------------------
 
         public static void OnDayStarted()
@@ -309,12 +309,12 @@ namespace HorseTycoon
         // host, so they replicate to every farmhand automatically (no per-client duplication).
         // Each client animates the grazing loop locally; the one-shot "chew" on feeding is
         // broadcast so it plays for everyone. The host reconciles proxies whenever pen state
-        // (synced building modData) changes — including farmhand-initiated changes.
+        // (synced building modData) changes, including farmhand-initiated changes.
         // ---------------------------------------------------------------------
 
         private static void OnSaving(object? sender, SavingEventArgs e)
         {
-            // Proxies are transient visuals — never let them get serialized into the save.
+            // Proxies are transient visuals. Never let them get serialized into the save.
             if (Context.IsMainPlayer)
                 DespawnAllProxies();
         }
@@ -348,7 +348,7 @@ namespace HorseTycoon
                 {
                     horse.drawOnTop = true; // not netcode-synced; reassert locally on every client
 
-                    // Vanilla's own carrot-eating overlay (see PlayChewOnProxy) is still running —
+                    // Vanilla's own carrot-eating overlay (see PlayChewOnProxy) is still running.
                     // Horse.update() decrements this itself, so leave the horse alone until it hits 0.
                     if (GetMunchingCarrotTimer(horse) > 0)
                         continue;
@@ -427,7 +427,7 @@ namespace HorseTycoon
             horse.faceDirection(facing);
             // The pen box is fully solid (see breedingpen.json), so the proxy would otherwise
             // sort behind the building's fence texture. drawOnTop forces a fixed high layerDepth
-            // (Character.draw) so the horse always renders above the fence. Not a netcode field —
+            // (Character.draw) so the horse always renders above the fence. Not a netcode field, so it
             // must also be (re)applied per-client in OnUpdateTicked below.
             horse.drawOnTop = true;
             if (!farm.characters.Contains(horse))
@@ -472,14 +472,14 @@ namespace HorseTycoon
             // GetMunchingCarrotTimer). It draws a dedicated muzzle-down sprite oriented by
             // FacingDirection, so the mare (facing right) and stallion (facing left) each get the
             // correctly mirrored art automatically, and Horse.update() skips idle animation
-            // while it's active — no need to fight the grazing loop ourselves.
+            // while it's active, so there's no need to fight the grazing loop ourselves.
             horse.Sprite.StopAnimation();
             SetMunchingCarrotTimer(horse, 1500);
             PlayHeartAbove(horse);
         }
 
         // doEmote's heart draws via Character.DrawEmote, which sorts by StandingPixel.Y and ignores
-        // drawOnTop — it rendered behind the (fully solid) pen building. A manually-placed TAS lets us
+        // drawOnTop, so it rendered behind the (fully solid) pen building. A manually-placed TAS lets us
         // force a layerDepth that's always above the building instead.
         private static void PlayHeartAbove(Horse horse)
         {

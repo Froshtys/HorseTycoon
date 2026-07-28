@@ -66,7 +66,7 @@ namespace HorseTycoon.Menus
 
             if (current != null)
             {
-                // Breeding is in progress — confirm before scrapping it.
+                // Breeding is in progress, so confirm before scrapping it.
                 if (BreedingPenManager.GetBreedDaysLeft(this.Pen) > 0)
                 {
                     Building confirmPen = this.Pen;

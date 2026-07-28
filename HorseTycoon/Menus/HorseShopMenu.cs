@@ -11,7 +11,7 @@ namespace HorseTycoon.Menus
 {
     /// <summary>
     /// Festival shop list: one row per <see cref="HorseOffer"/> showing the horse's sprite, name,
-    /// and IV stat segments — with a gold price on the right (Pierre's-shop style). Used by both
+    /// and IV stat segments, with a gold price on the right (Pierre's-shop style). Used by both
     /// the Horse Seller (buying the horse) and the Stud Shop (buying stud services). Clicking an
     /// affordable row closes the menu and invokes the selection callback; the caller runs the
     /// confirm dialogue / next step.

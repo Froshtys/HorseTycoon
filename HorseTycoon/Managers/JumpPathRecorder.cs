@@ -84,7 +84,7 @@ namespace HorseTycoon
             route.Add(start);
             Monitor.Log($"{Prefix} Recording STARTED in '{locationName}'. Start tile: {Fmt(start)}. Run ht_record_jumps again to stop.", LogLevel.Info);
             if (!Game1.player.isRidingHorse())
-                Monitor.Log($"{Prefix} Note: you are not mounted — jumps are only detected while riding a horse.", LogLevel.Warn);
+                Monitor.Log($"{Prefix} Note: you are not mounted. Jumps are only detected while riding a horse.", LogLevel.Warn);
         }
 
         private static void Stop()
@@ -134,7 +134,7 @@ namespace HorseTycoon
                 else
                 {
                     AddToRoute(landing);
-                    Monitor.Log($"{Prefix} Hop (no horizontal travel) at {Fmt(landing)} — recorded as waypoint only.", LogLevel.Info);
+                    Monitor.Log($"{Prefix} Hop (no horizontal travel) at {Fmt(landing)}, recorded as waypoint only.", LogLevel.Info);
                 }
                 // Reset the periodic timer so a waypoint doesn't fire immediately after a jump point.
                 waypointTimerMs = 0f;
@@ -163,7 +163,7 @@ namespace HorseTycoon
             var sb = new StringBuilder();
             sb.AppendLine($"{Prefix} ===== RECORDING SUMMARY =====");
             sb.AppendLine($"{Prefix} Location: {locationName}");
-            sb.AppendLine($"{Prefix} Route ({route.Count} waypoints) — paste into NpcRaceRoutes:");
+            sb.AppendLine($"{Prefix} Route ({route.Count} waypoints), paste into NpcRaceRoutes:");
             sb.AppendLine("new[]");
             sb.AppendLine("{");
             for (int i = 0; i < route.Count; i += 6)
@@ -178,7 +178,7 @@ namespace HorseTycoon
                 sb.AppendLine($"{Prefix}   approach {Fmt(approach)} -> landing {Fmt(landing)}");
 
             // Tile lists for placing marker tiles on the two Tiled layers (order matches the pairs above,
-            // which is how LoadNpcJumpZonesFromMap pairs them — but note it re-sorts top->bottom/left->right).
+            // which is how LoadNpcJumpZonesFromMap pairs them, but note it re-sorts top->bottom/left->right).
             sb.AppendLine($"{Prefix} NpcJumpApproach tiles: {string.Join(" ", jumps.Select(j => Fmt(j.Approach)))}");
             sb.AppendLine($"{Prefix} NpcJumpLanding tiles:  {string.Join(" ", jumps.Select(j => Fmt(j.Landing)))}");
             sb.Append($"{Prefix} =============================");
