@@ -211,6 +211,25 @@ namespace HorseTycoon
             return (speed / 40f, sprint);
         }
 
+        /// <summary>
+        /// Returns the Sprint stat split into (IV, EV) for a mounted horse, which the sprint minigame
+        /// needs because breeding and training pull its hit window in opposite directions.
+        /// Borrowed festival horses only store a single total, so they are reported as pure IV: they
+        /// get the full attempt count but the tightest window, matching their "rented thoroughbred" role.
+        /// </summary>
+        public static (int IV, int EV) GetSprintIVEV(Horse mount)
+        {
+            var animal = GetFarmAnimalForHorse(mount);
+            if (animal != null)
+            {
+                var stats = animal.GetHorseStats();
+                return (stats.SprintIV, stats.SprintEV);
+            }
+
+            int borrowed = mount.modData.TryGetValue(BorrowedSprintKey, out string pv) && int.TryParse(pv, out int p) ? p : 0;
+            return (borrowed, 0);
+        }
+
         /// <summary>Returns the raw total Speed stat (IV + EV) for a mounted horse, using the same
         /// borrowed-stat fallback as <see cref="GetRaceStats"/>.</summary>
         public static int GetRaceSpeedStat(Horse mount)

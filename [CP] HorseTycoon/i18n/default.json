@@ -76,6 +76,15 @@
     "IVPotionJump_Name": "Jump Potion",
     "IVPotionJump_Description": "A vibrant green potion. Give it to a horse to permanently improve its natural jumping ability.",
 
+    "TrainingPotion_Name": "Training Potion",
+    "TrainingPotion_Description": "A swirling purple potion. Give it to a horse and today's training comes twice as easily: every stat needs only half the usual work.",
+
+    "GallopPotion_Name": "Gallop Like Your Steed",
+    "GallopPotion_Description": "A golden potion brewed for the rider, not the horse. Drink it and your own legs grow strong.",
+
+    "CoatPotion_Name": "Coat Potion",
+    "CoatPotion_Description": "A swirling pink potion. Give it to a horse for a change of looks, and there's no telling which one you'll get.",
+
     "HorseStatue_Name": "Horse Race Trophy",
     "HorseStatue_Description": "A golden trophy awarded to the champion of the Spring Horse Festival.",
 

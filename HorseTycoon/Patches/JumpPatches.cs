@@ -99,6 +99,12 @@ namespace HorseTycoon
                     // Festival freezes the vanilla sprint buff, so apply its bonus here via the shared formula.
                     if (FestivalRaceManager.IsSprinting)
                         __result += HorseStats.SprintSpeedBonus(totalSprint);
+
+                    // The sprint minigame never uses buffs either, so its stacked bonus is applied here too.
+                    // Gated to the local player because the minigame state is per-screen and local-only;
+                    // without this the local rider's bonus would leak onto every remote farmer.
+                    if (__instance.IsLocalPlayer && SprintMinigameManager.IsSprinting)
+                        __result += SprintMinigameManager.CurrentSpeedBonus;
                 }
             }
             catch (Exception ex)

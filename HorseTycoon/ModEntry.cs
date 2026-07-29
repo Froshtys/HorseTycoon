@@ -25,9 +25,14 @@ namespace HorseTycoon
         private FestivalRaceManager? festivalRaceManager;
         private Texture2D? sprintBuffIcon;
 
+        /// <summary>The mod config, read once here so the sprint minigame and the movement-speed patch
+        /// can reach it (JumpManager.Config forwards to this same instance).</summary>
+        public static ModConfig Config { get; set; } = new();
+
         public override void Entry(IModHelper helper)
         {
             Logger.Init(this.Monitor);
+            Config = helper.ReadConfig<ModConfig>();
             sprintBuffIcon = helper.ModContent.Load<Texture2D>("assets/HorseRunningBuff.png");
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
@@ -112,6 +117,9 @@ namespace HorseTycoon
             this.festivalRaceManager = new FestivalRaceManager(helper, this.Monitor);
             this.festivalRaceManager.Initialize();
 
+            // Timing-bar sprint, replacing both legacy sprints when ModConfig.UseSprintMinigame is on
+            SprintMinigameManager.Initialize(helper, this.Monitor);
+
             // Robin-built bus horse trailer (required for away festivals)
             BusTrailerManager.Initialize(helper);
 
@@ -120,6 +128,9 @@ namespace HorseTycoon
 
             // Robin-built horse breeding pen
             BreedingPenManager.Initialize(helper, this.Monitor);
+
+            // Coat potion (farmhand -> host coat changes)
+            CoatPotionManager.Initialize(helper);
 
             // Debug tool: ht_record_jumps to author NPC race routes + jump zones by riding the course
             JumpPathRecorder.Initialize(helper, this.Monitor);
@@ -576,6 +587,9 @@ namespace HorseTycoon
         private void processHorseSprint(object? sender, ButtonPressedEventArgs e)
         {
             if (!Context.IsWorldReady || Game1.player.mount == null) return;
+
+            // SprintMinigameManager owns sprinting in both the world and the races when the minigame is on.
+            if (Config.UseSprintMinigame) return;
 
             // During the Horse Festival race, FestivalRaceManager runs a custom sprint instead (the vanilla
             // buff timer is frozen while the festival pauses time).

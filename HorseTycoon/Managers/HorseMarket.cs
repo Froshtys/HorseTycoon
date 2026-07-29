@@ -60,7 +60,7 @@ namespace HorseTycoon
         private static int _offersDay = -1;
 
         // Skin ids from the Tycoon.Horse Data/FarmAnimals entry; "" = base Roan texture.
-        private static readonly string[] SkinIds = { "", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
+        private static readonly string[] SkinIds = Patches.HorseTexturePatches.AllSkinIds;
 
         private static readonly string[] NameFirstParts =
         {

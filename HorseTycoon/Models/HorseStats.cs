@@ -69,6 +69,37 @@ namespace HorseTycoon.Models
         public static float SprintSpeedBonus(int totalSprint) =>
             1f + (totalSprint / 10 * 0.1f);
 
+        // --- Sprint minigame formulas (ModConfig.UseSprintMinigame) ---
+        // The timing-bar sprint: starts at the base bonus, and every well-timed press stacks another
+        // hit bonus on top. Stat no longer sets the speed directly; it sets how many attempts you get
+        // and how forgiving each one is.
+
+        /// <summary>Speed bonus the sprint opens at, before any timing hits.</summary>
+        public const float MinigameBaseSpeedBonus = 1f;
+
+        /// <summary>Extra speed bonus added by each well-timed press.</summary>
+        public const float MinigameHitSpeedBonus = 0.25f;
+
+        /// <summary>Timing attempts per sprint: one per 10 points of total Sprint, with a floor of one so a
+        /// green horse still gets a go. Stat 0 and 10 both give 1 attempt; stat 100 gives 10.</summary>
+        public static int MinigameChances(int totalSprint) =>
+            Math.Max(1, Math.Clamp(totalSprint, 0, STAT_MAX) / 10);
+
+        /// <summary>How long the bar takes to cross the track once. Faster horses sweep quicker: every extra
+        /// attempt the stat buys also shaves 50ms off each pass, so 1.30s at stat 0 down to 0.85s at stat 100.
+        /// This keeps a long attempt chain from dragging, but note it also shrinks the hit window in real
+        /// time, since <see cref="MinigameWindowHalf"/> is a fraction of the track rather than a duration.</summary>
+        public static int MinigameSweepMs(int chances) =>
+            Math.Max(500, 1300 - (50 * (chances - 1)));
+
+        /// <summary>Half-width of the hit window, as a fraction of the track. Training (EV) widens it,
+        /// breeding (IV) narrows it: a strong bloodline gives more attempts but demands sharper timing.
+        /// Ranges from 0.020 (IV 50 / EV 0) through 0.054 (20/20) to 0.090 (IV 0 / EV 50).</summary>
+        public static float MinigameWindowHalf(int sprintIV, int sprintEV) =>
+            Math.Clamp(
+                0.050f + (Math.Clamp(sprintEV, 0, EV_MAX) * 0.0008f) - (Math.Clamp(sprintIV, 0, IV_MAX) * 0.0006f),
+                0.020f, 0.090f);
+
         // --- Warrior Energy formula (festival shrine pickup) ---
         public const float WarriorEnergyMinBonus = 1f;
         public const float WarriorEnergyMaxBonus = 5f;

@@ -7,6 +7,9 @@ POTIONS = {
     'IVPotionSpeed':  ((70, 130, 235), (140, 190, 255)),   # blue liquid, highlight
     'IVPotionSprint': ((225, 95, 45),  (255, 170, 110)),   # orange
     'IVPotionJump':   ((80, 185, 90),  (160, 235, 160)),   # green
+    'TrainingPotion': ((160, 80, 210), (215, 165, 250)),   # purple
+    'GallopPotion':   ((235, 175, 45), (255, 225, 140)),   # amber
+    'CoatPotion':     ((225, 85, 155), (255, 170, 215)),   # pink
 }
 
 GLASS = (210, 230, 240, 255)

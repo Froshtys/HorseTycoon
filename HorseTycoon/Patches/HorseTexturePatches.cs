@@ -81,6 +81,10 @@ namespace HorseTycoon.Patches
             }
         }
 
+        /// <summary>Every skin id on the Tycoon.Horse entry in Data/FarmAnimals; "" is the base Roan
+        /// texture. Kept here next to the name/variation table so the two can't drift apart.</summary>
+        internal static readonly string[] AllSkinIds = { "", "BlueRoan", "Dapple", "Bay", "Belgian", "Shire", "Chestnut" };
+
         private static readonly Dictionary<string, int> SkinVariation = new()
         {
             ["Roan"] = 0,

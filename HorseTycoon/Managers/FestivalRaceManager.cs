@@ -1333,6 +1333,11 @@ namespace HorseTycoon
 
         private void TryStartSprint()
         {
+            // SprintMinigameManager replaces this state machine outright when the minigame is enabled.
+            // Standing down here also keeps IsSprinting false, so the two speed bonuses can never stack.
+            if (ModEntry.Config.UseSprintMinigame)
+                return;
+
             if (sprintPhase.Value != SprintPhase.Ready || Game1.player.mount == null)
                 return;
 

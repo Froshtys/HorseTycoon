@@ -176,11 +176,11 @@ namespace HorseTycoon
                 return false;
             }
 
-            // IV potion: player holds a potion while not mounted, so give it to the linked barn animal.
-            if (Game1.player.mount != __instance && IVPotionManager.IsIVPotion(Game1.player.CurrentItem))
+            // Potions: player holds one while not mounted, so give it to the linked barn animal.
+            if (Game1.player.mount != __instance)
             {
                 FarmAnimal? potionTarget = HorseHelper.GetFarmAnimalForHorse(__instance);
-                if (potionTarget != null && IVPotionManager.TryApplyPotion(potionTarget, Game1.player))
+                if (potionTarget != null && TryApplyAnyPotion(potionTarget, Game1.player))
                     return false;
             }
 
@@ -250,15 +250,23 @@ namespace HorseTycoon
             __result += totalPoints / 10 * 500;
         }
 
-        /// <summary>Clicking a barn horse while holding an IV potion gives it the potion instead of petting.</summary>
+        /// <summary>Clicking a barn horse while holding a potion gives it the potion instead of petting.</summary>
         public static bool Pet_Prefix(FarmAnimal __instance, Farmer who, bool is_auto_pet)
         {
-            if (is_auto_pet)
+            if (is_auto_pet || who == null)
                 return true;
-            if (IVPotionManager.IsIVPotion(who?.CurrentItem) && IVPotionManager.TryApplyPotion(__instance, who!))
-                return false;
-            return true;
+            return !TryApplyAnyPotion(__instance, who);
         }
+
+        /// <summary>
+        /// Offers the farmer's held item to each horse potion in turn. Every TryApplyPotion returns
+        /// false for an item it doesn't own, so at most one of them acts. Returns true when the click
+        /// was consumed by a potion and the caller should skip its vanilla behavior.
+        /// </summary>
+        private static bool TryApplyAnyPotion(FarmAnimal animal, Farmer who) =>
+            IVPotionManager.TryApplyPotion(animal, who)
+            || TrainingPotionManager.TryApplyPotion(animal, who)
+            || CoatPotionManager.TryApplyPotion(animal, who);
 
         public static void Building_BeforeDemolish_Prefix(Building __instance)
         {

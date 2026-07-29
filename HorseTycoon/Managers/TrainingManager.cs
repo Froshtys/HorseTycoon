@@ -20,6 +20,11 @@ namespace HorseTycoon
         private const int JumpsPerDayBase = 40;
         private const int DistanceTilesPerDayBase = 2000;
 
+        // Set to the current day by the training potion (see TrainingPotionManager): while it's today's
+        // date, every stat's daily requirement for that horse is halved.
+        private const string TrainingBoostDateKey = "Froshty.HorseTycoon/TrainingBoostDate";
+        private const double TrainingBoostMultiplier = 0.5;
+
         // Multiplayer: all stat mutations are applied authoritatively on the host so that the single
         // backing FarmAnimal's modData (counters + EVs) is owned/persisted by one peer. Farmhands report
         // their riding contributions to the host, which accumulates everyone's progress for the day.
@@ -28,6 +33,10 @@ namespace HorseTycoon
         // Host -> rider: tells the player who earned the stat gain to show the level-up notification,
         // since the host applies the mutation but the rider (often a farmhand) needs to see the result.
         private const string MsgTrainingNotify = "HorseTycoon.TrainingNotify";
+
+        // Farmhand -> host: a training potion was given to a horse. The requirement checks all run on the
+        // host, so the host has to be the one to stamp the boost onto the horse's modData.
+        private const string MsgTrainingBoost = "HorseTycoon.TrainingBoost";
 
         // Kind tags carried in the training message.
         private const string KindJump = "Jump";
@@ -43,6 +52,9 @@ namespace HorseTycoon
         /// <param name="HorseName">Display name of the horse that improved.</param>
         /// <param name="StatName">The stat that improved (Jump/Speed/Sprint).</param>
         private record TrainingNotifyMessage(string HorseName, string StatName);
+
+        /// <param name="HorseId">The backing FarmAnimal's id of the horse that drank a training potion.</param>
+        private record TrainingBoostMessage(long HorseId);
 
         // Farmhands batch distance and flush it to the host periodically rather than messaging every tick.
         private const float DistanceFlushChunk = 64f * 5f; // 5 tiles
@@ -129,7 +141,7 @@ namespace HorseTycoon
 
             stats.DailyJumps += jumps;
 
-            if (stats.DailyJumps >= Math.Max(5, JumpsPerDayBase * (stats.TotalJump * 0.01)))
+            if (stats.DailyJumps >= JumpsNeeded(horse, stats))
             {
                 if (ApplyTraining(horse, "Jump", riderId))
                 {
@@ -149,7 +161,7 @@ namespace HorseTycoon
 
             stats.DailySprints += sprints;
 
-            if (stats.DailySprints >= Math.Max(2, SprintsPerDayBase * (stats.TotalSprint * 0.01)))
+            if (stats.DailySprints >= SprintsNeeded(horse, stats))
             {
                 if (ApplyTraining(horse, "Sprint", riderId))
                 {
@@ -169,8 +181,7 @@ namespace HorseTycoon
 
             stats.DailyDistance += distanceTraveled;
 
-            // DistanceTilesPerDayNeeded tiles * 64 pixels per tile
-            if (stats.DailyDistance >= Math.Max(200, DistanceTilesPerDayBase * (stats.TotalSpeed * 0.01)) * 64)
+            if (stats.DailyDistance >= DistanceNeeded(horse, stats))
             {
                 if (ApplyTraining(horse, "Speed", riderId))
                 {
@@ -178,6 +189,48 @@ namespace HorseTycoon
                     stats.DailyDistance = 0f;
                 }
             }
+        }
+
+        // ----- Daily requirements -----
+        // Each stat's requirement scales with the horse's current total in that stat (the better the
+        // horse, the more work a further point costs), with a floor for untrained horses. A horse that
+        // drank a training potion today only needs half of it in every stat.
+
+        private static double JumpsNeeded(FarmAnimal horse, HorseStats stats) =>
+            Math.Max(5, JumpsPerDayBase * (stats.TotalJump * 0.01)) * BoostMultiplier(horse);
+
+        private static double SprintsNeeded(FarmAnimal horse, HorseStats stats) =>
+            Math.Max(2, SprintsPerDayBase * (stats.TotalSprint * 0.01)) * BoostMultiplier(horse);
+
+        /// <summary>Distance requirement in pixels (tiles needed * 64 pixels per tile).</summary>
+        private static double DistanceNeeded(FarmAnimal horse, HorseStats stats) =>
+            Math.Max(200, DistanceTilesPerDayBase * (stats.TotalSpeed * 0.01)) * 64 * BoostMultiplier(horse);
+
+        private static double BoostMultiplier(FarmAnimal horse) =>
+            HasTrainingBoost(horse) ? TrainingBoostMultiplier : 1.0;
+
+        /// <summary>Whether this horse is under the training potion's effect today.</summary>
+        public static bool HasTrainingBoost(FarmAnimal horse) =>
+            horse != null
+            && horse.modData.TryGetValue(TrainingBoostDateKey, out string date)
+            && date == Game1.Date.TotalDays.ToString();
+
+        /// <summary>Halves this horse's daily training requirements for the rest of today.</summary>
+        public static void GrantTrainingBoost(FarmAnimal horse)
+        {
+            if (Context.IsMainPlayer)
+            {
+                horse.modData[TrainingBoostDateKey] = Game1.Date.TotalDays.ToString();
+                return;
+            }
+
+            // Stamp it locally too so this player's own UI/checks agree, then let the host apply the
+            // authoritative copy that the requirement checks actually read.
+            horse.modData[TrainingBoostDateKey] = Game1.Date.TotalDays.ToString();
+            Manager.Helper.Multiplayer.SendMessage(
+                new TrainingBoostMessage(horse.myID.Value),
+                MsgTrainingBoost,
+                modIDs: new[] { Manager.Helper.ModRegistry.ModID });
         }
 
         private static void ReportToHost(long horseId, string kind, float amount)
@@ -201,7 +254,17 @@ namespace HorseTycoon
             }
 
             // Only the host owns the backing FarmAnimal's data; SendMessage never delivers to the sender.
-            if (!Context.IsMainPlayer || e.Type != MsgTraining) return;
+            if (!Context.IsMainPlayer) return;
+
+            if (e.Type == MsgTrainingBoost)
+            {
+                FarmAnimal? boosted = HorseHelper.GetHiddenHorseById(e.ReadAs<TrainingBoostMessage>().HorseId);
+                if (boosted != null)
+                    boosted.modData[TrainingBoostDateKey] = Game1.Date.TotalDays.ToString();
+                return;
+            }
+
+            if (e.Type != MsgTraining) return;
 
             var msg = e.ReadAs<TrainingMessage>();
             if (msg.Day != Game1.Date.TotalDays) return;

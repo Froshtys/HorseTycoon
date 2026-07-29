@@ -15,7 +15,10 @@ namespace HorseTycoon
         public readonly IModHelper Helper;
         public readonly IMonitor Monitor;
         public readonly IManifest Manifest;
-        public ModConfig Config = null!;
+
+        /// <summary>The shared config instance. ModEntry reads it and owns the canonical reference so the
+        /// sprint minigame and the movement-speed patch can reach it too; this is the same object.</summary>
+        public ModConfig Config { get => ModEntry.Config; set => ModEntry.Config = value; }
 
         public Texture2D? HorseShadow { get; set; }
 
@@ -67,7 +70,6 @@ namespace HorseTycoon
         public void Initialize()
         {
             this.HorseShadow = this.Helper.ModContent.Load<Texture2D>(Path.Combine("assets", "horse_shadow.png"));
-            this.Config = this.Helper.ReadConfig<ModConfig>();
 
             // Hook Events
             this.Helper.Events.Input.ButtonPressed += OnButtonPressed;
@@ -195,6 +197,22 @@ namespace HorseTycoon
                 mod: this.Manifest,
                 reset: () => Config = new ModConfig(),
                 save: () => this.Helper.WriteConfig(Config)
+            );
+
+            configMenu.AddBoolOption(
+                mod: this.Manifest,
+                getValue: () => Config.UseSprintMinigame,
+                setValue: value => Config.UseSprintMinigame = value,
+                name: () => "Sprint minigame",
+                tooltip: () => "On: holding a sprint opens a timing bar, and every well-timed press stacks more speed.\nOff: the original flat sprint buff based on the horse's Sprint stat."
+            );
+
+            configMenu.AddKeybind(
+                mod: this.Manifest,
+                getValue: () => Config.SprintModeToggleButton,
+                setValue: value => Config.SprintModeToggleButton = value,
+                name: () => "Toggle sprint mode",
+                tooltip: () => "Debug key that flips the sprint minigame on or off without leaving the game."
             );
         }
 

@@ -13,7 +13,7 @@
 		{
 			"LogName": "IV potion textures",
 			"Action": "Load",
-			"Target": "{{ModId}}/IVPotionSpeed, {{ModId}}/IVPotionSprint, {{ModId}}/IVPotionJump",
+			"Target": "{{ModId}}/IVPotionSpeed, {{ModId}}/IVPotionSprint, {{ModId}}/IVPotionJump, {{ModId}}/TrainingPotion, {{ModId}}/GallopPotion, {{ModId}}/CoatPotion",
 			"FromFile": "assets/potions/{{TargetWithoutPath}}.png"
 		},
 		{
@@ -65,6 +65,64 @@
 					"ExcludeFromFishingCollection": true,
 					"ExcludeFromShippingCollection": true,
 					"ExcludeFromRandomSale": true
+				},
+				/* Not an IV potion: a one-day training aid, handled by TrainingPotionManager. */
+				"HorseTycoon.TrainingPotion": {
+					"Name": "Training Potion",
+					"DisplayName": "{{i18n:TrainingPotion_Name}}",
+					"Description": "{{i18n:TrainingPotion_Description}}",
+					"Type": "Basic",
+					"Category": -999,
+					"Price": 500,
+					"Texture": "{{ModId}}/TrainingPotion",
+					"SpriteIndex": 0,
+					"Edibility": -300,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true
+				},
+				/* The one potion the player drinks themselves: +2 Speed for 360 (same duration as
+				   Triple Shot Espresso, which gives half as much). Pure data — the vanilla food-buff
+				   system handles it, so there's no C# hook. */
+				"HorseTycoon.GallopPotion": {
+					"Name": "Gallop Potion",
+					"DisplayName": "{{i18n:GallopPotion_Name}}",
+					"Description": "{{i18n:GallopPotion_Description}}",
+					"Type": "Cooking",
+					"Category": -7,
+					"Price": 250,
+					"Texture": "{{ModId}}/GallopPotion",
+					"SpriteIndex": 0,
+					"Edibility": 3,
+					"IsDrink": true,
+					"Buffs": [
+						{
+							"Id": "Drink",
+							"Duration": 360,
+							"CustomAttributes": { "Speed": 2 }
+						}
+					],
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true
+				},
+				/* Cosmetic only: re-rolls the horse's coat to a different one of the seven.
+				   Handled by CoatPotionManager. */
+				"HorseTycoon.CoatPotion": {
+					"Name": "Coat Potion",
+					"DisplayName": "{{i18n:CoatPotion_Name}}",
+					"Description": "{{i18n:CoatPotion_Description}}",
+					"Type": "Basic",
+					"Category": -999,
+					"Price": 1000,
+					"Texture": "{{ModId}}/CoatPotion",
+					"SpriteIndex": 0,
+					"Edibility": -300,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true
 				}
 			}
 		},
@@ -103,6 +161,28 @@
 						/* Exactly one of the three potions appears per festival day: SYNCED_CHOICE
 						   rolls one synced 0-2 value per day for the shared key, so the conditions
 						   below are mutually exclusive and identical for every player. */
+						/* Always stocked, unlike the IV potions: fixed count per player, per festival. */
+						{
+							"Id": "GallopPotion",
+							"ItemId": "(O)HorseTycoon.GallopPotion",
+							"Price": 500,
+							"AvailableStock": 5,
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "CoatPotion",
+							"ItemId": "(O)HorseTycoon.CoatPotion",
+							"Price": 2000,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
+						{
+							"Id": "TrainingPotion",
+							"ItemId": "(O)HorseTycoon.TrainingPotion",
+							"Price": 1000,
+							"AvailableStock": 3,
+							"AvailableStockLimit": "Player"
+						},
 						{
 							"Id": "IVPotionSpeed",
 							"ItemId": "(O)HorseTycoon.IVPotionSpeed",
