@@ -101,6 +101,11 @@ namespace HorseTycoon
             FarmAnimalPatches.Apply(harmony);
             PregnancyPatches.Apply(harmony);
 
+            // Per-player stable ownership (Horse Flute), plus the patch that stops vanilla renaming
+            // every stable horse to its owner's horseName each morning.
+            StableOwnershipPatches.Apply(harmony);
+            StableOwnershipManager.Initialize(helper, this.Monitor);
+
             MenuPatches.Initialize(helper, this.Monitor);
             MenuPatches.Apply(harmony);
 
@@ -180,6 +185,7 @@ namespace HorseTycoon
                         this.Monitor.Log($"Clear overnight clone horse", LogLevel.Debug);
                     }
                     stable.HorseId = Guid.Empty;
+                    StableOwnershipManager.SyncHorseNameForStableOwner(stable);
                     continue;
                 }
 
@@ -208,32 +214,56 @@ namespace HorseTycoon
                 // SaveGameMenu.update are the only callers of Game1.PollForEndOfNewDaySync, the host would
                 // never send newDaySync.finish() — every farmhand then sits on a black screen forever with
                 // nothing in the log, while the host's own day starts normally.
-                this.pendingHorseNamings.Enqueue(horse);
+                this.pendingHorseNamings.Enqueue(stable);
             }
         }
 
-        /// <summary>Horses converted from a finished stable that still need their naming prompt. Drained by
-        /// <see cref="OpenPendingHorseNaming"/> once the player is actually free (see ConvertUnassignedStableHorses).</summary>
-        private readonly Queue<Horse> pendingHorseNamings = new();
+        /// <summary>Stables whose new horse still needs its naming prompt. Drained by
+        /// <see cref="OpenPendingHorseNaming"/> once the player is actually free (see ConvertUnassignedStableHorses).
+        /// <para>The stable is queued rather than the Horse itself: the prompt opens some ticks later, and
+        /// anything that respawns the stable's character in between (Stable.dayUpdate, grabHorse) would leave
+        /// us renaming a discarded object while the barn horse silently kept its default name.</para></summary>
+        private readonly Queue<Stable> pendingHorseNamings = new();
 
-        /// <summary>Opens the naming prompt for one queued horse, but only once the day transition is fully
-        /// over and no other menu is up, so we can never replace an end-of-night or event menu.</summary>
+        /// <summary>Opens the naming prompt for one queued stable's horse, but only once the day transition
+        /// is fully over and no other menu is up, so we can never replace an end-of-night or event menu.
+        /// <para>Held back until the player steps outside as well: the stable and the horse are out there, so
+        /// the prompt lands when they can see what they're naming rather than on the wake-up frame.</para></summary>
         private void OpenPendingHorseNaming()
         {
-            if (this.pendingHorseNamings.Count == 0 || !HorseHelper.CanOpenMenu)
+            if (this.pendingHorseNamings.Count == 0
+                || !HorseHelper.CanOpenMenu
+                || Game1.currentLocation is StardewValley.Locations.FarmHouse) // Cabin extends FarmHouse
                 return;
 
-            Horse horse = this.pendingHorseNamings.Dequeue();
-            string defaultName = horse.Name;
+            Stable stable = this.pendingHorseNamings.Dequeue();
+
+            // Both resolved fresh, at prompt time. The barn horse is the one that actually matters (it
+            // carries the stats and shows in the animal list), so a missing Horse character isn't fatal.
+            Horse? horse = stable.getStableHorse();
+            FarmAnimal? farmAnimal =
+                stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string idStr)
+                && long.TryParse(idStr, out long animalId)
+                    ? HorseHelper.GetHiddenHorseById(animalId)
+                    : null;
+
+            if (horse == null && farmAnimal == null)
+            {
+                this.Monitor.Log($"Skipping the naming prompt for stable {stable.id}: its horse is gone.", LogLevel.Warn);
+                return;
+            }
+
+            string defaultName = !string.IsNullOrEmpty(horse?.Name) ? horse!.Name : farmAnimal?.Name ?? "Horse";
 
             Game1.showGlobalMessage($"Your new Stable is ready.");
             Game1.activeClickableMenu = new NamingMenu(
                 processedName =>
                 {
-                    horse.Name = processedName;
-                    horse.displayName = processedName;
-
-                    FarmAnimal? farmAnimal = HorseHelper.GetFarmAnimalForHorse(horse);
+                    if (horse != null)
+                    {
+                        horse.Name = processedName;
+                        horse.displayName = processedName;
+                    }
                     if (farmAnimal != null)
                     {
                         farmAnimal.Name = processedName;
@@ -569,7 +599,19 @@ namespace HorseTycoon
                     HorseHelper.SwapStableHorse(selectedHorse, targetStable, this.Monitor, this.Helper);
                 }
 
+                // The stable still belongs to whoever owned it; only the horse in it changed, so the
+                // owner's horseName (and therefore what their flute calls) has to follow.
+                StableOwnershipManager.SyncHorseNameForStableOwner(targetStable);
+                if (targetStable.owner.Value == Game1.player.UniqueMultiplayerID)
+                    StableOwnershipManager.SyncHorseNameForLocalPlayer();
+
                 Game1.exitActiveMenu();
+            },
+            onClaim: () =>
+            {
+                string horseName = targetStable.getStableHorse()?.Name ?? "your horse";
+                StableOwnershipManager.RequestStableClaim(targetStable, onlyIfUnowned: false);
+                Game1.showGlobalMessage($"This is now your stable. The Horse Flute will call {horseName}.");
             });
 
             this.Helper.Input.Suppress(SButton.MouseLeft);

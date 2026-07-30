@@ -4,8 +4,9 @@ namespace HorseTycoon
 {
     /// <summary>
     /// Apple treats. Handing a horse an apple grants exactly what a petting does, on top of the day's
-    /// petting — but only twice per week per horse; after that the horse has had its fill and the apple
-    /// stays in the player's inventory. Offered from both horse-interaction points, so it works whether
+    /// petting — but only twice per week per horse, and never twice in the same day, so the pair has to be
+    /// spread out. Over either limit the horse says so and the apple stays in the player's inventory
+    /// (each limit has its own message). Offered from both horse-interaction points, so it works whether
     /// the horse is a visible barn animal (FarmAnimal.pet prefix) or a managed stable horse the player
     /// isn't riding (Horse.checkAction prefix).
     /// </summary>
@@ -19,6 +20,7 @@ namespace HorseTycoon
 
         private const string TreatWeekKey = "Froshty.HorseTycoon/AppleTreatWeek";
         private const string TreatCountKey = "Froshty.HorseTycoon/AppleTreatCount";
+        private const string TreatDayKey = "Froshty.HorseTycoon/AppleTreatDay";
 
         public static bool IsApple(Item? item) => item?.QualifiedItemId == AppleQualifiedId;
 
@@ -39,11 +41,18 @@ namespace HorseTycoon
                 : 0;
         }
 
-        public static bool CanTreat(FarmAnimal horse) => TreatsThisWeek(horse) < TreatsPerWeek;
+        /// <summary>Whether this horse has already had its apple today. The weekly pair has to be spread
+        /// across two days — no doubling up in one.</summary>
+        public static bool WasTreatedToday(FarmAnimal horse) =>
+            horse.modData.TryGetValue(TreatDayKey, out string day) && day == Game1.Date.TotalDays.ToString();
+
+        public static bool CanTreat(FarmAnimal horse) =>
+            TreatsThisWeek(horse) < TreatsPerWeek && !WasTreatedToday(horse);
 
         /// <summary>
         /// Feeds the apple the farmer is holding to a horse. Returns true when the interaction was handled
-        /// (including the "already had its treats" case, which shows a message without consuming the apple);
+        /// (including the "already had its treats" case, the one path that still shows a message, since
+        /// nothing visible happens otherwise and the apple isn't consumed);
         /// false when the held item isn't an apple or the animal isn't a horse, so the caller falls through
         /// to vanilla behavior.
         /// </summary>
@@ -61,8 +70,15 @@ namespace HorseTycoon
                 return true;
             }
 
+            if (WasTreatedToday(animal))
+            {
+                Game1.drawObjectDialogue($"{animal.displayName} has already had an apple today.");
+                return true;
+            }
+
             animal.modData[TreatWeekKey] = CurrentWeek.ToString();
             animal.modData[TreatCountKey] = (alreadyFed + 1).ToString();
+            animal.modData[TreatDayKey] = Game1.Date.TotalDays.ToString();
 
             // Worth exactly one petting, and it doesn't set wasPet — so an apple is a second petting for the
             // day rather than a replacement for it.
@@ -72,14 +88,10 @@ namespace HorseTycoon
             (emoteOn ?? animal).doEmote(20); // heart
             Game1.playSound("eat");
 
-            int treatsLeft = TreatsPerWeek - (alreadyFed + 1);
-            Game1.drawObjectDialogue(treatsLeft > 0
-                ? $"{animal.displayName} crunches the apple happily."
-                : $"{animal.displayName} crunches the apple happily... and looks like it could go for another next week.");
-
+            // No dialogue box on a successful treat — the heart and the crunch say it without interrupting.
             Logger.LogVerbose($"Apple treat given to '{animal.displayName}' ({animal.myID.Value}): " +
                 $"friendship={animal.friendshipTowardFarmer.Value}, happiness={animal.happiness.Value}, " +
-                $"treat {alreadyFed + 1}/{TreatsPerWeek} of week {CurrentWeek}.");
+                $"treat {alreadyFed + 1}/{TreatsPerWeek} of week {CurrentWeek}, day {Game1.Date.TotalDays}.");
             return true;
         }
     }

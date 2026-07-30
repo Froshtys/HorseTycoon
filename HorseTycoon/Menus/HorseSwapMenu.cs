@@ -26,15 +26,46 @@ namespace HorseTycoon.Menus
 
         private readonly ClickableTextureComponent? returnToBarnButton;
 
+        /// <summary>Makes this stable the clicking player's, so their Horse Flute summons its horse.
+        /// Null when the stable is empty or already theirs. Sits left of the title banner, mirroring
+        /// <see cref="returnToBarnButton"/> on the right.</summary>
+        private readonly ClickableTextureComponent? claimButton;
+        private readonly Action? OnClaim;
+
         protected override int ItemCount => this.Animals.Count;
         protected override string Title => "Choose stable horse";
 
-        public HorseSwapMenu(List<FarmAnimal> animals, Stable stable, FarmAnimal? activeHorse, IModHelper helper, Action<FarmAnimal?> onSelected)
+        public HorseSwapMenu(List<FarmAnimal> animals, Stable stable, FarmAnimal? activeHorse, IModHelper helper, Action<FarmAnimal?> onSelected, Action? onClaim = null)
         {
             this.Animals = animals;
             this.OnSelected = onSelected;
             this.TargetStable = stable;
             this.ActiveFarmHorse = activeHorse;
+            this.OnClaim = onClaim;
+
+            if (onClaim != null && activeHorse != null && stable.owner.Value != Game1.player.UniqueMultiplayerID)
+            {
+                Texture2D fluteIconTexture = helper.ModContent.Load<Texture2D>("assets/horse_flute_icon.png");
+                const int baseSize = 16;
+                const float targetScale = 4f;
+
+                this.claimButton = new ClickableTextureComponent(
+                    name: "ClaimStable",
+                    // Sits a little further out than the barn icon's mirror position (which would be +46):
+                    // the title banner grows from the centre, so the left side runs tighter against it.
+                    bounds: new Rectangle(this.xPositionOnScreen + 32, this.yPositionOnScreen, (int)(baseSize * targetScale), (int)(baseSize * targetScale)),
+                    label: null,
+                    hoverText: "Make this your stable",
+                    texture: fluteIconTexture,
+                    sourceRect: new Rectangle(0, 0, baseSize, baseSize),
+                    scale: targetScale,
+                    drawShadow: true
+                )
+                {
+                    myID = 201,
+                    baseScale = targetScale
+                };
+            }
 
             if (this.ActiveFarmHorse != null)
             {
@@ -64,6 +95,19 @@ namespace HorseTycoon.Menus
 
         protected override void HoverExtras(int x, int y)
         {
+            if (this.claimButton != null)
+            {
+                if (this.claimButton.containsPoint(x, y))
+                {
+                    this.claimButton.scale = Math.Min(this.claimButton.scale + 0.05f, this.claimButton.baseScale + 0.5f);
+                    this.hoverText = this.claimButton.hoverText;
+                }
+                else
+                {
+                    this.claimButton.scale = Math.Max(this.claimButton.scale - 0.05f, this.claimButton.baseScale);
+                }
+            }
+
             if (this.returnToBarnButton == null)
                 return;
 
@@ -86,6 +130,14 @@ namespace HorseTycoon.Menus
 
         protected override bool TryHandleExtraClick(int x, int y)
         {
+            if (this.claimButton != null && this.claimButton.containsPoint(x, y))
+            {
+                Game1.playSound("newArtifact");
+                this.OnClaim!();
+                Game1.exitActiveMenu();
+                return true;
+            }
+
             if (this.returnToBarnButton == null || !this.returnToBarnButton.containsPoint(x, y))
                 return false;
 
@@ -165,6 +217,7 @@ namespace HorseTycoon.Menus
         protected override void DrawExtras(SpriteBatch b)
         {
             this.returnToBarnButton?.draw(b);
+            this.claimButton?.draw(b);
         }
     }
 }

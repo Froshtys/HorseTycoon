@@ -136,6 +136,9 @@ namespace HorseTycoon
                                 stableHorse.currentLocation?.characters.Remove(stableHorse);
                             }
                             stable.HorseId = Guid.Empty;
+                            // Stable stays theirs, but it's empty now, so their flute must report
+                            // "no horse" rather than summoning the animal that was just sold.
+                            StableOwnershipManager.SyncHorseNameForStableOwner(stable);
                             break;
                         }
                     }
@@ -187,13 +190,20 @@ namespace HorseTycoon
                     return false;
             }
 
-            // Prevent the vanilla per-player naming dialog by ensuring horseName is never empty
-            // for a stable already managed by this mod.
-            if (string.IsNullOrEmpty(Game1.player.horseName.Value))
-                Game1.player.horseName.Value = __instance.Name;
-
             // On mount (not dismount), pet the horse if it hasn't been pet today.
             bool isMounting = Game1.player.mount != __instance;
+
+            // Riding a stable horse while owning no stable of your own claims it, so the Horse Flute has
+            // something to summon. Silent by design — the deliberate claim is the swap menu's button.
+            // Checked before the petting block below, which returns early on the first interaction.
+            if (isMounting
+                && stable.owner.Value != Game1.player.UniqueMultiplayerID
+                && StableOwnershipManager.GetOwnedStable(Game1.player.UniqueMultiplayerID) == null)
+            {
+                Logger.LogVerbose($"{Game1.player.Name} owns no stable; claiming '{__instance.Name}'s.");
+                StableOwnershipManager.RequestStableClaim(stable, onlyIfUnowned: true);
+            }
+
             if (isMounting)
             {
                 FarmAnimal? animal = HorseHelper.GetFarmAnimalForHorse(__instance);
