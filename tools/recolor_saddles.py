@@ -10,6 +10,7 @@ COLORS = {
     'Orange':   (255, 140,   0),
     'Teal':     (  0, 160, 150),
     'Lavender': (180, 130, 215),
+    'Green':    ( 62, 142,  66),
 }
 
 RAINBOW_COLORS = [

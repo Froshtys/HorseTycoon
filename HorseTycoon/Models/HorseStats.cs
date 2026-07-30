@@ -49,7 +49,17 @@ namespace HorseTycoon.Models
             }
         }
 
-        public float SpeedBoost { get { return this.TotalSpeed / 40f; } }
+        /// <summary>How much additive movement speed one point of the Speed stat is worth. Anything that
+        /// wants to be priced "in skill points" (see <see cref="CarrotSpeedBonus"/>) should use this.</summary>
+        public const float SpeedPerStatPoint = 1f / 40f;
+
+        public float SpeedBoost { get { return this.TotalSpeed * SpeedPerStatPoint; } }
+
+        /// <summary>Race speed bonus for a horse that ate a Carrot today (vanilla's own feeding, done at the
+        /// stable before setting off): exactly one Speed stat point's worth, and applied alongside
+        /// <see cref="SpeedBoost"/> (i.e. before the race's overall speed penalty) so it really is worth the
+        /// same as training that point.</summary>
+        public const float CarrotSpeedBonus = SpeedPerStatPoint;
 
         // --- Sprint (Total Max 100) ---
         public int SprintIV { get => GetStat(SprintIVKey, isIV: true); set => SetStat(SprintIVKey, value, isIV: true); }
@@ -84,6 +94,11 @@ namespace HorseTycoon.Models
         /// green horse still gets a go. Stat 0 and 10 both give 1 attempt; stat 100 gives 10.</summary>
         public static int MinigameChances(int totalSprint) =>
             Math.Max(1, Math.Clamp(totalSprint, 0, STAT_MAX) / 10);
+
+        /// <summary>At or above this total Sprint, a rider who never touches the meter loses the coast at the
+        /// end of the sprint. High-stat horses get so many attempts that an unplayed sprint drags on, and
+        /// there's no reason to pay out the bonus second for not engaging with it.</summary>
+        public const int MinigameNoCoastMinSprint = 40;
 
         /// <summary>How long the bar takes to cross the track once. Faster horses sweep quicker: every extra
         /// attempt the stat buys also shaves 50ms off each pass, so 1.30s at stat 0 down to 0.85s at stat 100.

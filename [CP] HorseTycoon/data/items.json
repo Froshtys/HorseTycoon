@@ -97,6 +97,22 @@
 		}
 	}},
 	{
+	"LogName": "Item Data Saddle Green",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleGreen": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleGreen_Description}}",
+		"DisplayName": "{{i18n:SaddleGreen_Name}}",
+		"Name": "Green Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleGreen",
+		"Type": "Basic"
+		}
+	}},
+	{
 	"LogName": "Item Data Saddle Ice",
 	"Action": "EditData",
 	"Target": "Data/Objects",

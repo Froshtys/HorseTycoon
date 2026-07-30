@@ -176,11 +176,14 @@ namespace HorseTycoon
                 return false;
             }
 
-            // Potions: player holds one while not mounted, so give it to the linked barn animal.
+            // Potions and apple treats: player holds one while not mounted, so give it to the linked barn
+            // animal. The heart emotes on the visible Horse, since the backing FarmAnimal is hidden.
             if (Game1.player.mount != __instance)
             {
-                FarmAnimal? potionTarget = HorseHelper.GetFarmAnimalForHorse(__instance);
-                if (potionTarget != null && TryApplyAnyPotion(potionTarget, Game1.player))
+                FarmAnimal? treatTarget = HorseHelper.GetFarmAnimalForHorse(__instance);
+                if (treatTarget != null
+                    && (TryApplyAnyPotion(treatTarget, Game1.player)
+                        || AppleTreatManager.TryFeedApple(treatTarget, Game1.player, __instance)))
                     return false;
             }
 
@@ -214,6 +217,15 @@ namespace HorseTycoon
         private static void ApplyPetting(FarmAnimal animal)
         {
             animal.wasPet.Value = true;
+            ApplyPettingBonus(animal);
+        }
+
+        /// <summary>
+        /// The friendship and happiness half of a petting, without marking the animal as pet for the day.
+        /// Apple treats grant exactly this, so a treat is worth one extra petting on top of the daily one.
+        /// </summary>
+        public static void ApplyPettingBonus(FarmAnimal animal)
+        {
             animal.friendshipTowardFarmer.Value = Math.Min(1000, animal.friendshipTowardFarmer.Value + 15);
             int happinessDrain = animal.GetAnimalData()?.HappinessDrain ?? 0;
             animal.happiness.Value = (byte)Math.Min(255, animal.happiness.Value + Math.Max(5, 30 + happinessDrain));
@@ -250,12 +262,12 @@ namespace HorseTycoon
             __result += totalPoints / 10 * 500;
         }
 
-        /// <summary>Clicking a barn horse while holding a potion gives it the potion instead of petting.</summary>
+        /// <summary>Clicking a barn horse while holding a potion or an apple gives it that instead of petting.</summary>
         public static bool Pet_Prefix(FarmAnimal __instance, Farmer who, bool is_auto_pet)
         {
             if (is_auto_pet || who == null)
                 return true;
-            return !TryApplyAnyPotion(__instance, who);
+            return !TryApplyAnyPotion(__instance, who) && !AppleTreatManager.TryFeedApple(__instance, who);
         }
 
         /// <summary>

@@ -257,6 +257,10 @@ namespace HorseTycoon
         private static bool SkipHorseWarning = false;
 
         private readonly PerScreen<bool> pamGreeted = new(() => false);
+        // True once this player has answered Vincent's "can I ride your horse?", so he doesn't keep asking.
+        private readonly PerScreen<bool> vincentAsked = new(() => false);
+        // How Vincent's question was answered, for the line he gives on later talks.
+        private readonly PerScreen<bool> vincentSaidYes = new(() => false);
         // True once this player has heard the host's small talk, so later approaches go straight to
         // the "ready to race?" question.
         private readonly PerScreen<bool> starterGreeted = new(() => false);
@@ -333,10 +337,27 @@ namespace HorseTycoon
         private record NpcSpectatorPlacement(string Name, Point Tile, int Direction, bool IsAutoFilled = false);
 
         // These NPCs are only included when at least one attending farmer has met them.
-        // Kent is absent in year 1; Morgan/Scarlett are SVE; TristanLK is East Scarp.
+        // Morgan/Scarlett are SVE; TristanLK is East Scarp.
         private static readonly HashSet<string> MetRequiredNpcNames = new(System.StringComparer.OrdinalIgnoreCase)
         {
             "Kent", "Morgan", "Scarlett", "TristanLK",
+        };
+
+        /// <summary>
+        /// NPCs who don't start attending until a later year: Kent is away at war in year 1, and Morgan
+        /// hasn't come to the valley before year 3.
+        ///
+        /// This has to be enforced here, at spawn time. The vanilla loadActors path already skips Kent in
+        /// year 1 (Data/Characters gives him <c>UnlockConditions: YEAR 2</c>, so he isn't in the world to
+        /// find), but our own placement reader builds NPCs straight from the map tiles with no such check,
+        /// so without this he'd turn up on the Racing and AwardsEvent layers. It can't be expressed in the
+        /// dialogue data either: a <c>&lt;name&gt;_y&lt;N&gt;</c> key rotates lines between years rather
+        /// than gating attendance (see the note in the CP pack's data/spring19.json).
+        /// </summary>
+        private static readonly Dictionary<string, int> FirstAttendingYear = new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            ["Kent"] = 2,
+            ["Morgan"] = 3,
         };
 
         // Holding tiles for borrowed NPCs during the pasture phase (before stall assignment).
@@ -376,11 +397,27 @@ namespace HorseTycoon
         public static bool IsSprinting =>
             Instance != null && RaceRidingActive && Instance.sprintPhase.Value == SprintPhase.Sprinting;
 
+        /// <summary>The horses of every NPC racer currently sprinting, so the sparkle trail can follow them.
+        /// NPC sprints are broadcast by the host, so this reads the same on every client.</summary>
+        public static IEnumerable<Horse> SprintingNpcHorses =>
+            Instance == null
+                ? Enumerable.Empty<Horse>()
+                : Instance.npcRacers
+                    .Where(r => r.NpcSprintPhase == SprintPhase.Sprinting && !r.Finished && r.Horse != null)
+                    .Select(r => r.Horse);
+
         public FestivalRaceManager(IModHelper helper, IMonitor monitor)
         {
             this.Helper = helper;
             this.Monitor = monitor;
             Instance = this;
+
+            // Let [HorseTycoon_PlayerHorseName] in festival dialogue name the horse the player actually
+            // brought. It has to come from here: attendee dialogue is built during Set-Up, by which point
+            // the warp has already dismounted the player, so Farmer.mount is null and only the pre-warp
+            // capture still knows which horse it was.
+            NpcHorseNames.FestivalHorseNameResolver = () =>
+                competitor.Value?.Name ?? lastRiddenMount.Value?.Name;
         }
 
         private const string MsgPastureHorse = "PastureHorse";
@@ -437,10 +474,18 @@ namespace HorseTycoon
             // getMovementSpeed zeroes the horse bonus / addedSpeed during events. Report non-event during
             // our race so riding speed, SpeedBoost stat, and the sprint buff all apply normally.
             // A postfix then applies a 20% speed penalty for the duration of the festival.
+            // Priority.Last so this postfix runs AFTER JumpPatches' one, which adds the horse's SpeedBoost
+            // and the sprint bonus. That ordering matters: the 0.75 penalty below has to scale the bonuses
+            // along with the base speed, otherwise a sprint would be worth a bigger *proportion* of the
+            // rider's speed inside a race than outside one. Both patches sat at default priority before,
+            // which left the order undefined between the two Harmony instances.
             harmony.Patch(
                 original: AccessTools.Method(typeof(Farmer), nameof(Farmer.getMovementSpeed)),
                 transpiler: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Transpiler)),
-                postfix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Postfix)));
+                postfix: new HarmonyMethod(typeof(FestivalRaceManager), nameof(GetMovementSpeed_Postfix))
+                {
+                    priority = Priority.Last
+                });
 
             // Block dismounting during the race. Patching checkAction (which initiates the dismount slide)
             // rather than dismount() prevents the rider getting stuck mid-slide.
@@ -577,6 +622,11 @@ namespace HorseTycoon
             return true;
         }
 
+        /// <summary>True while the local player is racing a horse that ate a carrot today. Feeding is
+        /// entirely vanilla's (hold a Carrot, click your horse at the stable before you set off, which sets
+        /// Horse.ateCarrotToday until the next day start) — we only read the flag.</summary>
+        private static bool HasCarrotBoost => Game1.player.mount?.ateCarrotToday == true;
+
         /// <summary>Used by the getMovementSpeed transpiler: report "not in an event" for the whole time
         /// our festival is running (not just while actively racing), so players can run on foot while
         /// browsing the pasture/shops too. Other vanilla events (weddings, other festivals) are unaffected.</summary>
@@ -593,6 +643,11 @@ namespace HorseTycoon
             // Added before the festival penalty below, so the pickup is worth its full raw speed.
             if (__instance.IsLocalPlayer && HasWarriorEnergy)
                 __result += Instance!.warriorEnergyBonus.Value;
+
+            // The carrot rides alongside the horse's own SpeedBoost (added in JumpPatches, also before the
+            // penalty), which is what makes it worth exactly one Speed stat point rather than more.
+            if (__instance.IsLocalPlayer && IsInAnyRacingPhase && HasCarrotBoost)
+                __result += HorseStats.CarrotSpeedBonus;
 
             // Going is applied AFTER the festival penalty so it lands as a true flat +1/-1 on the speed
             // the rider actually gets. It reads __instance rather than Game1.player because this also
@@ -1413,7 +1468,10 @@ namespace HorseTycoon
             Game1.freezeControls = false;
             Game1.viewportFreeze = false;
 
-            Game1.changeMusicTrack("silence", track_interruptable: true);
+            // MusicContext.Event, not the default: the festival script's own opening track ("event1", the
+            // first field of the set-up command) already owns the Event context, which outranks Default,
+            // so a plain changeMusicTrack here is ignored and event1 keeps playing over the arrival.
+            Game1.changeMusicTrack("silence", track_interruptable: true, MusicContext.Event);
             Game1.displayFarmer = false;
             Game1.player.CanMove = false;
             Game1.player.Halt();
@@ -1681,7 +1739,9 @@ namespace HorseTycoon
             Game1.player.CanMove = false;
             Game1.player.Halt();
             Game1.displayFarmer = false;
-            Game1.changeMusicTrack("silence", track_interruptable: true);
+            // Event context, for the same reason as the arrival: the ceremony track holds it, and a
+            // Default-context request would lose to it.
+            Game1.changeMusicTrack("silence", track_interruptable: true, MusicContext.Event);
 
             // Frames 0 -> 5 is the door swinging shut.
             busDoorSprite.Value = new TemporaryAnimatedSprite("LooseSprites\\Cursors",
@@ -1836,6 +1896,14 @@ namespace HorseTycoon
             activeDef.Value = DefinitionForEvent(festival);
             competitor.Value = null;
             FestivalDefinition def = activeDef.Value!;
+
+            // Free roam starts here, so hand movement back. UpdateBusArrival holds CanMove off for the
+            // whole arrival cinematic and nothing else turns it back on: during an event the player walks
+            // on eventUp/playerControlSequence alone (Game1.UpdateControlInput, Farmer.MovePosition), so a
+            // stuck CanMove=false is invisible until the first full stop — Farmer.setMoving(0x40) clears
+            // Farmer.running directly, and every path that could restore it (Farmer.setRunning, vanilla's
+            // periodic checkForRunButton in Game1.UpdateOther, MaintainRunState) requires CanMove.
+            Game1.player.CanMove = true;
 
             var penSlotsSeed = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays) + 3);
             var slots = (Point[])def.PenSlots.Clone();
@@ -2095,7 +2163,13 @@ namespace HorseTycoon
             if (competitor.Value != null) return;
 
             string skin = AllSkins[Game1.random.Next(AllSkins.Length)];
-            string name = MarnieHorseNames[Game1.random.Next(MarnieHorseNames.Length)];
+            // Skip names an NPC racer is already riding this save, so dialogue naming Marnie's or
+            // Abigail's horse can't accidentally be naming the player's borrowed one too.
+            string[] available = MarnieHorseNames
+                .Except(NpcHorseNames.AllRiderHorseNames, System.StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (available.Length == 0) available = MarnieHorseNames;
+            string name = available[Game1.random.Next(available.Length)];
             var horse = new Horse(System.Guid.NewGuid(), 0, 0);
             horse.Name = name;
             horse.modData[HorseHelper.HorseSkinKey] = skin;
@@ -2316,15 +2390,13 @@ namespace HorseTycoon
             {
                 Point tile = PastureSpawnForSlot(playerSlotCount + i);
                 var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
-                horse.Name = Def.NpcRiderNames[i] + "PenHorse";
-                horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
-                string saddleId = Def.NpcRiderNames[i] switch
-                {
-                    "Abigail" => "HorseTycoon.SaddleLavender",
-                    "Sebastian" => "HorseTycoon.SaddleRed",
-                    _ => "HorseTycoon.SaddleBrown",
-                };
-                HorseHelper.EquipSaddle(horse, saddleId);
+                // Grazing in the pasture is the same animal that lines up in the stalls later, so it
+                // takes its whole identity from NpcHorseNames rather than rolling a look of its own.
+                string riderName = Def.NpcRiderNames[i];
+                NpcHorseNames.HorseIdentity? identity = NpcHorseNames.ForRiderOrNull(riderName);
+                horse.Name = identity?.Name ?? (riderName + "PenHorse");
+                horse.modData[HorseHelper.HorseSkinKey] = identity?.Skin ?? AllSkins[rng.Next(AllSkins.Length)];
+                HorseHelper.EquipSaddle(horse, identity?.SaddleId ?? "HorseTycoon.SaddleBrown");
                 horse.currentLocation = loc;
                 horse.Position = TileToPixels(tile);
                 horse.Halt();
@@ -2467,11 +2539,15 @@ namespace HorseTycoon
             }
 
             // Standing still (or not racing yet): leave whatever animation is already playing alone,
-            // but never leave the sprite with none at all.
+            // but never leave the sprite with none at all. Stand facing the way the rider faces —
+            // Farmer.Halt nulls the mount's animation on every stop, so this branch is what the horse
+            // shows whenever the player lets go, and a fixed side-on idle would spin the horse
+            // sideways under a rider still facing up or down.
             if (mount.Sprite.CurrentAnimation == null)
             {
                 localMountAnimDir.Value = StoppedAnimDir;
-                HorseAnimations.SetIdle(mount);
+                mount.faceDirection(player.FacingDirection);
+                HorseAnimations.SetStanding(mount, player.FacingDirection);
             }
         }
 
@@ -2561,8 +2637,10 @@ namespace HorseTycoon
             NPC? studKeeper = festival?.getActorByName(StudShopActorName);
             NPC? itemKeeper = festival?.getActorByName(ItemShopActorName);
             NPC? bookie = festival?.getActorByName(BookieActorName);
+            NPC? vincent = FacedFestivalActor(festival, "Vincent");
 
             bool nearPam = pam != null;
+            bool nearVincent = vincent != null;
             bool nearStarter = starter != null && IsPlayerFacing(starter);
             bool nearSeller = horseSeller != null && IsPlayerFacingKeeper(horseSeller);
             bool nearStud = studKeeper != null && IsPlayerFacingKeeper(studKeeper);
@@ -2570,10 +2648,19 @@ namespace HorseTycoon
             bool nearBookie = bookie != null && IsPlayerFacingKeeper(bookie);
             bool nearTrader = this.IsFacingDesertTrader();
 
-            if (!nearPam && !nearStarter && !nearSeller && !nearStud && !nearItemShop && !nearBookie && !nearTrader)
+            if (!nearPam && !nearStarter && !nearSeller && !nearStud && !nearItemShop && !nearBookie
+                && !nearTrader && !nearVincent)
                 return;
 
             this.Helper.Input.Suppress(e.Button);
+
+            // Vincent asks to ride your horse. Only during the mingling phase; once the race is on he
+            // falls back to his ordinary spectator line from Data/Festivals.
+            if (nearVincent)
+            {
+                this.AskVincentJockeyQuestion(vincent!);
+                return;
+            }
 
             // The desert merchant's caravan, parked at the away festival.
             if (nearTrader)
@@ -2848,6 +2935,66 @@ namespace HorseTycoon
             return worldPam != null && IsPlayerFacing(worldPam) ? worldPam : null;
         }
 
+        /// <summary>The named festival attendee the player is currently facing, or null. Same two spawn
+        /// routes as <see cref="FacedPam"/>: an event actor from the map's NPC layer, or a plain world
+        /// character drawn because <c>showWorldCharacters</c> is on.</summary>
+        private static NPC? FacedFestivalActor(Event? festival, string name)
+        {
+            NPC? actor = festival?.getActorByName(name);
+            if (actor != null && IsPlayerFacing(actor))
+                return actor;
+
+            NPC? worldNpc = Game1.currentLocation?.getCharacterFromName(name);
+            return worldNpc != null && IsPlayerFacing(worldNpc) ? worldNpc : null;
+        }
+
+        /// <summary>Friendship Vincent gains from being told yes; roughly a quarter-heart, in line with
+        /// vanilla's small festival kindnesses.</summary>
+        private const int VincentJockeyFriendship = 50;
+
+        /// <summary>
+        /// Vincent's "I want to be a jockey! Can I ride your horse?" from the dialogue sheet. It needs code
+        /// rather than a Data/Festivals line because the answer branches: the <c>$q</c>/<c>$r</c> data syntax
+        /// resolves its response text against the NPC's own dialogue file, not the festival asset.
+        ///
+        /// One answer per festival; afterwards he just comments, so the friendship can't be farmed by
+        /// re-clicking him.
+        /// </summary>
+        private void AskVincentJockeyQuestion(NPC vincent)
+        {
+            if (vincentAsked.Value)
+            {
+                string followUp = vincentSaidYes.Value
+                    ? "That was the best!! When I'm big I'm gonna be a REAL jockey.$1"
+                    : "That's okay. I'm gonna watch super closely so I learn how to do it.$1";
+                Game1.DrawDialogue(new Dialogue(vincent, null, followUp));
+                return;
+            }
+
+            Game1.currentLocation.createQuestionDialogue(
+                "I want to be a jockey! Can I ride your horse?",
+                Game1.currentLocation.createYesNoResponses(),
+                (_, answer) =>
+                {
+                    vincentAsked.Value = true;
+                    vincentSaidYes.Value = answer == "Yes";
+
+                    if (vincentSaidYes.Value)
+                    {
+                        // Credit the real villager, not the throwaway event actor, so it sticks after the festival.
+                        NPC? realVincent = Game1.getCharacterFromName("Vincent");
+                        if (realVincent != null)
+                            Game1.player.changeFriendship(VincentJockeyFriendship, realVincent);
+
+                        Game1.DrawDialogue(new Dialogue(vincent, null, "Yayy! I'm gonna go tell mom!$1"));
+                    }
+                    else
+                    {
+                        Game1.DrawDialogue(new Dialogue(vincent, null, "Aww... maybe next year?$2"));
+                    }
+                });
+        }
+
         /// <summary>Is the player facing a stall keeper, either directly or across the counter they stand
         /// behind? Market stalls on the festival map draw a solid counter row in front of the keeper, so the
         /// customer stands two tiles away and <see cref="IsPlayerFacing"/>'s one-tile grab area never reaches
@@ -2986,7 +3133,7 @@ namespace HorseTycoon
             Game1.player.Halt();
             Game1.player.completelyStopAnimatingOrDoingAction();
             Game1.player.Position = TileToPixels(stall);
-            Game1.player.faceDirection(Game1.right);
+            Game1.player.faceDirection(LineupFacing);
 
             // Mount directly without the NetMutex, since the async round-trip can silently fail during festival
             // events. Setting rider + mounting.Value = true is enough; Horse.update finalizes the mount state.
@@ -2995,6 +3142,11 @@ namespace HorseTycoon
             Game1.player.synchronizedJump(6f);
             Game1.player.Halt();
             Game1.player.UsingTool = false;
+
+            // Point the horse down the track too. It arrives from the pasture carrying whatever facing it
+            // grazed in, and Farmer.Halt just above nulls its animation, so without this the stall pose is
+            // whatever EnsureLocalMountAnimation happens to top it up with.
+            PoseHorse(horse, LineupFacing);
 
             this.DespawnPenNpcHorses();
             this.SpawnNpcRacers(loc, System.Math.Max(1, Game1.getOnlineFarmers().Count()));
@@ -3935,6 +4087,15 @@ namespace HorseTycoon
                     }
                 }
 
+            // Remove NPCs who aren't in the valley yet this year.
+            results.RemoveAll(p =>
+            {
+                if (!FirstAttendingYear.TryGetValue(p.Name, out int firstYear) || Game1.year >= firstYear)
+                    return false;
+                Logger.LogVerbose($"ReadNpcPlacements('{layerName}'): skipping '{p.Name}', doesn't attend until year {firstYear} (currently year {Game1.year}).");
+                return true;
+            });
+
             // Remove NPCs that require a prior meeting if no attending farmer has met them yet.
             var farmers = Game1.getAllFarmers().ToList();
             results.RemoveAll(p =>
@@ -4017,6 +4178,32 @@ namespace HorseTycoon
             "FestivalSpectator_Dialog_7",
         };
 
+        /// <summary>
+        /// Reads <paramref name="npcName"/>'s attendee line out of Data/Festivals, preferring a
+        /// <c>&lt;name&gt;_dating</c> variant when the local player is romantically involved with them and
+        /// falling back to the plain key (which is all most NPCs have).
+        ///
+        /// It's what keeps a line that would be too forward coming from an acquaintance — Corwin's flirting —
+        /// to the players it actually fits, without depending on another mod's internal consent flag.
+        ///
+        /// Only mod-spawned spectators route through here; vanilla villagers get their line straight from the
+        /// game's loadActors, so a <c>_dating</c> key on a vanilla NPC would never be read.
+        /// </summary>
+        private static bool TryGetSpectatorDialogue(Event festival, NPC actor, string npcName, out Dialogue dialogue)
+        {
+            bool romantic = Game1.player.friendshipData.TryGetValue(npcName, out Friendship? friendship)
+                && friendship != null
+                && (friendship.IsDating() || friendship.IsEngaged() || friendship.IsMarried());
+
+            if (romantic && festival.TryGetFestivalDialogueForYear(actor, npcName + "_dating", out dialogue))
+            {
+                Logger.LogVerbose($"SpawnSpectators: using the '_dating' festival line for '{npcName}'.");
+                return true;
+            }
+
+            return festival.TryGetFestivalDialogueForYear(actor, npcName, out dialogue);
+        }
+
         private void SpawnSpectators(List<NpcSpectatorPlacement>? placements)
         {
             if (placements == null) return;
@@ -4042,7 +4229,7 @@ namespace HorseTycoon
                     actor.TemporaryDialogue.Push(new Dialogue(actor, "HorseTycoon.spectator." + p.Name, text));
                 }
                 else if (RaceFestival is Event fest
-                      && fest.TryGetFestivalDialogueForYear(actor, p.Name, out Dialogue festivalDialogue))
+                      && TryGetSpectatorDialogue(fest, actor, p.Name, out Dialogue festivalDialogue))
                 {
                     // Named SVE/ES spectators are spawned by us (not the game's loadActors, which the
                     // 144-tile sheet padding deliberately hides them from), so the game never applies
@@ -4172,9 +4359,15 @@ namespace HorseTycoon
 
                 // Create the AI horse in the stall.
                 var horse = new Horse(System.Guid.NewGuid(), stallTile.X, stallTile.Y);
-                horse.Name = riderName + "RaceHorse";
-                horse.modData[HorseHelper.HorseSkinKey] = AllSkins[rng.Next(AllSkins.Length)];
-                horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
+                // The rider's own horse: same name, coat and tack at every race, so the animal the
+                // dialogue names is the one the player sees on the track (see NpcHorseNames).
+                NpcHorseNames.HorseIdentity? identity = NpcHorseNames.ForRiderOrNull(riderName);
+                horse.Name = identity?.Name ?? (riderName + "RaceHorse");
+                horse.modData[HorseHelper.HorseSkinKey] = identity?.Skin ?? AllSkins[rng.Next(AllSkins.Length)];
+                if (identity != null)
+                    HorseHelper.EquipSaddle(horse, identity.SaddleId);
+                else
+                    horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
                 horse.currentLocation = loc;
                 horse.Position = TileToPixels(stallTile);
                 horse.Halt();
@@ -4786,15 +4979,20 @@ namespace HorseTycoon
             }
         }
 
-        private static void PoseHorseForCeremony(Horse? horse)
+        private static void PoseHorseForCeremony(Horse? horse) => PoseHorse(horse, CeremonyFacing);
+
+        private static void PoseHorse(Horse? horse, int direction)
         {
             if (horse == null)
                 return;
-            if (horse.FacingDirection != CeremonyFacing)
-                horse.faceDirection(CeremonyFacing);
-            if (!HorseAnimations.IsStanding(horse, CeremonyFacing))
-                HorseAnimations.SetStanding(horse, CeremonyFacing);
+            if (horse.FacingDirection != direction)
+                horse.faceDirection(direction);
+            if (!HorseAnimations.IsStanding(horse, direction))
+                HorseAnimations.SetStanding(horse, direction);
         }
+
+        /// <summary>Which way riders sit in the starting stalls: down the track, toward the gates.</summary>
+        private const int LineupFacing = Game1.right;
 
         private static bool IsGalloppingAnimation(Horse horse, int dir)
         {
@@ -5063,6 +5261,8 @@ namespace HorseTycoon
             suppressFadeTicks = 0;
             disqualified.Value = false;
             pamGreeted.Value = false;
+            vincentAsked.Value = false;
+            vincentSaidYes.Value = false;
             starterGreeted.Value = false;
             showBettingMoneyBox.Value = false;
             betTargetFarmerId.Value = null;

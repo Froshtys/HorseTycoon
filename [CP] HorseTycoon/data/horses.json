@@ -9,7 +9,7 @@
 	{
 		"LogName": "Load tack assets",
 		"Action": "Load",
-		"Target": "{{ModId}}/SaddleBrown, {{ModId}}/SaddleWhite, {{ModId}}/SaddleBlack, {{ModId}}/SaddleRed, {{ModId}}/SaddleOrange, {{ModId}}/SaddleTeal, {{ModId}}/SaddleIce, {{ModId}}/SaddleLavender, {{ModId}}/SaddleRainbow, {{ModId}}/SaddleTrans, {{ModId}}/SaddleLesbian, {{ModId}}/SaddleAce, {{ModId}}/SaddleNonBinary, {{ModId}}/SaddleBisexual",
+		"Target": "{{ModId}}/SaddleBrown, {{ModId}}/SaddleWhite, {{ModId}}/SaddleBlack, {{ModId}}/SaddleRed, {{ModId}}/SaddleOrange, {{ModId}}/SaddleTeal, {{ModId}}/SaddleIce, {{ModId}}/SaddleLavender, {{ModId}}/SaddleRainbow, {{ModId}}/SaddleTrans, {{ModId}}/SaddleLesbian, {{ModId}}/SaddleAce, {{ModId}}/SaddleNonBinary, {{ModId}}/SaddleBisexual, {{ModId}}/SaddleGreen",
 		"FromFile": "assets/tack/{{TargetWithoutPath}}.png"
 		},
 		{

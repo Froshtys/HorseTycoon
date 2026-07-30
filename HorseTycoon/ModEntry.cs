@@ -43,6 +43,10 @@ namespace HorseTycoon
             helper.Events.Display.MenuChanged += this.OnMenuChanged;
             helper.Events.Multiplayer.ModMessageReceived += this.OnModMessageReceived;
 
+            // Dialogue tokens for horse names ([HorseTycoon_NpcHorseName Marnie], [HorseTycoon_PlayerHorseName]),
+            // used by the festival attendee dialogue in the CP pack's data/spring19.json.
+            NpcHorseNames.RegisterTokens();
+
             helper.ConsoleCommands.Add("set_horse_stat",
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
             this.HandleSetStat);
@@ -103,6 +107,10 @@ namespace HorseTycoon
             ThinHorseDrawPatches.ApplyPatches(harmony);
             ThinHorsePatches.ApplyPatches(harmony);
 
+            // Backstop for remote players' horses galloping in place (see RemoteRiderAnimationPatches)
+            RemoteRiderAnimationPatches.Apply(harmony);
+            RemoteRiderAnimationPatches.Initialize(helper);
+
             HorseTexturePatches.Initialize(helper, this.Monitor);
             HorseTexturePatches.Apply(harmony);
 
@@ -119,6 +127,9 @@ namespace HorseTycoon
 
             // Timing-bar sprint, replacing both legacy sprints when ModConfig.UseSprintMinigame is on
             SprintMinigameManager.Initialize(helper, this.Monitor);
+
+            // Sparkle trail under any sprinting horse (player mounts and NPC racers alike)
+            SprintSparkleManager.Initialize(helper);
 
             // Robin-built bus horse trailer (required for away festivals)
             BusTrailerManager.Initialize(helper);
@@ -191,27 +202,50 @@ namespace HorseTycoon
                 horse.displayName = defaultName;
                 HorseHelper.ConvertStableHorseToFarmAnimal(stable, horse, barn, this.Monitor, this.Helper);
 
-                Game1.showGlobalMessage($"Your new Stable is ready.");
-                Game1.activeClickableMenu = new NamingMenu(
-                    processedName =>
-                    {
-                        horse.Name = processedName;
-                        horse.displayName = processedName;
-
-                        FarmAnimal? farmAnimal = HorseHelper.GetFarmAnimalForHorse(horse);
-                        if (farmAnimal != null)
-                        {
-                            farmAnimal.Name = processedName;
-                            farmAnimal.displayName = processedName;
-                        }
-
-                        this.Monitor.Log($"Named new horse '{processedName}'", LogLevel.Info);
-                        Game1.exitActiveMenu();
-                    },
-                    defaultName: defaultName,
-                    title: "Name your new horse:"
-                );
+                // Queued rather than opened here: this runs from DayStarted, which SMAPI raises while the
+                // end-of-night menus (ShippingMenu / SaveGameMenu / LevelUpMenu) can still be on screen.
+                // Assigning activeClickableMenu then destroys that menu, and since ShippingMenu.update and
+                // SaveGameMenu.update are the only callers of Game1.PollForEndOfNewDaySync, the host would
+                // never send newDaySync.finish() — every farmhand then sits on a black screen forever with
+                // nothing in the log, while the host's own day starts normally.
+                this.pendingHorseNamings.Enqueue(horse);
             }
+        }
+
+        /// <summary>Horses converted from a finished stable that still need their naming prompt. Drained by
+        /// <see cref="OpenPendingHorseNaming"/> once the player is actually free (see ConvertUnassignedStableHorses).</summary>
+        private readonly Queue<Horse> pendingHorseNamings = new();
+
+        /// <summary>Opens the naming prompt for one queued horse, but only once the day transition is fully
+        /// over and no other menu is up, so we can never replace an end-of-night or event menu.</summary>
+        private void OpenPendingHorseNaming()
+        {
+            if (this.pendingHorseNamings.Count == 0 || !HorseHelper.CanOpenMenu)
+                return;
+
+            Horse horse = this.pendingHorseNamings.Dequeue();
+            string defaultName = horse.Name;
+
+            Game1.showGlobalMessage($"Your new Stable is ready.");
+            Game1.activeClickableMenu = new NamingMenu(
+                processedName =>
+                {
+                    horse.Name = processedName;
+                    horse.displayName = processedName;
+
+                    FarmAnimal? farmAnimal = HorseHelper.GetFarmAnimalForHorse(horse);
+                    if (farmAnimal != null)
+                    {
+                        farmAnimal.Name = processedName;
+                        farmAnimal.displayName = processedName;
+                    }
+
+                    this.Monitor.Log($"Named new horse '{processedName}'", LogLevel.Info);
+                    Game1.exitActiveMenu();
+                },
+                defaultName: defaultName,
+                title: "Name your new horse:"
+            );
         }
 
         // Farmhand -> host: roll Starter stats for a freshly purchased horse. The host is the only
@@ -342,6 +376,11 @@ namespace HorseTycoon
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
+            // Deferred prompts hold live Horse/FarmAnimal references from the world we just left. Quitting
+            // to title before one opened would otherwise pop it against this save's world.
+            this.pendingHorseNamings.Clear();
+            BreedingManager.ClearPendingDeliveries();
+
             HorseTexturePatches.PreloadTextures();
             HorseHelper.MigrateAtSkinKeys(this.Monitor);
 
@@ -638,6 +677,15 @@ namespace HorseTycoon
 
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
+            // Both queues are filled host-side only, and IsMainPlayer is false for a split-screen farmhand
+            // sharing this process — without it, screen 2 could be the one that satisfies CanOpenMenu first
+            // and get the host's naming prompt.
+            if (Context.IsWorldReady && Context.IsMainPlayer)
+            {
+                this.OpenPendingHorseNaming();
+                BreedingManager.Update();
+            }
+
             // 1. Basic safety checks (Runs every tick)
             if (!Context.IsWorldReady || Game1.player.mount == null)
             {

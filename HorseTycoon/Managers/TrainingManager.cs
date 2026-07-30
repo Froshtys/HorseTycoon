@@ -96,15 +96,19 @@ namespace HorseTycoon
                 ReportToHost(horse.myID.Value, KindJump, 1f);
         }
 
-        public static void ProcessSprint(Horse mount)
+        /// <summary>Credits sprint training. <paramref name="sprints"/> lets a well-played sprint minigame
+        /// count for more than one; see <see cref="SprintMinigameManager"/>.</summary>
+        public static void ProcessSprint(Horse mount, int sprints = 1)
         {
+            if (sprints <= 0) return;
+
             FarmAnimal? horse = HorseHelper.GetFarmAnimalForHorse(mount);
             if (horse == null) return;
 
             if (Context.IsMainPlayer)
-                ApplySprintProgress(horse, 1, Game1.player.UniqueMultiplayerID);
+                ApplySprintProgress(horse, sprints, Game1.player.UniqueMultiplayerID);
             else
-                ReportToHost(horse.myID.Value, KindSprint, 1f);
+                ReportToHost(horse.myID.Value, KindSprint, sprints);
         }
 
         public static void ProcessMovement(Horse mount, float distanceTraveled)

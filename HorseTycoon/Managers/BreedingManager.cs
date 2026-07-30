@@ -86,7 +86,27 @@ namespace HorseTycoon
                 }
             }
 
-            DeliverFoals(dueMares, 0);
+            // Deferred, not delivered here: the naming menu must not open during the day transition.
+            // See HorseHelper.CanOpenMenu for why doing that hangs every farmhand on a black screen.
+            pendingDeliveries.AddRange(dueMares);
+        }
+
+        /// <summary>Mares whose foal is due but whose naming menu is still waiting for a safe moment.</summary>
+        private static readonly List<FarmAnimal> pendingDeliveries = new();
+
+        /// <summary>Drops any undelivered queue, so a prompt can't carry across a save load.</summary>
+        public static void ClearPendingDeliveries() => pendingDeliveries.Clear();
+
+        /// <summary>Host-only per-tick check: delivers any foals queued by <see cref="OnDayStarted"/> once
+        /// the day transition is over and no other menu is up.</summary>
+        public static void Update()
+        {
+            if (pendingDeliveries.Count == 0 || !HorseHelper.CanOpenMenu)
+                return;
+
+            List<FarmAnimal> due = new(pendingDeliveries);
+            pendingDeliveries.Clear();
+            DeliverFoals(due, 0);
         }
 
         /// <summary>Parks the mare at the bottom-left corner of her home barn and stops her wandering.</summary>

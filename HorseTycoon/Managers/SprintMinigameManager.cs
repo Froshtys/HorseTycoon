@@ -5,6 +5,7 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewModdingAPI.Utilities;
 using StardewValley;
+using StardewValley.Characters;
 using StardewValley.Menus;
 
 namespace HorseTycoon
@@ -67,10 +68,11 @@ namespace HorseTycoon
         // --- Buff icon, placed in vanilla's buff row rather than the screen corner ---
         private const int BuffIconSize = 64;
         private const int BuffIconGap = 8;
-        /// <summary>Fallback only, for the vanishingly unlikely case that Game1.buffsDisplay isn't built yet.
-        /// Mirrors BuffsDisplay.updatePosition: a 288px-wide box inset 300px from the title-safe right edge,
-        /// which is the reservation that keeps buffs clear of the clock and money box.</summary>
-        private const int VanillaBuffRowFallbackInset = 300 + 288;
+        /// <summary>Width the clock and money box reserve at the right of the screen, per
+        /// DayTimeMoneyBox.updatePosition. Fallback for when Game1.dayTimeMoneyBox isn't built yet.</summary>
+        private const int ClockBoxWidth = 300;
+        /// <summary>Top margin the clock and vanilla buff row both use.</summary>
+        private const int HudTopMargin = 8;
 
         private static IModHelper Helper = null!;
         private static IMonitor Monitor = null!;
@@ -88,12 +90,19 @@ namespace HorseTycoon
         private static readonly PerScreen<float> sweepMs = new(() => 1500f);
         private static readonly PerScreen<int> chancesLeft = new(() => 0);
         private static readonly PerScreen<int> chancesTotal = new(() => 0);
+        /// <summary>The horse's total Sprint, kept from sprint start to decide the coast at the end.</summary>
+        private static readonly PerScreen<int> totalSprintStat = new(() => 0);
+        /// <summary>Whether the rider pressed at all this sprint. A press counts even if it missed — this
+        /// tracks engagement with the meter, not accuracy.</summary>
+        private static readonly PerScreen<bool> engaged = new(() => false);
+        /// <summary>Attempts landed on the marker this sprint, for the well-played training bonus.</summary>
+        private static readonly PerScreen<int> hits = new(() => 0);
+        /// <summary>The horse being sprinted, kept so the end-of-sprint training bonus survives a dismount.</summary>
+        private static readonly PerScreen<Horse?> sprintingHorse = new(() => null);
         /// <summary>Counts down the Coasting and Exhausted phases.</summary>
         private static readonly PerScreen<float> phaseTimer = new(() => 0f);
-        /// <summary>Counts down the post-attempt flash on the meter.</summary>
+        /// <summary>Counts down the green flash on the meter after a successful hit.</summary>
         private static readonly PerScreen<float> flashMs = new(() => 0f);
-        /// <summary>Whether the flash currently running is a hit (green) or a miss (red).</summary>
-        private static readonly PerScreen<bool> flashWasHit = new(() => false);
 
         /// <summary>Whether the local player's horse is currently getting the minigame speed bonus.</summary>
         public static bool IsSprinting =>
@@ -119,6 +128,30 @@ namespace HorseTycoon
                 + "- Omit the argument to report the current mode.\n"
                 + $"- Also bound to {ModEntry.Config.SprintModeToggleButton} in-game (ModConfig.SprintModeToggleButton).",
                 HandleSprintModeCommand);
+
+            helper.ConsoleCommands.Add("sprint_hud",
+                "Dumps every coordinate source the sprint HUD could anchor to, for diagnosing icon placement.\n\n"
+                + "Usage: sprint_hud",
+                (_, _) =>
+                {
+                    if (!Context.IsWorldReady) { Monitor.Log("Load a save first.", LogLevel.Warn); return; }
+
+                    Rectangle safe = Utility.getSafeArea();
+                    Monitor.Log($"uiViewport      : {Game1.uiViewport.Width}x{Game1.uiViewport.Height}", LogLevel.Info);
+                    Monitor.Log($"getSafeArea     : {safe}", LogLevel.Info);
+                    Monitor.Log($"zoomLevel={Game1.options.zoomLevel}, uiScale={Game1.options.uiScale}", LogLevel.Info);
+                    Monitor.Log($"dayTimeMoneyBox : x={Game1.dayTimeMoneyBox?.xPositionOnScreen}, y={Game1.dayTimeMoneyBox?.yPositionOnScreen}", LogLevel.Info);
+                    Monitor.Log($"buffsDisplay    : x={Game1.buffsDisplay?.xPositionOnScreen}, y={Game1.buffsDisplay?.yPositionOnScreen}, w={Game1.buffsDisplay?.width}", LogLevel.Info);
+                    Monitor.Log($"applied buffs   : {Game1.player.buffs.AppliedBuffs.Count}", LogLevel.Info);
+
+                    var leftmost = GetLeftmostVanillaBuffIcon();
+                    Monitor.Log($"leftmost drawn buff icon: {(leftmost.HasValue ? $"x={leftmost.Value.X}, y={leftmost.Value.Y}" : "none")}", LogLevel.Info);
+
+                    int clockLeft = Game1.dayTimeMoneyBox?.xPositionOnScreen ?? (Game1.uiViewport.Width - ClockBoxWidth);
+                    int drawX = leftmost?.X - (BuffIconSize + BuffIconGap) ?? clockLeft - (BuffIconSize + BuffIconGap);
+                    int drawY = leftmost?.Y ?? HudTopMargin;
+                    Monitor.Log($"=> sprint icon draws at x={drawX}, y={drawY}", LogLevel.Info);
+                });
         }
 
         private static void HandleSprintModeCommand(string command, string[] args)
@@ -225,6 +258,10 @@ namespace HorseTycoon
             phase.Value = Phase.Running;
             speedBonus.Value = HorseStats.MinigameBaseSpeedBonus;
             chancesTotal.Value = chancesLeft.Value = HorseStats.MinigameChances(totalSprint);
+            totalSprintStat.Value = totalSprint;
+            engaged.Value = false;
+            hits.Value = 0;
+            sprintingHorse.Value = mount;
             windowHalf.Value = HorseStats.MinigameWindowHalf(sprintIV, sprintEV);
             sweepMs.Value = HorseStats.MinigameSweepMs(chancesTotal.Value);
             sweepCentre.Value = windowHalf.Value;
@@ -247,8 +284,12 @@ namespace HorseTycoon
         {
             bool hit = System.Math.Abs(sweepCentre.Value - 0.5f) <= windowHalf.Value;
             if (hit)
+            {
                 speedBonus.Value += HorseStats.MinigameHitSpeedBonus;
+                hits.Value++;
+            }
 
+            engaged.Value = true;
             SpendChance(hit, hit ? "hit" : "mistimed");
         }
 
@@ -262,24 +303,68 @@ namespace HorseTycoon
             chancesLeft.Value--;
             sweepCentre.Value = windowHalf.Value;
 
-            flashMs.Value = FlashMs;
-            flashWasHit.Value = hit;
+            // Only a hit flashes the meter. A miss is signalled by sound alone — a red flash was tried and
+            // read as too punishing.
+            if (hit)
+                flashMs.Value = FlashMs;
             Game1.playSound(hit ? "crit" : "cancel");
 
             Logger.LogVerbose($"Sprint (minigame): {reason}, speed=+{speedBonus.Value:0.##}, chances left={chancesLeft.Value}");
 
             if (chancesLeft.Value <= 0)
-            {
-                phase.Value = Phase.Coasting;
-                phaseTimer.Value = CoastMs;
-            }
+                BeginCoast();
         }
 
+        /// <summary>
+        /// Ends the attempts and holds the final speed briefly. A rider who never touched the meter on a
+        /// horse of <see cref="HorseStats.MinigameNoCoastMinSprint"/> or better skips that hold: those horses
+        /// have enough attempts that an unplayed sprint already runs long, and the coast just padded it out.
+        /// </summary>
+        private static void BeginCoast()
+        {
+            bool skipCoast = !engaged.Value && totalSprintStat.Value >= HorseStats.MinigameNoCoastMinSprint;
+            if (skipCoast)
+            {
+                Logger.LogVerbose($"Sprint (minigame): no attempt made on a sprint-{totalSprintStat.Value} horse, skipping the coast.");
+                BeginExhaustion();
+                return;
+            }
+
+            phase.Value = Phase.Coasting;
+            phaseTimer.Value = CoastMs;
+        }
+
+        /// <summary>
+        /// Ends the sprint proper. Landing half the sprint's attempts or better credits a second sprint of
+        /// training, so playing the meter well trains the horse faster than just holding shift. Reached
+        /// exactly once per sprint (via the coast, the skipped coast, or a mid-sprint dismount), so the
+        /// bonus can't be awarded twice.
+        /// </summary>
         private static void BeginExhaustion()
         {
+            AwardWellPlayedTraining();
+
             phase.Value = Phase.Exhausted;
             phaseTimer.Value = ExhaustMs;
             speedBonus.Value = 0f;
+        }
+
+        /// <summary>Credits the extra sprint for a well-played meter. The denominator is always the sprint's
+        /// full attempt count, so bailing out early after a couple of hits doesn't qualify.</summary>
+        private static void AwardWellPlayedTraining()
+        {
+            var mount = sprintingHorse.Value;
+            sprintingHorse.Value = null;
+
+            if (mount == null || chancesTotal.Value <= 0)
+                return;
+
+            if (hits.Value * 2 < chancesTotal.Value)
+                return;
+
+            Logger.LogVerbose($"Sprint (minigame): {hits.Value}/{chancesTotal.Value} attempts landed, " +
+                "crediting a second sprint of training.");
+            TrainingManager.ProcessSprint(mount, 1);
         }
 
         private static void Reset()
@@ -289,6 +374,8 @@ namespace HorseTycoon
             phaseTimer.Value = 0f;
             chancesLeft.Value = chancesTotal.Value = 0;
             flashMs.Value = 0f;
+            hits.Value = 0;
+            sprintingHorse.Value = null;
         }
 
         /*********
@@ -382,6 +469,44 @@ namespace HorseTycoon
         }
 
         /// <summary>
+        /// The top-left corner of the left-most buff icon vanilla is currently drawing, or null if no buffs
+        /// are up. Read straight off BuffsDisplay's own ClickableTextureComponents, which is the only
+        /// source that survives the coordinate-space mismatch described in <see cref="DrawBuffIcon"/>.
+        /// </summary>
+        private static (int X, int Y)? GetLeftmostVanillaBuffIcon()
+        {
+            try
+            {
+                if (Game1.buffsDisplay == null)
+                    return null;
+
+                var field = Helper.Reflection.GetField<System.Collections.IDictionary>(
+                    Game1.buffsDisplay, "buffs", required: false);
+                System.Collections.IDictionary? icons = field?.GetValue();
+                if (icons == null || icons.Count == 0)
+                    return null;
+
+                int minX = int.MaxValue;
+                int rowY = HudTopMargin;
+                foreach (object key in icons.Keys)
+                {
+                    if (key is not ClickableTextureComponent component)
+                        continue;
+                    if (component.bounds.X < minX)
+                        minX = component.bounds.X;
+                    rowY = component.bounds.Y;
+                }
+
+                return minX == int.MaxValue ? null : (minX, rowY);
+            }
+            catch
+            {
+                // Never let a HUD nicety break rendering; fall back to the clock-relative position.
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Draws the sprint buff (or exhaustion debuff) in the top-right buff stack, matching where the
         /// festival race puts its own icons. The minigame can't use a vanilla <see cref="StardewValley.Buffs.Buff"/>
         /// for this — its timer would freeze during a race — so the icon is drawn by hand.
@@ -390,14 +515,24 @@ namespace HorseTycoon
         {
             bool exhausted = phase.Value == Phase.Exhausted;
 
-            // Sit just left of vanilla's whole buff box rather than trying to reproduce its internal slot
-            // layout. Vanilla packs its icons right-to-left inside that box, so clearing the box's left
-            // edge keeps us off both the buffs and the clock no matter how many buffs are up. Reading its
-            // own position also means we inherit whatever resolution and UI scale it resolved to.
-            var buffBox = Game1.buffsDisplay;
-            int x = (buffBox?.xPositionOnScreen ?? (Utility.getSafeArea().Right - VanillaBuffRowFallbackInset))
-                - BuffIconSize - BuffIconGap;
-            int y = buffBox?.yPositionOnScreen ?? (Utility.getSafeArea().Top + 8);
+            // Sit one slot left of the vanilla buff row. Note we read the *drawn icon bounds* rather than
+            // computing them: DayTimeMoneyBox positions itself from Game1.uiViewport while BuffsDisplay
+            // positions itself from the raw device title-safe area, so any attempt to derive one from the
+            // other lands in the wrong place whenever UI scale or zoom makes those two disagree.
+            // With no buffs up there are no bounds to read, so fall back to tucking beside the clock.
+            (int X, int Y)? row = GetLeftmostVanillaBuffIcon();
+            int x, y;
+            if (row.HasValue)
+            {
+                x = row.Value.X - (BuffIconSize + BuffIconGap);
+                y = row.Value.Y;
+            }
+            else
+            {
+                int clockLeft = Game1.dayTimeMoneyBox?.xPositionOnScreen ?? (Game1.uiViewport.Width - ClockBoxWidth);
+                x = clockLeft - (BuffIconSize + BuffIconGap);
+                y = HudTopMargin;
+            }
 
             string label;
             string caption;
@@ -413,10 +548,9 @@ namespace HorseTycoon
             }
             else
             {
-                label = $"Horse Sprint (+{speedBonus.Value:0.##} speed)"
-                    + (phase.Value == Phase.Running
-                        ? $"\n{chancesLeft.Value} of {chancesTotal.Value} attempts left"
-                        : "");
+                // Attempts remaining are already on screen as the notches along the top of the meter,
+                // so the tooltip only carries the speed.
+                label = $"Horse Sprint (+{speedBonus.Value:0.##} speed)";
                 caption = $"+{speedBonus.Value:0.##}";
 
                 if (sprintBuffIcon != null)
@@ -433,9 +567,7 @@ namespace HorseTycoon
 
         private static void DrawTrack(SpriteBatch b, int left, int top)
         {
-            Color tint = flashMs.Value <= 0f
-                ? Color.White
-                : (flashWasHit.Value ? Color.LightGreen : Color.Salmon);
+            Color tint = flashMs.Value > 0f ? Color.LightGreen : Color.White;
             DrawRotated(b, Game1.mouseCursors, FrameSrc, left, top, Scale, Scale, tint, 0.85f);
         }
 

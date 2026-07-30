@@ -5,44 +5,86 @@
 	"Set-Up_additionalCharacters": "Jas 94 31 2",
 
 	// ---- Attendee festival dialogue (imported from Forest Festival - Dialog sheet) ----
-	// Key = NPC internal name (year variants use <name>_y<year>, e.g. Kent_y2). Dialog1/2/3 from
-	// the sheet are joined with #$e# so the player must talk to the NPC AGAIN to see each next line
-	// (same as vanilla Egg Festival Alex/Harvey). Use #$b# instead for click-through pages in one talk.
+	// Key = NPC internal name. Dialog1/2/3 from the sheet become separate lines within one entry.
+	//
+	// Break rule: if the FIRST line is one short beat the whole entry uses #$b#, so it plays as a single
+	// conversation the player clicks through. That's one sentence, or two that read as one ("Wow! They're
+	// so big!!"). Entries whose first line is genuinely two or more sentences of substance keep #$e#,
+	// which closes the box and reveals the next line only when the player talks again (same as vanilla
+	// Egg Festival Alex/Harvey).
 	// Trailing $n = portrait/mood for that line (0 neutral, 1 happy, 2 sad, 3 unique/blush).
+	//
+	// DON'T use a bare <name>_y<N> key to mean "from year N onward" — Event.TryGetFestivalDataForYear
+	// ROTATES between variants (year % <number of consecutive _y2.._yN keys>), so a lone Kent_y2 is used
+	// in even years and falls through to a missing plain "Kent" in odd ones (= default dialogue), and a
+	// lone Morgan_y3 is never used at all. Add _y2, _y3... only as alternating lines alongside a plain
+	// key. Attendance gating is spawn-side in FestivalRaceManager, not dialogue-side: FirstAttendingYear
+	// (Kent from year 2, Morgan from year 3) and MetRequiredNpcNames.
+
+	// Horse names come from the mod's own dialogue tokens (NpcHorseNames.cs, registered in ModEntry):
+	//   [HorseTycoon_NpcHorseName <Rider>]  - that NPC racer's horse (Marnie/Leah/Abigail/Sebastian);
+	//                                          fixed per save, so it's the same horse every year.
+	//   [HorseTycoon_PlayerHorseName]       - the horse the player rode in on, else their first barn
+	//                                          horse, else the words "your horse".
 
 	// -- Vanilla --
+	"Abigail": "Hey @! Watch out for me and [HorseTycoon_NpcHorseName Abigail] today. We've been training all year!$1#$e#If you placed a bet today, I hope it was on me. Because I'm going to win!$1",
+	"Alex": "I hear Pam is taking bets! Now this is my kinda sport.$1#$b#I should start a fantasy horse racing league. You in?$1",
 	"Caroline": "I always try to guess which horse will win. I'm rarely right, but that's half the fun of it!$1",
-	"Clint": "You wouldn't believe how many shoes I make at my shop.$0#$e#Horseshoes, of course. What did you think I meant?$1",
+	"Clint": "You wouldn't believe how many shoes I make at my shop.$0#$b#Horseshoes, of course. What did you think I meant?$1",
 	"Demetrius": "Did you know that a horse's stomach has a super-strong, one-way valve that makes it physically impossible for them to vomit? That's why it's so important to routinely check their pasture for any poisonous plants, as horses have no way to purge toxic substances once consumed. The physiological mechanics behind a horse's digestive tract are truly remarkable, if somewhat perilous...$0#$e#Did you know that a pony is not a baby horse, but a full-grown adult? If we look at the taxonomic classification, both horses and ponies belong to the exact same species, Equus caballus. The distinction is actually a matter of physical measurements: a pony is classified as any mature equine that stands under 14.2 hands high. A baby horse, or any equine under one year of age, is properly referred to as a foal.$0#$e#Science is all about precise definitions!$1",
-	"Elliott": "Why, it does look like the horses are having fun, dare I say.$1",
-	"Emily": "Horses are real empathic creatures.$0#$e#Let your intentions become one and there's no way you can lose!$1",
-	"Evelyn": "I used to be quite the rider back in my day.$1#$e#Watch out for Abigail, she's quite the spitfire!$1",
+	"Elliott": "Why, it does look like the horses are having fun, dare I say.$1#$b#It's no wonder great artists and writers were inspired by horses.$1",
+	"Emily": "Horses are real empathic creatures.$0#$b#Let your intentions become one and there's no way you can lose!$1",
+	"Evelyn": "I used to be quite the rider back in my day.$1#$b#Watch out for Abigail, she's quite the spitfire!$1",
 	"George": "What's that? It's too hard to hear over all those animals!$0",
-	"Haley": "Be sure to keep good form while you're riding!$1#$e#It would be so embarrassing if you fell!$1",
-	"Harvey": "There are too many injuries at these sorts of events.$2#$e#Well, there haven't been any here, but I mean generally!$0",
-	"Jas": "Whee!!$1#$e#The horsies are so cute!$1#$e#Do you think Marnie will let me race when I'm older?$1",
-	"Kent_y2": "They used to train these horses for cavalry purposes.$0#$e#I couldn't imagine trusting my life to an animal as skittish as a horse.$2",
+	"Gus": "Good luck in the race today! I hope you and [HorseTycoon_PlayerHorseName] ate a good breakfast.$1#$e#Can't run a race on an empty stomach!$1",
+	"Haley": "Be sure to keep good form while you're riding!$1#$b#It would be so embarrassing if you fell!$1",
+	"Harvey": "There are too many injuries at these sorts of events.$2#$b#Well, there haven't been any here, but I mean generally!$0",
+	"Jas": "Whee!!$1#$b#The horsies are so cute!$1#$b#Do you think Marnie will let me race when I'm older?$1",
+	"Jodi": "Vincent keeps going on about being a jockey. It's so cute!$1#$e#But maybe he does have a future in racing someday?$1",
+	"Kent": "They used to train these horses for cavalry purposes.$0#$b#I couldn't imagine trusting my life to an animal as skittish as a horse.$2#$b#To overcome their skittish nature, the bond between horse and rider was necessary for survival. I wonder if racing is the same?$0",
 	"Leah": "I've been working hard on this tack. I haven't worked on leather in a long time.$0#$e#I hope you like it!$1",
-	"Leo": "Wow! They're so big!!$1#$e#Do I want to try? Don't be ridiculous!$0",
-	"Lewis": "Marnie is usually so easygoing.$0#$e#But she gets real competitive out on the race course!$1",
-	"Linus": "I hope the horses aren't too hot out here.$2#$e#They look so tired when they're done running.$2",
+	"Leo": "Wow! They're so big!!$1#$b#Do I want to try? Don't be ridiculous!$0",
+	"Lewis": "Marnie is usually so easygoing.$0#$b#But she gets real competitive out on the race course!$1",
+	"Linus": "I hope the horses aren't too hot out here.$2#$b#They look so tired when they're done running.$2",
+	"Marnie": "Welcome to the races! [HorseTycoon_NpcHorseName Marnie] and I are getting ready.$1#$e#Winning? Oh, maybe! [HorseTycoon_NpcHorseName Marnie] and I are just here to have fun.$1#$e#Besides, I worry the pressure gets to [HorseTycoon_NpcHorseName Marnie] sometimes...$2",
+	"Maru": "My dad gets so annoying with \"Horse Facts\" this time of year.$0#$b#With all these facts, I wonder if I know just as much about horses as I do machines!$1",
+	"Penny": "I love reading books about horses.$1#$b#Have you read The Black Stallion, or Misty of Chincoteague?$1",
 	"Pierre": "The whole valley comes out for this one. It's one of the best days of the year.$1",
-	"Sebastian": "Riding a horse at full speed down the track feels a lot like taking my bike out on the open highway at midnight.$0#$e#It's just you, the wind, and that total feeling of freedom.$1#$e#It makes the world feel a lot less heavy, you know?$2",
-	"Vincent": "I want to be a jockey! Can I ride your horse?$1",
-	"Wizard": "While the crowd cheers for a simple sport, I am observing the ancient spirit of the equine.$0#$e#They carry a rare, untamed elemental energy in their bloodlines that dates back to the dawn of the valley.$0#$e#It is fascinating to see such primordial power on display.$0",
+	"Robin": "When the Valley started hosting horse races, I had so many new requests for horse stables.$0#$b#I love seeing the horses run, it makes all the hard work worth it!$1",
+	"Sam": "All right, let's see those horses run!$1#$b#The thundering hooves make for a wicked drum beat.$1",
+	"Sebastian": "Good luck today. You'll need it against me and [HorseTycoon_NpcHorseName Sebastian].$0#$e#Riding [HorseTycoon_NpcHorseName Sebastian] at full speed down the track feels a lot like taking my bike out on the open highway at midnight.$0#$e#It's just you, the wind, and that total feeling of freedom.$1#$e#It makes the world feel a lot less heavy, you know?$2",
+	"Shane": "I've really gotten attached to Marnie's horse, [HorseTycoon_NpcHorseName Marnie]. We're best buds.$1#$e#Sometimes [HorseTycoon_NpcHorseName Marnie] kicks, but she doesn't mean it. She only does it when she's scared.$0#$e#She's a little wild, but that's what I love about her. None of us are perfect.$0",
+	// Vincent's "can I ride your horse?" question is asked in C# during the mingling phase
+	// (AskVincentJockeyQuestion) because the answer branches. This is his line for the rest of the day.
+	"Vincent": "Look at them go! I'm gonna be a jockey when I'm bigger.$1#$e#I'm gonna practice on Marnie's fence first. That counts, right?$1",
+	"Wizard": "While the crowd cheers for a simple sport, I am observing the ancient spirit of the equine.$0#$b#They carry a rare, untamed elemental energy in their bloodlines that dates back to the dawn of the valley.$0#$b#It is fascinating to see such primordial power on display.$0",
 
 	// -- SVE --
-	"Andy": "I hate all this dust these races kick up.$0#$e#It makes it a real pain to get any harvesting done.$0",
-	"Olivia": "I used to ride quite often back in Zuzu city.$0#$e#Of course, I always did dressage.$1",
-	"Sophia": "Are you actually going to get up on top of one of those things??$2#$e#They're way too big for me, no thanks!$2#$e#But I like watching. Horses are cute!$1",
-	"Victor": "I hear Sebastian has been practicing a lot for this race.$0#$e#Good luck today, I'll be rooting for you.$1",
+	"Andy": "I hate all this dust these races kick up.$0#$b#It makes it a real pain to get any harvesting done.$0",
+	"Morgan": "I think horses are pretty magical!$1",
+	"Olivia": "I used to ride quite often back in Zuzu city.$0#$b#Of course, I always did dressage.$0#$b#Not to brag, but I may have a few ribbons!$1",
+	"Scarlett": "Horses make Sophia nervous, but she still really wanted to come today!$0#$b#I'm proud of her for trying to conquer her fears.$1",
+	"Sophia": "Are you actually going to get up on top of one of those things??$2#$b#They're way too big for me, no thanks!$2#$b#But I like watching. Horses are cute!$1",
+	"Susan": "Do you grow carrots on your farm, @? Horses love carrots!$1#$e#Here, you should feed [HorseTycoon_PlayerHorseName] a carrot. I even hear they make horses go faster!$1",
+	"Victor": "I hear Sebastian has been practicing a lot for this race.$0#$b#Good luck today, I'll be rooting for you.$1",
 
 	// -- East Scarp --
 	"Aideen": "Horses are such exquisite creatures, aren't they? I always wanted a pony as a girl.$1#$e#The cost of their up-keep, the premium leather tack, the pedigree bloodlines... it's a wonderfully high-class hobby to bring to Pelican Town.$1#$e#I would have brought Baron Munchington out to see the pageantry, but I suspect he'd be more interested in the field mice.$1",
 	"Beatrice": "Hello @. Good luck today, it looks like it is going to be a great race.$1",
+	// Corwin flirts only if you're actually seeing him: SpawnSpectators prefers a "<name>_dating"
+	// key for any mod-spawned spectator the local player is dating/engaged/married to.
+	"CorwinLK": "I can tell you and [HorseTycoon_PlayerHorseName] have a special bond.$1",
+	"CorwinLK_dating": "You really know how to handle that steed. I could watch you ride all day!$1#$e#I can tell you and [HorseTycoon_PlayerHorseName] have a special bond.$1",
 	"DaleWaede": "Valkyrie goes crazy around the horses. Maybe next year I'll be able to bring her.$1",
+	"Eloise": "I wonder if the Valley has any wild horses?$0#$b#I bet I could catch one!$1",
+	"Jacob": "Hopefully no injured horses today. Horses are notoriously difficult to treat.$0#$e#If a horse breaks their leg, there is often nothing we can do.$2#$e#Sorry, I shouldn't be so blunt.$0",
+	"JadeMalic": "Do you own many horses, @? They must be so happy roaming on your large farm!$1",
 	"Jasper": "There is something ancient in the bond between rider and horse.$0",
+	"Juliet": "Are you racing today? Break a leg!$1#$b#Hmm, I guess that figure of speech is only for stageshows.$0",
+	"KeanuAvis": "Horse riding sounds mad tough, dude. Respect.$0#$b#Me? The only thing I ride are the waves!$1",
 	"Rosa": "I love the thunder of hooves on spring soil. What a thrill!$1",
+	"ToriLK": "Are you excited to race today, @?$1#$b#Me too!$1#$b#Erm, I mean, I'm excited to watch! Not race! Darn it!$3",
 	"TristanLK": "Nothing beats a sunny spring day and a good horse race. I'm glad I made it out here.$1",
 
 	// -- Generic villagers --

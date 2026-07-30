@@ -658,6 +658,12 @@ namespace HorseTycoon
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
+
+            // The venue is Calico Desert, so wear its theme for the set-up and the ceremony ("wavy" is
+            // the Desert location context's DefaultMusic). The race switches to the Outlaw showdown
+            // track from Journey of the Prairie King.
+            PastureMusic = "wavy",
+            RaceMusic = "cowboy_outlawsong",
         };
     }
 

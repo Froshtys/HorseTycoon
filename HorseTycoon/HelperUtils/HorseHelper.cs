@@ -30,6 +30,25 @@ namespace HorseTycoon
         public const string BorrowedSprintKey = "Froshty.HorseTycoon/BorrowedSprint";
         public const string BorrowedJumpKey = "Froshty.HorseTycoon/BorrowedJump";
 
+        /// <summary>
+        /// Whether it's safe to assign <see cref="Game1.activeClickableMenu"/> right now.
+        /// <para>Never open a menu straight from DayStarted: SMAPI raises that event as soon as
+        /// <c>Context.IsSaving()</c> goes false, which happens while the end-of-night menus
+        /// (ShippingMenu once it has saved, SaveGameMenu, LevelUpMenu) are still on screen. Replacing one
+        /// of those strands the new-day handshake — ShippingMenu.update and SaveGameMenu.update are the
+        /// only callers of <see cref="Game1.PollForEndOfNewDaySync"/>, so the host never sends
+        /// <c>newDaySync.finish()</c> and every farmhand sits on a black screen forever with nothing in
+        /// the log, while the host's own day starts normally.</para>
+        /// Callers should queue the menu and poll this from UpdateTicked instead.
+        /// </summary>
+        public static bool CanOpenMenu =>
+            StardewModdingAPI.Context.IsPlayerFree
+            && !Game1.eventUp // IsPlayerFree allows festivals; a prompt has no business opening at one
+            && !Game1.showingEndOfNightStuff
+            && !Game1.fadeToBlack
+            && !Game1.globalFade
+            && Game1.currentMinigame == null;
+
         // Maps unqualified saddle item ID → "Saddle_X,Bridle_X" overlay string.
         public static readonly IReadOnlyDictionary<string, string> SaddleItemOverlays =
             new Dictionary<string, string>
@@ -40,6 +59,7 @@ namespace HorseTycoon
                 ["HorseTycoon.SaddleRed"]    = "Saddle_Red,Bridle_Red",
                 ["HorseTycoon.SaddleOrange"] = "Saddle_Orange,Bridle_Orange",
                 ["HorseTycoon.SaddleTeal"]   = "Saddle_Teal,Bridle_Teal",
+                ["HorseTycoon.SaddleGreen"]  = "Saddle_Green,Bridle_Green",
                 ["HorseTycoon.SaddleIce"]      = "Saddle_Ice,Bridle_Ice",
                 ["HorseTycoon.SaddleLavender"] = "Saddle_Lavender,Bridle_Lavender",
                 ["HorseTycoon.SaddleRainbow"]  = "Saddle_Rainbow,Bridle_Rainbow",
