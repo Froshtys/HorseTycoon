@@ -15,9 +15,10 @@ COLORS = {
     'Pink':     (240, 130, 180),
     'Gold':     (210, 160,  40),
     'Peach':    (255, 175, 130),
-    'Plum':     ( 90,  40, 120),
+    'Midnight': ( 90,  40, 120),
     'Sky':      (130, 200, 245),
     'Mint':     (145, 235, 195),
+    'Lemon':    (240, 255,  45),
 }
 
 # Three-stop vertical gradients: colour runs top -> middle -> bottom of each frame.
@@ -28,6 +29,7 @@ GRADIENTS = {
     'Meadow': [(235, 230, 120), (120, 200,  90), ( 30, 105,  70)],   # sun -> grass -> deep green
     'Candy':  [(255, 165, 205), (198, 140, 242), (100, 180, 255)],   # pink -> orchid -> sky
     'Ember':  [(255, 235, 120), (250, 140,  30), (150,  20,  25)],   # flame yellow -> orange -> ember red
+    'Neon':   [(255,  55, 165), (250, 255,  60), (120, 255,  55)],   # hot pink -> lemon yellow -> lime green
 }
 
 # Bias the gradient's position for a given ramp: <1 reaches the later stops sooner, so the last

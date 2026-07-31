@@ -591,7 +591,7 @@ namespace HorseTycoon
             CeremonyThirdPlaceLine = "Third place goes to... {0}! You rode a tight race out there.",
             CeremonySecondPlaceLine = "And in second... {0}! So close, sugar. So close!",
             CeremonyFirstPlaceLine =
-                "Your winner, out here in the sand and the heat... {0}! Come get your trophy, champion!",
+                "Your winner, out here in the sand and the heat... {0}! Come get your Ember tack, champion. Nobody else in the valley will be wearing it!",
             CeremonyClosingLine =
                 "Thank you all for coming out to the {0}!",
             SpectatorTiles = new[]
@@ -684,7 +684,10 @@ namespace HorseTycoon
                 },
             },
 
-            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
+            // Ember tack instead of the trophy the other two festivals hand out: it's sold nowhere
+            // (see the gradient rotation in the CP pack's data/items.json and data/festival.json),
+            // so winning here is the only way to get it.
+            FirstPlacePrizes = new[] { "(O)PrizeTicket", "(O)HorseTycoon.SaddleEmber" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
 

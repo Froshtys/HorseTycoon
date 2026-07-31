@@ -10,8 +10,8 @@ TACK_DIR    = "[CP] HorseTycoon/assets/tack"
 OVERLAY_DIR = "HorseTycoon/assets/horse_overlays"
 
 variants = ["Ace","Aurora","Bisexual","Black","Brown","Candy","Ember","Gold","Green",
-            "Ice","Lavender","Lesbian","Meadow","Mint","Navy","NonBinary","Ocean","Orange","Pink",
-            "Peach","Plum","Rainbow","Red","Sky","Sunset","Teal","Trans","White"]
+            "Ice","Lavender","Lemon","Lesbian","Meadow","Midnight","Mint","Navy","NonBinary","Ocean",
+            "Neon","Orange","Pink","Peach","Rainbow","Red","Sky","Sunset","Teal","Trans","White"]
 
 N    = len(variants)
 CELL = FRAME_SIZE  # 32 wide for all columns; icons centered within

@@ -43,7 +43,7 @@ namespace HorseTycoon
         /// <summary>The saddles the merchant's mystery saddle can turn out to be. Deliberately an
         /// allow-list rather than "everything except X": the pride flag saddles and the Rainbow one
         /// aren't random-loot material, the Ice one is excluded, the gradient ones stay festival-shop
-        /// exclusives, and Brown is what every horse already wears by default
+        /// exclusives, Midnight stays a Night Market exclusive, and Brown is what every horse already wears by default
         /// (<see cref="HorseHelper.DefaultSaddleId"/>).</summary>
         private static readonly string[] TraderSaddleIds =
         {
@@ -57,7 +57,7 @@ namespace HorseTycoon
             "HorseTycoon.SaddlePink",
             "HorseTycoon.SaddleGold",
             "HorseTycoon.SaddlePeach",
-            "HorseTycoon.SaddlePlum",
+            "HorseTycoon.SaddleLemon",
             "HorseTycoon.SaddleSky",
             "HorseTycoon.SaddleMint",
         };

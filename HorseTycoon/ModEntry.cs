@@ -167,6 +167,9 @@ namespace HorseTycoon
             // Coat potion (farmhand -> host coat changes)
             CoatPotionManager.Initialize(helper);
 
+            // Jadu's stall in Town, up on the days the Bookseller's wagon is in
+            TownStallManager.Initialize(helper, this.Monitor);
+
             // Debug tool: ht_record_jumps to author NPC race routes + jump zones by riding the course
             JumpPathRecorder.Initialize(helper, this.Monitor);
         }

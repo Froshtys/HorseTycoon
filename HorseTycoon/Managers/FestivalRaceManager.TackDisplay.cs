@@ -31,18 +31,19 @@ namespace HorseTycoon
 
         /// <summary>
         /// Tack colours in the order their cells sit on HorseTycoonTileSet.png, keyed by the top row
-        /// of each row pair. Cell k occupies (row, 2k) = shop icon, (row, 2k+1) = saddle,
-        /// (row+1, 2k) = bridle.
+        /// of each row pair and the column that row's run starts at. Cell k occupies
+        /// (row, start + 2k) = shop icon, (row, start + 2k + 1) = saddle, (row+1, start + 2k) = bridle.
         /// <para>MUST MATCH the ROWS dict in tools/build_tack_tiles.py — that script paints the very
         /// cells this table indexes into, so a colour added to one has to be added to the other and
         /// the sheet rebuilt.</para>
         /// </summary>
-        private static readonly Dictionary<int, string[]> TackSheetRows = new()
+        private static readonly Dictionary<int, (int StartColumn, string[] Colours)> TackSheetRows = new()
         {
-            [0] = new[] { "Ace", "Bisexual", "Black", "Brown", "Ice", "Lavender", "Lesbian",
-                          "NonBinary", "Orange", "Rainbow", "Red", "Teal", "Trans", "White" },
-            [5] = new[] { "Aurora", "Candy", "Gold", "Green", "Meadow", "Navy", "Ocean",
-                          "Peach", "Pink", "Plum", "Sunset", "Sky", "Ember", "Mint" },
+            [0] = (0, new[] { "Ace", "Bisexual", "Black", "Brown", "Ice", "Lavender", "Lesbian",
+                              "NonBinary", "Orange", "Rainbow", "Red", "Teal", "Trans", "White" }),
+            [5] = (0, new[] { "Aurora", "Candy", "Gold", "Green", "Meadow", "Navy", "Ocean",
+                              "Peach", "Pink", "Midnight", "Sunset", "Sky", "Ember", "Mint" }),
+            [2] = (17, new[] { "Lemon", "Neon" }),
         };
 
         /// <summary>Colour name → local tile index of that colour's saddle sprite on the sheet.</summary>
@@ -51,9 +52,9 @@ namespace HorseTycoon
         private static Dictionary<string, int> BuildSaddleTileIndex()
         {
             var map = new Dictionary<string, int>();
-            foreach ((int row, string[] colours) in TackSheetRows)
+            foreach ((int row, (int startColumn, string[] colours)) in TackSheetRows)
                 for (int k = 0; k < colours.Length; k++)
-                    map[colours[k]] = row * TackSheetColumns + (2 * k + 1); // saddle sits at col 2k+1
+                    map[colours[k]] = row * TackSheetColumns + startColumn + (2 * k + 1); // saddle sits one right of the icon
             return map;
         }
 
@@ -79,7 +80,7 @@ namespace HorseTycoon
         private static readonly Dictionary<int, int> BareMannequinColumn = new()
         {
             [4] = 4,   // cloth, plain
-            [12] = 4,  // cloth + Plum
+            [12] = 4,  // cloth + Midnight
             [14] = 4,  // cloth + Peach
             [6] = 6,   // wood, plain
             [8] = 6,   // wood + Orange

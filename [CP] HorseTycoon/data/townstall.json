@@ -1,0 +1,23 @@
+{
+	/*
+	  Jadu's horse-supply stall in Town, set up alongside the Bookseller's wagon.
+
+	  The Bookseller visits on two randomly-picked days per season (Utility
+	  .getDaysOfBooksellerThisSeason(), seeded off the save), so there is no Content Patcher
+	  token that can gate an EditMap on it. All this pack does is Load the stall map; C#
+	  (Managers/TownStallManager.cs) stamps it onto Town with ApplyMapOverride on the days
+	  the wagon is in, and stamps it back off again afterwards.
+
+	  The counter carries an "OpenShop CP.HorseTycoon_IsaacFestivalShop" tile action, so the
+	  stall sells exactly what Jadu sells at the Summer Horse Festival - the shop and its
+	  Owners/portrait entry live in data/ivpotions.json and stay the single source of truth.
+	*/
+	"Changes": [
+		{
+			"LogName": "Town horse stall map",
+			"Action": "Load",
+			"Target": "Maps/{{ModId}}_TownHorseStall",
+			"FromFile": "assets/maps/Town-HorseStall.tmx"
+		}
+	]
+}

@@ -305,18 +305,34 @@
 		}
 	}},
 	{
-	"LogName": "Item Data Saddle Plum",
+	"LogName": "Item Data Saddle Midnight",
 	"Action": "EditData",
 	"Target": "Data/Objects",
 	"Entries": {
-		"HorseTycoon.SaddlePlum": {
+		"HorseTycoon.SaddleMidnight": {
 		"Category": -999,
-		"Description": "{{i18n:SaddlePlum_Description}}",
-		"DisplayName": "{{i18n:SaddlePlum_Name}}",
-		"Name": "Plum Tack",
+		"Description": "{{i18n:SaddleMidnight_Description}}",
+		"DisplayName": "{{i18n:SaddleMidnight_Name}}",
+		"Name": "Midnight Tack",
 		"Price": 500,
 		"MaxStack": 1,
-		"Texture": "{{ModId}}/SaddlePlum",
+		"Texture": "{{ModId}}/SaddleMidnight",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Lemon",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleLemon": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleLemon_Description}}",
+		"DisplayName": "{{i18n:SaddleLemon_Name}}",
+		"Name": "Lemon Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleLemon",
 		"Type": "Basic"
 		}
 	}},
@@ -433,6 +449,22 @@
 		}
 	}},
 	{
+	"LogName": "Item Data Saddle Neon",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleNeon": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleNeon_Description}}",
+		"DisplayName": "{{i18n:SaddleNeon_Name}}",
+		"Name": "Neon Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleNeon",
+		"Type": "Basic"
+		}
+	}},
+	{
 	"LogName": "Item Data Saddle Mint",
 	"Action": "EditData",
 	"Target": "Data/Objects",
@@ -530,7 +562,9 @@
   }
 },
 {
-  // The traveling cart may turn up with one of the six gradient saddles. 0.06 over the cart's ~35
+  // The traveling cart may turn up with one of the six gradient saddles Leah rotates through. Ember
+  // isn't among them: it's the Summer Horse Festival champion's prize and isn't sold anywhere.
+  // 0.06 over the cart's ~35
   // openings a year (Fri/Sun, plus the three Night Market days, which reuse this same shop) works
   // out to roughly 2 sightings a year. @addDailyLuck adds the day's luck (-0.1 to +0.1) on top, so
   // a lucky day genuinely helps and an unlucky one can rule it out entirely.
@@ -550,7 +584,7 @@
         "(O)HorseTycoon.SaddleAurora",
         "(O)HorseTycoon.SaddleMeadow",
         "(O)HorseTycoon.SaddleCandy",
-        "(O)HorseTycoon.SaddleEmber"
+        "(O)HorseTycoon.SaddleNeon"
       ],
       "Price": 6000,
       "AvailableStock": 1,
@@ -584,6 +618,22 @@
       "AvailableStock": 1,
       "AvailableStockLimit": "Player",
       "Condition": "SYNCED_RANDOM day horsetycoon_cart_cloth_mannequin 0.06 @addDailyLuck"
+    }
+  }
+},
+{
+  // The blue decoration boat at the Night Market (the one selling the fireplaces) is the only place
+  // Midnight tack is sold, so it's a three-nights-a-year buy in winter. Unlimited stock: the boat's
+  // own vanilla stock is unlimited too, and one saddle per horse means players want spares.
+  "LogName": "Horse Tycoon - Midnight tack at the Night Market decoration boat",
+  "Action": "EditData",
+  "Target": "Data/Shops",
+  "TargetField": [ "Festival_NightMarket_DecorationBoat", "Items" ],
+  "Entries": {
+    "{{ModId}}_SaddleMidnight": {
+      "Id": "{{ModId}}_SaddleMidnight",
+      "ItemId": "(O)HorseTycoon.SaddleMidnight",
+      "Price": 3000
     }
   }
 },

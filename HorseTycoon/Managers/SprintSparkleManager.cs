@@ -44,6 +44,9 @@ namespace HorseTycoon
         /// <param name="SourceRects">Sprite variants on <paramref name="TextureName"/>; one is picked at random
         /// per particle.</param>
         /// <param name="RotationChange">Radians per tick the particle spins.</param>
+        /// <param name="HeightAboveFeet">Pixels above the bottom of the horse's bounding box the particle
+        /// spawns at. Larger values sit higher up the horse's body.</param>
+        /// <param name="ScaleChange">Scale gained per tick; negative shrinks the particle as it ages.</param>
         private readonly record struct TrailStyle(
             int AnimationRow,
             int Frames,
@@ -57,7 +60,12 @@ namespace HorseTycoon
             Color[]? Palette = null,
             string? TextureName = null,
             Rectangle[]? SourceRects = null,
-            float RotationChange = 0f);
+            float RotationChange = 0f,
+            int HeightAboveFeet = 40,
+            float ScaleChange = 0f);
+
+        /// <summary>The 4-frame flame vanilla draws for torches and campfires, on LooseSprites\Cursors.</summary>
+        private static readonly Rectangle[] FlameRect = { new(276, 1985, 12, 11) };
 
         /// <summary>The five 4x4 snowflakes vanilla snow weather is drawn from (see <c>WeatherDebris</c>).</summary>
         private static readonly Rectangle[] SnowflakeRects =
@@ -90,38 +98,71 @@ namespace HorseTycoon
                     ScaleJitter: 1.5f,
                     Motion: new Vector2(0f, 0.05f),
                     AlphaFade: 0.008f,
+                    // Mixed white and blue flakes — the cycle is weighted so roughly half come out near-white
+                    // and the rest chill through to the full ice blue.
+                    Palette: new[]
+                    {
+                        Color.White,
+                        new Color(170, 230, 255),
+                        new Color(225, 245, 255),
+                        new Color(140, 215, 255),
+                        Color.White,
+                        new Color(195, 238, 255),
+                    },
                     TextureName: "LooseSprites\\Cursors",
                     SourceRects: SnowflakeRects,
-                    RotationChange: 0.02f),
+                    RotationChange: 0.02f,
+                    // Snowflakes settle on the ground, so they spawn down at the hooves rather than at
+                    // the height the kicked-up sparkle trails use.
+                    HeightAboveFeet: 10),
 
-                // Ember tack: hot sparks that rise off the hooves and burn out fast.
+                // Ember tack: real flames — the vanilla 4-frame torch fire — licking up off the hooves,
+                // rising and shrinking as they burn out.
                 ["HorseTycoon.SaddleEmber"] = new(
-                    SparkleRow, SparkleFrames, FrameMs: 40f,
-                    Color: new Color(255, 150, 60),
+                    AnimationRow: 0, Frames: 4, FrameMs: 70f,
+                    Color: Color.White,
                     ParticlesPerSpawn: 2,
-                    MinScale: 0.3f,
-                    ScaleJitter: 0.3f,
-                    Motion: new Vector2(0f, -0.35f),
-                    AlphaFade: 0.025f),
+                    MinScale: 1.4f,
+                    ScaleJitter: 0.9f,
+                    Motion: new Vector2(0f, -0.3f),
+                    AlphaFade: 0.025f,
+                    // The sprite is already fire-coloured, so these only shade it: plain flame, a hotter
+                    // yellow lick, and a couple of deeper oranges for variety.
+                    Palette: new[]
+                    {
+                        Color.White,
+                        new Color(255, 235, 190),
+                        new Color(255, 200, 130),
+                        new Color(255, 170, 100),
+                    },
+                    TextureName: "LooseSprites\\Cursors",
+                    SourceRects: FlameRect,
+                    // Between the ice trail's hooves and the sparkle trails' height: the flames read as
+                    // catching at the fetlocks rather than lying flat on the ground.
+                    HeightAboveFeet: 25,
+                    ScaleChange: -0.012f),
 
                 // Rainbow tack: one sparkle per spawn, each the next colour of the rainbow, fading slowly
                 // enough that the whole arc trails behind the horse at once.
                 ["HorseTycoon.SaddleRainbow"] = new(
                     SparkleRow, SparkleFrames, SparkleFrameMs,
                     Color.White,
-                    ParticlesPerSpawn: 1,
-                    MinScale: 0.5f,
-                    ScaleJitter: 0.25f,
+                    ParticlesPerSpawn: 2,
+                    MinScale: 0.65f,
+                    ScaleJitter: 0.3f,
                     Motion: new Vector2(0f, -0.08f),
                     AlphaFade: 0.01f,
+                    // The sparkle sprite is white and `color` multiplies it, so saturated tints read as dim.
+                    // These stay high-value (no channel below ~130) to keep the twinkle bright while still
+                    // reading as six distinct hues.
                     Palette: new[]
                     {
-                        new Color(255, 80, 80),   // red
-                        new Color(255, 165, 60),  // orange
-                        new Color(255, 240, 90),  // yellow
-                        new Color(110, 225, 110), // green
-                        new Color(90, 170, 255),  // blue
-                        new Color(190, 120, 255), // violet
+                        new Color(255, 130, 130), // red
+                        new Color(255, 190, 110), // orange
+                        new Color(255, 250, 150), // yellow
+                        new Color(150, 255, 150), // green
+                        new Color(140, 215, 255), // blue
+                        new Color(215, 165, 255), // violet
                     }),
             };
 
@@ -176,10 +217,11 @@ namespace HorseTycoon
             for (int i = 0; i < style.ParticlesPerSpawn; i++)
             {
                 // Scattered across the horse's hooves, biased to the back half of its footprint so the trail
-                // reads as being kicked up rather than sitting under the head.
+                // reads as being kicked up rather than sitting under the head. How high up the horse the
+                // trail sits is per-style — see HeightAboveFeet.
                 Vector2 position = new(
                     bounds.Center.X - 32 + Game1.random.Next(-20, 21),
-                    bounds.Bottom - 40 + Game1.random.Next(-7, 8));
+                    bounds.Bottom - style.HeightAboveFeet + Game1.random.Next(-7, 8));
 
                 bool flipped = Game1.random.Next(2) == 0;
 
@@ -210,6 +252,7 @@ namespace HorseTycoon
                     ? palette[PaletteIndex++ % palette.Length]
                     : style.Color;
                 particle.motion = style.Motion;
+                particle.scaleChange = style.ScaleChange;
                 if (style.RotationChange != 0f)
                 {
                     // Tumbling particles start at a random angle and spin either way, so no two look alike.

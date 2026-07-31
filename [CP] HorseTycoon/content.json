@@ -40,6 +40,9 @@
       		"FromFile": "data/ivpotions.json"},
 		{
 		"Action": "Include",
-      		"FromFile": "data/festivalnpcs.json"}
+      		"FromFile": "data/festivalnpcs.json"},
+		{
+		"Action": "Include",
+      		"FromFile": "data/townstall.json"}
 	]
 }

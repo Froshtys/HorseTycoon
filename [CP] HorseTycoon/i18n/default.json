@@ -85,8 +85,11 @@
     "SaddlePeach_Name": "Peach Tack",
     "SaddlePeach_Description": "A warm peach saddle and matching bridle.",
 
-    "SaddlePlum_Name": "Plum Tack",
-    "SaddlePlum_Description": "A regal deep-purple saddle and matching bridle.",
+    "SaddleMidnight_Name": "Midnight Tack",
+    "SaddleMidnight_Description": "A regal deep-purple saddle and matching bridle.",
+
+    "SaddleLemon_Name": "Lemon Tack",
+    "SaddleLemon_Description": "A zesty neon-yellow saddle and matching bridle.",
 
     "SaddleSunset_Name": "Sunset Tack",
     "SaddleSunset_Description": "A saddle and bridle that fade from gold through coral to dusky purple.",
@@ -110,7 +113,10 @@
     "SaddleMint_Description": "A cool mint-green saddle and matching bridle.",
 
     "SaddleEmber_Name": "Ember Tack",
-    "SaddleEmber_Description": "A saddle and bridle that burn from flame yellow through orange to ember red.",
+    "SaddleEmber_Description": "A saddle and bridle that burn from flame yellow through orange to ember red. Only the champion of the Summer Horse Festival wears it.",
+
+    "SaddleNeon_Name": "Neon Tack",
+    "SaddleNeon_Description": "A saddle and bridle that blaze from hot pink through lemon yellow to lime green.",
 
     "IVPotionSpeed_Name": "Speed Potion",
     "IVPotionSpeed_Description": "A shimmering blue potion. Give it to a horse to permanently improve its natural speed.",

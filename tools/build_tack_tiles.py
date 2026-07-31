@@ -23,22 +23,27 @@ ICON_Y = 2                          # icon sits 2px down inside its tile
 SADDLE_CROP = (9, 70, 25, 86)       # 16x16 out of the down-facing saddle frame
 BRIDLE_CROP = (80, 35, 96, 51)      # 16x16 out of the right-facing bridle frame
 
-# Row pair -> colours, in the order they sit on the sheet. Rows 0-1 are the original
-# fourteen; rows 5-6 were added when the remaining colours arrived. Both runs are
-# alphabetical within themselves. Appending a new colour means extending ROWS[5].
+# Row pair -> (first column, colours) in the order they sit on the sheet. Rows 0-1 are
+# the original fourteen; rows 5-6 were added when the remaining colours arrived. Both
+# runs are alphabetical within themselves and fill their row edge to edge, so later
+# colours go in the gap on rows 2-3, right of the scenery at the start of row 2 and
+# right of the mannequin blocks on row 3. Those start at an ODD column on purpose: a
+# bridle landing on an even row-3 column would look like a mannequin block's top-left
+# corner to FestivalRaceManager.TackDisplay.IsMannequinTopLeft.
 ROWS = {
-    0: ['Ace', 'Bisexual', 'Black', 'Brown', 'Ice', 'Lavender', 'Lesbian',
-        'NonBinary', 'Orange', 'Rainbow', 'Red', 'Teal', 'Trans', 'White'],
-    5: ['Aurora', 'Candy', 'Gold', 'Green', 'Meadow', 'Navy', 'Ocean',
-        'Peach', 'Pink', 'Plum', 'Sunset', 'Sky', 'Ember', 'Mint'],
+    0: (0, ['Ace', 'Bisexual', 'Black', 'Brown', 'Ice', 'Lavender', 'Lesbian',
+            'NonBinary', 'Orange', 'Rainbow', 'Red', 'Teal', 'Trans', 'White']),
+    5: (0, ['Aurora', 'Candy', 'Gold', 'Green', 'Meadow', 'Navy', 'Ocean',
+            'Peach', 'Pink', 'Midnight', 'Sunset', 'Sky', 'Ember', 'Mint']),
+    2: (17, ['Lemon', 'Neon']),
 }
 
 COLS = 28
 
 
-def build(sheet, row, colours):
+def build(sheet, row, start_col, colours):
     for k, v in enumerate(colours):
-        col = 2 * k
+        col = start_col + 2 * k
         if col + 1 >= COLS:
             raise SystemExit(f'row {row} overflows: {v} needs col {col + 1}')
         icon = Image.open(f'{TACK_DIR}/Saddle{v}.png').convert('RGBA')
@@ -51,8 +56,8 @@ def build(sheet, row, colours):
 
 if __name__ == '__main__':
     sheet = Image.open(SHEET).convert('RGBA')
-    for row, colours in ROWS.items():
-        build(sheet, row, colours)
+    for row, (start_col, colours) in ROWS.items():
+        build(sheet, row, start_col, colours)
     sheet.save(SHEET)
-    total = sum(len(v) for v in ROWS.values())
+    total = sum(len(colours) for _, colours in ROWS.values())
     print(f'{total} tack cells written to {SHEET}')

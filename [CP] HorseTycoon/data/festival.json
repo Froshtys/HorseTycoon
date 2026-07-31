@@ -200,12 +200,12 @@
 						{ "Id": "SaddleWhite", "ItemId": "(O)HorseTycoon.SaddleWhite", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
 						{ "Id": "SaddleGreen", "ItemId": "(O)HorseTycoon.SaddleGreen", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
 						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddlePlum", "ItemId": "(O)HorseTycoon.SaddlePlum", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
+						{ "Id": "SaddleLemon", "ItemId": "(O)HorseTycoon.SaddleLemon", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
 						{ "Id": "SaddleNavy", "ItemId": "(O)HorseTycoon.SaddleNavy", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
 						{ "Id": "SaddleGold", "ItemId": "(O)HorseTycoon.SaddleGold", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 0" },
 						{ "Id": "SaddleMint", "ItemId": "(O)HorseTycoon.SaddleMint", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 0" },
 						{ "Id": "SaddleSunset", "ItemId": "(O)HorseTycoon.SaddleSunset", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 2" },
-						{ "Id": "SaddleEmber", "ItemId": "(O)HorseTycoon.SaddleEmber", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 0" },
+						{ "Id": "SaddleNeon", "ItemId": "(O)HorseTycoon.SaddleNeon", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 0" },
 						{ "Id": "SaddleAurora", "ItemId": "(O)HorseTycoon.SaddleAurora", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 1" },
 						{ "Id": "ClothHorseMannequin", "ItemId": "(F){{ModId}}.ClothHorseMannequin", "Price": 2500, "AvailableStock": 1, "AvailableStockLimit": "Player" }
 					]
