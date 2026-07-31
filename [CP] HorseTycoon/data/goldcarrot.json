@@ -125,7 +125,7 @@
 				"GoldCarrotSeed": {
 					"Id": "GoldCarrotSeed",
 					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
-					"Price": 1000,
+					"Price": 500,
 					"AvailableStock": 2,
 					"AvailableStockLimit": "Player"
 				}
@@ -140,7 +140,7 @@
 				"GoldCarrotSeed": {
 					"Id": "GoldCarrotSeed",
 					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
-					"Price": 1000,
+					"Price": 500,
 					"AvailableStock": 2,
 					"AvailableStockLimit": "Player"
 				}
@@ -155,7 +155,7 @@
 				"GoldCarrotSeed": {
 					"Id": "GoldCarrotSeed",
 					"ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed",
-					"Price": 1000,
+					"Price": 500,
 					"AvailableStock": 2,
 					"AvailableStockLimit": "Player"
 				}

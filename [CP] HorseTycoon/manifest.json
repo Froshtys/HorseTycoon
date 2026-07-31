@@ -8,5 +8,11 @@
     "ContentPackFor": {
         "UniqueID": "Pathoschild.ContentPatcher"
 
-    }
+    },
+    "Dependencies": [
+        {
+            "UniqueID": "FlashShifter.StardewValleyExpandedCP",
+            "IsRequired": false
+        }
+    ]
 }

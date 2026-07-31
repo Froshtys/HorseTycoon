@@ -178,7 +178,7 @@
 			"LogName": "Fall Horse Festival - Festival map (beach)",
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_FallBeach",
-			"FromFile": "assets/maps/Beach-HorseFestival-Expanded.tmx"
+			"FromFile": "assets/maps/Beach-HorseFestival.tmx"
 		},
 		{
 			"LogName": "Fall Horse Festival - Leah's saddle shop",
@@ -236,6 +236,51 @@
 						{ "Id": "ScarecrowHorse", "ItemId": "(BC){{ModId}}_ScarecrowHorse", "Price": 2500, "AvailableStock": 1, "AvailableStockLimit": "Player" },
 						{ "Id": "StumpSeat", "ItemId": "(F)88", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
 						{ "Id": "CurlyTree", "ItemId": "(F)CurlyTree", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" }
+					]
+				}
+			}
+		},
+		{
+			/* Willy's stall on the beach. The Seahorse is SVE's item when SVE is installed and our
+			   duplicate of it otherwise (see data/seahorse.json), so the listing is ungated. */
+			"LogName": "Fall Horse Festival - Willy's stall (seahorse)",
+			"Action": "EditData",
+			"Target": "Data/Shops",
+			"Entries": {
+				"Festival_FallHorseFestival_Willy": {
+					"Currency": 0,
+					"Owners": [
+						{
+							"Id": "Willy",
+							"Name": "Willy",
+							"Dialogues": [
+								{
+									"Id": "Default",
+									"Dialogue": "Ha! Y'want a horse for the festival? Well, this here's the only kind I can get ya."
+								}
+							],
+							"RandomizeDialogueOnOpen": false,
+							"ClosedMessage": null
+						}
+					],
+					/* Listed cheapest first: the shop menu shows items in this order. */
+					"Items": [
+						/* Horse treats (see AppleTreatManager), at twice the apple's base price. */
+						{ "Id": "Apple", "ItemId": "(O)613", "Price": 200, "AvailableStock": -1, "AvailableStockLimit": "Player" },
+						/* Same listing Pierre runs at every horse festival (see data/goldcarrot.json).
+						   Ungated for the same reason as the Seahorse: the item ID exists with or without SVE. */
+						{ "Id": "GoldCarrotSeed", "ItemId": "FlashShifter.StardewValleyExpandedCP_Gold_Carrot_Seed", "Price": 500, "AvailableStock": 2, "AvailableStockLimit": "Player" },
+						{ "Id": "Seahorse", "ItemId": "(O)FlashShifter.StardewValleyExpandedCP_Seahorse", "Price": 500, "AvailableStock": 3, "AvailableStockLimit": "Player" },
+						/* -1 = unlimited, same as Pierre's carrot listings. */
+						{ "Id": "ModernFishTank", "ItemId": "(F)2414", "Price": 1000, "AvailableStock": -1, "AvailableStockLimit": "Player" },
+						{ "Id": "FishSmoker", "ItemId": "(BC)FishSmoker", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						/* One pirate piece per year on a 3-year cycle, the same HorseTycoon_YEAR_MOD trick
+						   Leah's saddle stock uses (Game1.year % divisor == remainder, registered in
+						   ModEntry). Year 1 -> flag, year 2 -> rug, year 3 -> bed, then it repeats. */
+						{ "Id": "PirateFlag", "ItemId": "(F)1900", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 3 1" },
+						{ "Id": "PirateRug", "ItemId": "(F)1902", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 3 2" },
+						{ "Id": "PirateDoubleBed", "ItemId": "(F)2070", "Price": 5000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 3 0" },
+						{ "Id": "MermaidHorse", "ItemId": "(BC){{ModId}}_MermaidHorse", "Price": 5000, "AvailableStock": 1, "AvailableStockLimit": "Player" }
 					]
 				}
 			}

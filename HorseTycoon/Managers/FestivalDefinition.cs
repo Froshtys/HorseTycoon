@@ -468,6 +468,9 @@ namespace HorseTycoon
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
+
+            // Leah's beach stall, same deal as the spring one: slots are found by scanning the map.
+            TackDisplayShopId = "Festival_FallHorseFestival_Leah",
         };
 
         /// <summary>

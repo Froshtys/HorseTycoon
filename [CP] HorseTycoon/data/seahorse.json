@@ -1,0 +1,139 @@
+{
+	/*
+	  Seahorse: the novelty "horse" Willy sells at the Fall Horse Festival (see his stall in
+	  data/festival.json).
+
+	  Same approach as the Gold Carrot (data/goldcarrot.json): when Stardew Valley Expanded is
+	  installed SVE already defines the item, its texture, and its fishing data, so we leave all
+	  of that alone and just sell SVE's item. When SVE is ABSENT we recreate the object under
+	  SVE's exact item ID, so a save is interchangeable whether or not SVE is installed.
+
+	  The fallback is deliberately NOT a catchable fish: we don't add a Data/Fish or
+	  Data/Locations entry, so Willy's stall is the only source. Because of that the fallback
+	  sets ExcludeFromFishingCollection/ExcludeFromShippingCollection to true — with no way to
+	  catch it, leaving it in the collections would create a permanently unfillable slot. With
+	  SVE installed you get SVE's version, which is catchable and does count.
+	*/
+	"Changes": [
+		{
+			"LogName": "Seahorse texture (no SVE)",
+			"Action": "Load",
+			"Target": "Mods/FlashShifter.StardewValleyExpandedCP/Seahorse",
+			"FromFile": "assets/Seahorse.png",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false }
+		},
+		{
+			"LogName": "Seahorse object (no SVE)",
+			"Action": "EditData",
+			"Target": "Data/Objects",
+			"When": { "HasMod |contains=FlashShifter.StardewValleyExpandedCP": false },
+			"Entries": {
+				"FlashShifter.StardewValleyExpandedCP_Seahorse": {
+					"Name": "Seahorse",
+					"DisplayName": "Seahorse",
+					"Description": "A tiny fish that makes a home in coral reefs.",
+					"Type": "Fish",
+					"Category": -4,
+					"Price": 60,
+					"Texture": "Mods\\FlashShifter.StardewValleyExpandedCP\\Seahorse",
+					"SpriteIndex": 0,
+					"Edibility": 5,
+					"IsDrink": false,
+					"ExcludeFromFishingCollection": true,
+					"ExcludeFromShippingCollection": true,
+					"ExcludeFromRandomSale": true,
+					"ContextTags": [ "color_yellow", "fish_ocean", "fish_seahorse" ]
+				}
+			}
+		},
+
+		/* ---- Seahorse pond: roe early, horseshoes at higher populations (with or without SVE) ---- */
+		{
+			/*
+			  Ungated on purpose. With SVE this REPLACES SVE's own Seahorse pond entry (SVE is an
+			  optional dependency in the manifest, so it loads first and we edit on top of it);
+			  without SVE this creates the entry, which the pond needs to produce anything at all.
+
+			  ProducedItems is evaluated top-down and the FIRST rule whose RequiredPopulation is met
+			  AND whose Chance roll succeeds is what the pond yields that day — so the rarest, highest
+			  population rules must come first, with the always-succeeds roe rule last as the fallback.
+			  This is the same ordering vanilla uses (see the Lionfish entry in Data/FishPondData).
+
+			  Dropped from SVE's version: a 50% chance of 2-6 Wild Horseradish at population 10, which
+			  the horseshoes now replace. PopulationGates are kept as SVE had them (Coral to grow the
+			  pond past 5 and 10), so the horseshoe tiers stay something you work up to.
+			*/
+			"LogName": "Seahorse fish pond (roe -> horseshoes)",
+			"Action": "EditData",
+			"Target": "Data/FishPondData",
+			"Entries": {
+				"FlashShifter.StardewValleyExpandedCP_Seahorse": {
+					"Id": "FlashShifter.StardewValleyExpandedCP_Seahorse",
+					/* Auto-generated from the object's internal name ("Seahorse"), so this matches
+					   whether the item came from SVE or from our fallback above. */
+					"RequiredTags": [ "item_seahorse" ],
+					"SpawnTime": -1,
+					"ProducedItems": [
+						{
+							"Id": "GoldHorseshoe",
+							"ItemId": "(O)HorseTycoon.ShoeGold",
+							"RequiredPopulation": 10,
+							"Chance": 0.05,
+							"MinStack": 1,
+							"MaxStack": 1
+						},
+						{
+							"Id": "IronHorseshoe",
+							"ItemId": "(O)HorseTycoon.ShoeIron",
+							"RequiredPopulation": 10,
+							"Chance": 0.15,
+							"MinStack": 1,
+							"MaxStack": 1
+						},
+						{
+							"Id": "CopperHorseshoe",
+							"ItemId": "(O)HorseTycoon.ShoeCopper",
+							"RequiredPopulation": 5,
+							"Chance": 0.10,
+							"MinStack": 1,
+							"MaxStack": 1
+						},
+						/* Above the roe rule so it can actually roll — roe always succeeds, so anything
+						   below it is unreachable. Horse treats, so a pond of any size can drop one. */
+						{
+							"Id": "Apple",
+							"ItemId": "(O)613",
+							"RequiredPopulation": 1,
+							"Chance": 0.25,
+							"MinStack": 1,
+							"MaxStack": 1
+						},
+						/* Baseline for a young pond, and the fallback whenever the rolls above miss. */
+						{
+							"Id": "Roe",
+							"ItemId": "(O)812",
+							"RequiredPopulation": 1,
+							"Chance": 1.0,
+							"MinStack": 1,
+							"MaxStack": 2
+						}
+					],
+					/*
+					  Three asks, on vanilla's usual 4/6/8 keys. A gate at key N caps the pond at N-1
+					  until it's paid (FishPond.UpdateMaximumOccupancy loops i = 1..10 and breaks at the
+					  first unpaid gate), so the pond asks at population 3, 5 and 7, then grows to 10.
+
+					  Coral is the ordinary fishing ask; the manure and Gold Carrots then gate the pond
+					  behind actually keeping horses. Clearing coral raises the cap to 5, which is where
+					  copper horseshoes start; clearing the carrots raises it to 10 for iron/gold.
+					*/
+					"PopulationGates": {
+						"4": [ "(O)393 3" ],
+						"6": [ "(O)HorseTycoon.Manure 5" ],
+						"8": [ "(O)FlashShifter.StardewValleyExpandedCP_Gold_Carrot 2" ]
+					}
+				}
+			}
+		}
+	]
+}
