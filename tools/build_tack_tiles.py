@@ -30,7 +30,7 @@ ROWS = {
     0: ['Ace', 'Bisexual', 'Black', 'Brown', 'Ice', 'Lavender', 'Lesbian',
         'NonBinary', 'Orange', 'Rainbow', 'Red', 'Teal', 'Trans', 'White'],
     5: ['Aurora', 'Candy', 'Gold', 'Green', 'Meadow', 'Navy', 'Ocean',
-        'Peach', 'Pink', 'Plum', 'Sunset'],
+        'Peach', 'Pink', 'Plum', 'Sunset', 'Sky', 'Ember', 'Mint'],
 }
 
 COLS = 28

@@ -1940,6 +1940,8 @@ namespace HorseTycoon
             // left wearing a work outfit or an off-season variant.
             this.ApplyFestivalAppearances();
             this.SyncBack2WaterTiles(Game1.currentLocation);
+            // Point Leah's stall display at whatever her shop is stocking this year.
+            this.ApplyTackDisplay();
 
 
             // Bus festival: the horses picked in the HorseBusLoadMenu ride along instead of the mount.
@@ -2365,9 +2367,15 @@ namespace HorseTycoon
             Point tile = Def.PenHorseTile!.Value;
             GameLocation loc = Game1.currentLocation;
             var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
-            horse.Name = "PenHorse";
-            horse.modData[HorseHelper.HorseSkinKey] = AllSkins[Game1.random.Next(AllSkins.Length)];
-            horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
+            // The pony ride is given by a real racer's horse where the festival names one (Marnie's Rosie
+            // in spring), so it keeps that horse's identity here and skips the pasture (SpawnPenNpcHorses).
+            NpcHorseNames.HorseIdentity? identity = NpcHorseNames.ForRiderOrNull(Def.PenHorseRider);
+            horse.Name = identity?.Name ?? "PenHorse";
+            horse.modData[HorseHelper.HorseSkinKey] = identity?.Skin ?? AllSkins[Game1.random.Next(AllSkins.Length)];
+            if (identity != null)
+                HorseHelper.EquipSaddle(horse, identity.SaddleId);
+            else
+                horse.modData[HorseHelper.OverlaysKey] = "Saddle,Bridle";
             horse.currentLocation = loc;
             horse.Position = TileToPixels(tile);
             horse.Halt();
@@ -2386,13 +2394,22 @@ namespace HorseTycoon
             int playerSlotCount = Game1.getOnlineFarmers().Count();
             var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)Game1.Date.TotalDays));
 
+            int slot = playerSlotCount;
+
             for (int i = 0; i < Def.NpcRiderNames.Length; i++)
             {
-                Point tile = PastureSpawnForSlot(playerSlotCount + i);
+                string riderName = Def.NpcRiderNames[i];
+
+                // The pony-ride horse is one of the racers' horses (see SpawnPenHorse), and a horse can
+                // only be in one place, so it doesn't also graze in the pasture.
+                if (Def.PenHorseTile.HasValue && Def.PenHorseRider != null
+                    && riderName.Equals(Def.PenHorseRider, System.StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Point tile = PastureSpawnForSlot(slot++);
                 var horse = new Horse(System.Guid.NewGuid(), tile.X, tile.Y);
                 // Grazing in the pasture is the same animal that lines up in the stalls later, so it
                 // takes its whole identity from NpcHorseNames rather than rolling a look of its own.
-                string riderName = Def.NpcRiderNames[i];
                 NpcHorseNames.HorseIdentity? identity = NpcHorseNames.ForRiderOrNull(riderName);
                 horse.Name = identity?.Name ?? (riderName + "PenHorse");
                 horse.modData[HorseHelper.HorseSkinKey] = identity?.Skin ?? AllSkins[rng.Next(AllSkins.Length)];
@@ -5230,6 +5247,9 @@ namespace HorseTycoon
             phase.Value = Phase.None;
             // Bus drive-in cinematic cleanup (safety net if the festival ended mid-arrival).
             this.UnparkBus();
+            // Hand the cached festival map back exactly as it was authored.
+            this.ClearTackDisplaySprites();
+            this.RestoreTackDisplay();
             busDoorSprite.Value = null;
             busArrivalDoorTimer.Value = -1f;
             busArrivalMotion.Value = Vector2.Zero;

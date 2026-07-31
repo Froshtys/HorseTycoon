@@ -34,6 +34,9 @@ namespace HorseTycoon
         // Decorative pony-ride horse placed in the pen (e.g. left of Leah's house in the Forest map).
         // Null means no pony ride (e.g. Fall beach race has no Jas pony ride).
         public Point? PenHorseTile;
+        // Rider whose horse (see NpcHorseNames) is the one giving the pony ride. That horse is then
+        // shown here instead of in the pasture with the other racers' horses. Null = a generic horse.
+        public string? PenHorseRider;
 
         // --- Race course layout (tiles) ---
         // Stall i's horse tile is (StartStall.X, StartStall.Y + offset); horses break east into the course.
@@ -174,6 +177,23 @@ namespace HorseTycoon
         // open the vanilla "DesertTrade" shop (see FestivalRaceManager.Trader.cs).
         public Point? DesertTraderTile;
 
+        // --- Tack stall display (opt-in) ---
+        // Data/Shops key whose stock the stall's decorative saddles and mannequins mirror. The
+        // display is READ BACK OUT of the shop rather than authored on the map, so the yearly
+        // rotation in the CP pack's data/festival.json (the HorseTycoon_YEAR_MOD conditions) stays
+        // the single source of truth and the stall always advertises what's really for sale that
+        // year. Null = this map has no tack display (see FestivalRaceManager.TackDisplay.cs).
+        public string? TackDisplayShopId;
+        // Both slot lists are normally left EMPTY: the display slots are found by scanning the map
+        // for the tilesheet's saddle and mannequin cells, so the stall can be moved, resized or
+        // rearranged entirely in Tiled. Fill these in only to override that for a layout the scan
+        // can't express (e.g. pinning a specific saddle to a specific tile).
+        // Tiles on the "Front2" layer each holding one decorative saddle sprite, left to right.
+        public Point[] TackDisplaySaddleTiles = Array.Empty<Point>();
+        // Top-left tile of each 2x2 mannequin: top half on "Front" at y, bottom half on
+        // "Buildings" at y+1. Mannequins get the priciest tack; the saddle tiles take the rest.
+        public Point[] TackDisplayMannequinTiles = Array.Empty<Point>();
+
         // --- Bus arrival cinematic (opt-in) ---
         // When true, the festival opens with the vanilla-style bus driving in from the right before the
         // pasture phase. Park/drop tiles mirror the vanilla Desert bus (rest 17,24; player drops at 18,27).
@@ -239,6 +259,7 @@ namespace HorseTycoon
                 new Point(98, 20), new Point(94, 20), new Point(98, 16), new Point(102, 20),
             },
             PenHorseTile = new Point(94, 31),
+            PenHorseRider = "Marnie",
 
             StartStall = new Point(39, 48),
             FinishMin = new Point(40, 11),
@@ -329,6 +350,11 @@ namespace HorseTycoon
             FirstPlacePrizes = new[] { "(O)PrizeTicket", "(F)CP.HorseTycoon.HorseStatue" },
             SecondPlacePrizes = new[] { "(O)PrizeTicket" },
             ThirdPlacePrizes = new[] { "(O)PrizeTicket" },
+
+            // Leah's stall mirrors whatever her shop is stocking this year. The saddle slots and
+            // mannequins are found by scanning the map, so move or add them freely in Tiled — no
+            // tile coordinates needed here.
+            TackDisplayShopId = "Festival_SpringHorseFestival_Leah",
         };
 
         /// <summary>

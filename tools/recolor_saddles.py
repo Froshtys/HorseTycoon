@@ -26,8 +26,15 @@ GRADIENTS = {
     'Ocean':  [(150, 235, 235), ( 40, 150, 205), ( 20,  45, 110)],   # foam -> sea -> deep water
     'Aurora': [(120, 240, 170), ( 60, 190, 220), (150,  90, 220)],   # green -> cyan -> violet
     'Meadow': [(235, 230, 120), (120, 200,  90), ( 30, 105,  70)],   # sun -> grass -> deep green
-    'Candy':  [(255, 170, 210), (215, 130, 235), (130, 165, 245)],   # pink -> orchid -> sky
+    'Candy':  [(255, 165, 205), (198, 140, 242), (100, 180, 255)],   # pink -> orchid -> sky
     'Ember':  [(255, 235, 120), (250, 140,  30), (150,  20,  25)],   # flame yellow -> orange -> ember red
+}
+
+# Bias the gradient's position for a given ramp: <1 reaches the later stops sooner, so the last
+# colour covers more of the sprite. Candy's sky blue was barely visible on an even ramp because
+# the saddle's silhouette is widest at the top. Default is 1.0 (evenly spaced).
+GRADIENT_BIAS = {
+    'Candy': 0.6,
 }
 
 # Frame grid of the horse-overlay sheets; the icons are a single 16x16 cell.
@@ -103,7 +110,7 @@ def _gradient_at(stops, t):
     return tuple(a[c] + (b[c] - a[c]) * f for c in range(3))
 
 
-def recolor_gradient(src_path, out_path, stops):
+def recolor_gradient(src_path, out_path, stops, bias=1.0):
     """Vertical 3-stop gradient, computed per animation frame so every frame of the sheet
     shows the whole gradient rather than a slice of one that spans the sheet."""
     img = Image.open(src_path).convert('RGBA')
@@ -123,7 +130,7 @@ def recolor_gradient(src_path, out_path, stops):
                 continue
             y0, y1 = rows[0], rows[-1]
             for y in range(y0, y1 + 1):
-                t = (y - y0) / (y1 - y0) if y1 > y0 else 0.0
+                t = ((y - y0) / (y1 - y0)) ** bias if y1 > y0 else 0.0
                 tr, tg, tb = _gradient_at(stops, t)
                 for x in range(cx, min(cx + cell, img.width)):
                     r, g, b, a = px[x, y]
@@ -196,10 +203,11 @@ def recolor_stripes(src_path, out_path, colors):
 
 
 for name, stops in GRADIENTS.items():
-    print(f'{name} gradient {stops}')
-    recolor_gradient(f'{OVERLAY_DIR}/Saddle_Brown.png', f'{OVERLAY_DIR}/Saddle_{name}.png', stops)
-    recolor_gradient(f'{OVERLAY_DIR}/Bridle_Brown.png', f'{OVERLAY_DIR}/Bridle_{name}.png', stops)
-    recolor_gradient(f'{CP_ASSETS}/SaddleBrown.png',    f'{CP_ASSETS}/Saddle{name}.png',    stops)
+    bias = GRADIENT_BIAS.get(name, 1.0)
+    print(f'{name} gradient {stops} bias={bias}')
+    recolor_gradient(f'{OVERLAY_DIR}/Saddle_Brown.png', f'{OVERLAY_DIR}/Saddle_{name}.png', stops, bias)
+    recolor_gradient(f'{OVERLAY_DIR}/Bridle_Brown.png', f'{OVERLAY_DIR}/Bridle_{name}.png', stops, bias)
+    recolor_gradient(f'{CP_ASSETS}/SaddleBrown.png',    f'{CP_ASSETS}/Saddle{name}.png',    stops, bias)
 
 print('Rainbow (2px diagonal stripes)')
 recolor_rainbow(f'{OVERLAY_DIR}/Saddle_Brown.png', f'{OVERLAY_DIR}/Saddle_Rainbow.png')
