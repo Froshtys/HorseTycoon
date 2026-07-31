@@ -102,6 +102,13 @@
 							"AvailableStock": 1,
 							"AvailableStockLimit": "Player"
 						},
+						{
+							"Id": "WoodHorseMannequin",
+							"ItemId": "(F){{ModId}}.WoodHorseMannequin",
+							"Price": 2500,
+							"AvailableStock": 1,
+							"AvailableStockLimit": "Player"
+						},
 					]
 				}
 			}
@@ -225,7 +232,8 @@
 						{ "Id": "SaddleRed", "ItemId": "(O)HorseTycoon.SaddleRed", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
 						{ "Id": "SaddleOrange", "ItemId": "(O)HorseTycoon.SaddleOrange", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
 						{ "Id": "SaddleTeal", "ItemId": "(O)HorseTycoon.SaddleTeal", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" }
+						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "ClothHorseMannequin", "ItemId": "(F){{ModId}}.ClothHorseMannequin", "Price": 2500, "AvailableStock": 1, "AvailableStockLimit": "Player" }
 					]
 				}
 			}

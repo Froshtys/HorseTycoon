@@ -667,6 +667,31 @@
 		"Entries": {
 			"{{ModId}}.HorseStatue": "Horse Race Trophy/decor/2 2/2 1/1/0/-1/Horse Race Trophy/0/{{ModId}}_HorseStatue/true"
 		}
+	},
+	{
+		"LogName": "Wooden Horse Mannequin - Load Texture",
+		"Action": "Load",
+		"Target": "{{ModId}}_WoodHorseMannequin",
+		"FromFile": "assets/WoodHorseMannequin.png"
+	},
+	{
+		"LogName": "Cloth Horse Mannequin - Load Texture",
+		"Action": "Load",
+		"Target": "{{ModId}}_ClothHorseMannequin",
+		"FromFile": "assets/ClothHorseMannequin.png"
+	},
+	{
+		// Furniture format: name/type/tilesheet size/bounding box size/rotations/price/placement
+		// restriction/display name/sprite index/texture/off limits for random sale.
+		// 32x32 sprite = "2 2" tiles; bounding box "2 1" leaves the top row passable and blocks
+		// only the bottom two tiles (same shape as the Horse Race Trophy above).
+		"LogName": "Horse Mannequins - Furniture Data",
+		"Action": "EditData",
+		"Target": "Data/Furniture",
+		"Entries": {
+			"{{ModId}}.WoodHorseMannequin": "Wooden Horse Mannequin/decor/2 2/2 1/1/2500/-1/{{i18n:WoodHorseMannequin_Name}}/0/{{ModId}}_WoodHorseMannequin/true",
+			"{{ModId}}.ClothHorseMannequin": "Cloth Horse Mannequin/decor/2 2/2 1/1/2500/-1/{{i18n:ClothHorseMannequin_Name}}/0/{{ModId}}_ClothHorseMannequin/true"
+		}
 	}
 	]
 }

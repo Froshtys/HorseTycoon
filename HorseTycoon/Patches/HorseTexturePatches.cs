@@ -37,6 +37,12 @@ namespace HorseTycoon.Patches
 
         internal static IReadOnlyCollection<string> AvailableOverlayNames => _overlayDict.Keys;
 
+        /// <summary>A single raw tack overlay sheet ("Saddle_Red", "Bridle_Red", ...), or null if it
+        /// isn't loaded. Overlay sheets share the horse spritesheet's layout, so callers pick a frame
+        /// with a source rectangle (see <see cref="MannequinPatches"/>).</summary>
+        internal static Texture2D? GetOverlayTexture(string name) =>
+            _overlayDict.TryGetValue(name, out Texture2D? tex) ? tex : null;
+
 
         /// <summary>Base skin texture (no overlays) for a Data/FarmAnimals skin id, used by shop
         /// menus that display horses which don't exist as FarmAnimals yet.</summary>

@@ -91,6 +91,9 @@
     "HorseStatue_Name": "Horse Race Trophy",
     "HorseStatue_Description": "A golden trophy awarded to the champion of the Spring Horse Festival.",
 
+    "WoodHorseMannequin_Name": "Wooden Horse Mannequin",
+    "ClothHorseMannequin_Name": "Cloth Horse Mannequin",
+
     "FestivalSpectator_Dialog_0": "Every year this race gets more exciting. I love seeing how the horses have grown!",
     "FestivalSpectator_Dialog_1": "",
     "FestivalSpectator_Dialog_2": "I always look forward to this. There's nothing like watching the race on a day like today.",

@@ -119,6 +119,9 @@ namespace HorseTycoon
             HorseTexturePatches.Initialize(helper, this.Monitor);
             HorseTexturePatches.Apply(harmony);
 
+            // Horse mannequin furniture: hang a saddle set on it, drawn from the same tack overlays
+            MannequinPatches.Apply(harmony);
+
             // Horse-face markers on the Billboard calendar for all three horse festivals
             CalendarPatches.Apply(harmony);
 
