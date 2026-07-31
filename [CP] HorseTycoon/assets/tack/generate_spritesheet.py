@@ -9,8 +9,9 @@ BRIDLE_CROP = (64, 32, 96, 64)  # frame 10 of horse animation (down-facing bridl
 TACK_DIR    = "[CP] HorseTycoon/assets/tack"
 OVERLAY_DIR = "HorseTycoon/assets/horse_overlays"
 
-variants = ["Ace","Bisexual","Black","Brown","Ice","Lavender",
-            "Lesbian","NonBinary","Orange","Rainbow","Red","Teal","Trans","White"]
+variants = ["Ace","Aurora","Bisexual","Black","Brown","Candy","Ember","Gold","Green",
+            "Ice","Lavender","Lesbian","Meadow","Mint","Navy","NonBinary","Ocean","Orange","Pink",
+            "Peach","Plum","Rainbow","Red","Sky","Sunset","Teal","Trans","White"]
 
 N    = len(variants)
 CELL = FRAME_SIZE  # 32 wide for all columns; icons centered within

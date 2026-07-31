@@ -241,6 +241,214 @@
 		}
 	}},
 	{
+	"LogName": "Item Data Saddle Navy",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleNavy": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleNavy_Description}}",
+		"DisplayName": "{{i18n:SaddleNavy_Name}}",
+		"Name": "Navy Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleNavy",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Pink",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddlePink": {
+		"Category": -999,
+		"Description": "{{i18n:SaddlePink_Description}}",
+		"DisplayName": "{{i18n:SaddlePink_Name}}",
+		"Name": "Pink Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddlePink",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Gold",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleGold": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleGold_Description}}",
+		"DisplayName": "{{i18n:SaddleGold_Name}}",
+		"Name": "Gold Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleGold",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Peach",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddlePeach": {
+		"Category": -999,
+		"Description": "{{i18n:SaddlePeach_Description}}",
+		"DisplayName": "{{i18n:SaddlePeach_Name}}",
+		"Name": "Peach Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddlePeach",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Plum",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddlePlum": {
+		"Category": -999,
+		"Description": "{{i18n:SaddlePlum_Description}}",
+		"DisplayName": "{{i18n:SaddlePlum_Name}}",
+		"Name": "Plum Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddlePlum",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Sunset",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleSunset": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleSunset_Description}}",
+		"DisplayName": "{{i18n:SaddleSunset_Name}}",
+		"Name": "Sunset Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleSunset",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Ocean",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleOcean": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleOcean_Description}}",
+		"DisplayName": "{{i18n:SaddleOcean_Name}}",
+		"Name": "Ocean Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleOcean",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Aurora",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleAurora": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleAurora_Description}}",
+		"DisplayName": "{{i18n:SaddleAurora_Name}}",
+		"Name": "Aurora Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleAurora",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Meadow",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleMeadow": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleMeadow_Description}}",
+		"DisplayName": "{{i18n:SaddleMeadow_Name}}",
+		"Name": "Meadow Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleMeadow",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Candy",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleCandy": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleCandy_Description}}",
+		"DisplayName": "{{i18n:SaddleCandy_Name}}",
+		"Name": "Candy Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleCandy",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Sky",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleSky": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleSky_Description}}",
+		"DisplayName": "{{i18n:SaddleSky_Name}}",
+		"Name": "Sky Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleSky",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Ember",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleEmber": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleEmber_Description}}",
+		"DisplayName": "{{i18n:SaddleEmber_Name}}",
+		"Name": "Ember Tack",
+		"Price": 750,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleEmber",
+		"Type": "Basic"
+		}
+	}},
+	{
+	"LogName": "Item Data Saddle Mint",
+	"Action": "EditData",
+	"Target": "Data/Objects",
+	"Entries": {
+		"HorseTycoon.SaddleMint": {
+		"Category": -999,
+		"Description": "{{i18n:SaddleMint_Description}}",
+		"DisplayName": "{{i18n:SaddleMint_Name}}",
+		"Name": "Mint Tack",
+		"Price": 500,
+		"MaxStack": 1,
+		"Texture": "{{ModId}}/SaddleMint",
+		"Type": "Basic"
+		}
+	}},
+	{
 	"LogName": "ScarecrowHorse Rarecrow",
 	"Action": "EditData",
 	"Target": "Data/BigCraftables",
@@ -300,6 +508,64 @@
   "Target": "Data/CraftingRecipes",
   "Entries": {
     "{{ModId}}_FertilizerGranulator": "335 1 709 10 390 25 68 2/Home/{{ModId}}_FertilizerGranulator/true/none",
+  }
+},
+{
+  // The traveling cart may turn up with one of the six gradient saddles. 0.06 over the cart's ~35
+  // openings a year (Fri/Sun, plus the three Night Market days, which reuse this same shop) works
+  // out to roughly 2 sightings a year. @addDailyLuck adds the day's luck (-0.1 to +0.1) on top, so
+  // a lucky day genuinely helps and an unlucky one can rule it out entirely.
+  // SYNCED_RANDOM (not RANDOM) because shop conditions roll on Game1.random, which would otherwise
+  // give every farmhand different stock. Deliberately ungated by year: the cart can turn up with a
+  // gradient in year 1, before Leah starts selling them at the year-2 spring festival.
+  "LogName": "Horse Tycoon - Random gradient saddle at the Traveling Cart",
+  "Action": "EditData",
+  "Target": "Data/Shops",
+  "TargetField": [ "Traveler", "Items" ],
+  "Entries": {
+    "{{ModId}}_GradientSaddle": {
+      "Id": "{{ModId}}_GradientSaddle",
+      "RandomItemId": [
+        "(O)HorseTycoon.SaddleSunset",
+        "(O)HorseTycoon.SaddleOcean",
+        "(O)HorseTycoon.SaddleAurora",
+        "(O)HorseTycoon.SaddleMeadow",
+        "(O)HorseTycoon.SaddleCandy",
+        "(O)HorseTycoon.SaddleEmber"
+      ],
+      "Price": 6000,
+      "AvailableStock": 1,
+      "AvailableStockLimit": "Player",
+      "Condition": "SYNCED_RANDOM day horsetycoon_cart_gradient_saddle 0.06 @addDailyLuck"
+    }
+  }
+},
+{
+  // Both mannequins ride along on the cart at the same 6% + daily luck as the gradient saddles, on
+  // their own SYNCED_RANDOM keys so they roll independently of each other and of the saddle (a
+  // shared key would make them all show up on the same days). ~2.2 of each a year, ~4.4 total, so
+  // the cart is a way to stock up on spares between festivals. 500g over Leah's festival price.
+  "LogName": "Horse Tycoon - Horse mannequins at the Traveling Cart",
+  "Action": "EditData",
+  "Target": "Data/Shops",
+  "TargetField": [ "Traveler", "Items" ],
+  "Entries": {
+    "{{ModId}}_WoodHorseMannequin": {
+      "Id": "{{ModId}}_WoodHorseMannequin",
+      "ItemId": "(F){{ModId}}.WoodHorseMannequin",
+      "Price": 3000,
+      "AvailableStock": 1,
+      "AvailableStockLimit": "Player",
+      "Condition": "SYNCED_RANDOM day horsetycoon_cart_wood_mannequin 0.06 @addDailyLuck"
+    },
+    "{{ModId}}_ClothHorseMannequin": {
+      "Id": "{{ModId}}_ClothHorseMannequin",
+      "ItemId": "(F){{ModId}}.ClothHorseMannequin",
+      "Price": 3000,
+      "AvailableStock": 1,
+      "AvailableStockLimit": "Player",
+      "Condition": "SYNCED_RANDOM day horsetycoon_cart_cloth_mannequin 0.06 @addDailyLuck"
+    }
   }
 },
 {

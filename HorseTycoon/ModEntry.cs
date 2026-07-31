@@ -47,6 +47,22 @@ namespace HorseTycoon
             // used by the festival attendee dialogue in the CP pack's data/spring19.json.
             NpcHorseNames.RegisterTokens();
 
+            // Custom game state query for Leah's rotating saddle stock: vanilla's YEAR query only does
+            // min/max ranges, so there's no way to express "every other year" or "one of three on a
+            // 3-year cycle" in a shop item condition. Usage: "HorseTycoon_YEAR_MOD <divisor> <remainder>"
+            // — e.g. "HorseTycoon_YEAR_MOD 2 1" is odd years, "HorseTycoon_YEAR_MOD 3 0" is years 3/6/9.
+            // Pair it with "YEAR <min>" (comma-separated = AND) to skip early years.
+            GameStateQuery.Register("HorseTycoon_YEAR_MOD", (query, context) =>
+            {
+                if (query.Length < 3 || !int.TryParse(query[1], out int divisor) || divisor <= 0
+                    || !int.TryParse(query[2], out int remainder))
+                {
+                    Logger.LogVerbose($"Bad HorseTycoon_YEAR_MOD query: '{string.Join(' ', query)}'.");
+                    return false;
+                }
+                return Game1.year % divisor == remainder;
+            });
+
             helper.ConsoleCommands.Add("set_horse_stat",
             "Sets a horse's stat.\n\nUsage: set_horse_stat <stat_name> <iv/ev> <value>\n- Example: set_horse_stat Jump EV 50",
             this.HandleSetStat);

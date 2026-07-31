@@ -68,6 +68,18 @@ namespace HorseTycoon
                 ["HorseTycoon.SaddleAce"]       = "Saddle_Ace,Bridle_Ace",
                 ["HorseTycoon.SaddleNonBinary"] = "Saddle_NonBinary,Bridle_NonBinary",
                 ["HorseTycoon.SaddleBisexual"]  = "Saddle_Bisexual,Bridle_Bisexual",
+                ["HorseTycoon.SaddleNavy"]      = "Saddle_Navy,Bridle_Navy",
+                ["HorseTycoon.SaddlePink"]      = "Saddle_Pink,Bridle_Pink",
+                ["HorseTycoon.SaddleGold"]      = "Saddle_Gold,Bridle_Gold",
+                ["HorseTycoon.SaddlePeach"]    = "Saddle_Peach,Bridle_Peach",
+                ["HorseTycoon.SaddlePlum"]  = "Saddle_Plum,Bridle_Plum",
+                // Three-colour gradient tack (see tools/recolor_saddles.py).
+                ["HorseTycoon.SaddleSunset"]    = "Saddle_Sunset,Bridle_Sunset",
+                ["HorseTycoon.SaddleOcean"]     = "Saddle_Ocean,Bridle_Ocean",
+                ["HorseTycoon.SaddleAurora"]    = "Saddle_Aurora,Bridle_Aurora",
+                ["HorseTycoon.SaddleMeadow"]    = "Saddle_Meadow,Bridle_Meadow",
+                ["HorseTycoon.SaddleCandy"]     = "Saddle_Candy,Bridle_Candy",
+                ["HorseTycoon.SaddleEmber"]     = "Saddle_Ember,Bridle_Ember",
             };
 
         public static bool IsSaddleItem(Item? item) =>

@@ -11,7 +11,27 @@ COLORS = {
     'Teal':     (  0, 160, 150),
     'Lavender': (180, 130, 215),
     'Green':    ( 62, 142,  66),
+    'Navy':     ( 30,  50, 110),
+    'Pink':     (240, 130, 180),
+    'Gold':     (210, 160,  40),
+    'Peach':    (255, 175, 130),
+    'Plum':     ( 90,  40, 120),
+    'Sky':      (130, 200, 245),
+    'Mint':     (145, 235, 195),
 }
+
+# Three-stop vertical gradients: colour runs top -> middle -> bottom of each frame.
+GRADIENTS = {
+    'Sunset': [(255, 205,  90), (240, 110,  70), (105,  50, 130)],   # gold -> coral -> dusk purple
+    'Ocean':  [(150, 235, 235), ( 40, 150, 205), ( 20,  45, 110)],   # foam -> sea -> deep water
+    'Aurora': [(120, 240, 170), ( 60, 190, 220), (150,  90, 220)],   # green -> cyan -> violet
+    'Meadow': [(235, 230, 120), (120, 200,  90), ( 30, 105,  70)],   # sun -> grass -> deep green
+    'Candy':  [(255, 170, 210), (215, 130, 235), (130, 165, 245)],   # pink -> orchid -> sky
+    'Ember':  [(255, 235, 120), (250, 140,  30), (150,  20,  25)],   # flame yellow -> orange -> ember red
+}
+
+# Frame grid of the horse-overlay sheets; the icons are a single 16x16 cell.
+FRAME_SIZE = 32
 
 RAINBOW_COLORS = [
     (255,  50,  50),  # Red
@@ -69,6 +89,49 @@ def recolor_rainbow(src_path, out_path):
             lum_n = (0.299*r + 0.587*g + 0.114*b) / 255.0 / max_lum if max_lum > 0 else 0.0
             tr, tg, tb = RAINBOW_COLORS[(x + y) // RAINBOW_STRIPE_WIDTH % n]
             op[x, y] = (min(255, int(tr*lum_n)), min(255, int(tg*lum_n)), min(255, int(tb*lum_n)), a)
+    out.save(out_path)
+    print(f'  -> {out_path}')
+
+
+def _gradient_at(stops, t):
+    """Colour at position t (0..1) along an evenly-spaced list of colour stops."""
+    t = min(max(t, 0.0), 1.0)
+    span = t * (len(stops) - 1)
+    i = min(int(span), len(stops) - 2)
+    f = span - i
+    a, b = stops[i], stops[i + 1]
+    return tuple(a[c] + (b[c] - a[c]) * f for c in range(3))
+
+
+def recolor_gradient(src_path, out_path, stops):
+    """Vertical 3-stop gradient, computed per animation frame so every frame of the sheet
+    shows the whole gradient rather than a slice of one that spans the sheet."""
+    img = Image.open(src_path).convert('RGBA')
+    px = img.load()
+    max_lum = _max_lum(img, px)
+    out = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    op = out.load()
+    cell = FRAME_SIZE if img.width >= FRAME_SIZE * 2 else img.height
+
+    for cy in range(0, img.height, cell):
+        for cx in range(0, img.width, cell):
+            # The tack covers only part of its frame, so stretch the gradient over the
+            # rows that actually have pixels in this cell.
+            rows = [y for y in range(cy, min(cy + cell, img.height))
+                    if any(px[x, y][3] > 0 for x in range(cx, min(cx + cell, img.width)))]
+            if not rows:
+                continue
+            y0, y1 = rows[0], rows[-1]
+            for y in range(y0, y1 + 1):
+                t = (y - y0) / (y1 - y0) if y1 > y0 else 0.0
+                tr, tg, tb = _gradient_at(stops, t)
+                for x in range(cx, min(cx + cell, img.width)):
+                    r, g, b, a = px[x, y]
+                    if a == 0:
+                        continue
+                    lum_n = (0.299*r + 0.587*g + 0.114*b) / 255.0 / max_lum if max_lum > 0 else 0.0
+                    op[x, y] = (min(255, int(tr*lum_n)), min(255, int(tg*lum_n)),
+                                min(255, int(tb*lum_n)), a)
     out.save(out_path)
     print(f'  -> {out_path}')
 
@@ -131,6 +194,12 @@ def recolor_stripes(src_path, out_path, colors):
     out.save(out_path)
     print(f'  -> {out_path}')
 
+
+for name, stops in GRADIENTS.items():
+    print(f'{name} gradient {stops}')
+    recolor_gradient(f'{OVERLAY_DIR}/Saddle_Brown.png', f'{OVERLAY_DIR}/Saddle_{name}.png', stops)
+    recolor_gradient(f'{OVERLAY_DIR}/Bridle_Brown.png', f'{OVERLAY_DIR}/Bridle_{name}.png', stops)
+    recolor_gradient(f'{CP_ASSETS}/SaddleBrown.png',    f'{CP_ASSETS}/Saddle{name}.png',    stops)
 
 print('Rainbow (2px diagonal stripes)')
 recolor_rainbow(f'{OVERLAY_DIR}/Saddle_Brown.png', f'{OVERLAY_DIR}/Saddle_Rainbow.png')

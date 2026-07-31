@@ -70,6 +70,45 @@
     "SaddleBisexual_Name": "Bisexual Pride Tack",
     "SaddleBisexual_Description": "A saddle and bridal in the colors of the bisexual pride flag.",
 
+    "SaddleNavy_Name": "Navy Tack",
+    "SaddleNavy_Description": "A smart midnight-blue saddle and matching bridle.",
+
+    "SaddlePink_Name": "Pink Tack",
+    "SaddlePink_Description": "A sweet blossom-pink saddle and matching bridle.",
+
+    "SaddleGold_Name": "Gold Tack",
+    "SaddleGold_Description": "A rich burnished-gold saddle and matching bridle.",
+
+    "SaddlePeach_Name": "Peach Tack",
+    "SaddlePeach_Description": "A warm peach saddle and matching bridle.",
+
+    "SaddlePlum_Name": "Plum Tack",
+    "SaddlePlum_Description": "A regal deep-purple saddle and matching bridle.",
+
+    "SaddleSunset_Name": "Sunset Tack",
+    "SaddleSunset_Description": "A saddle and bridle that fade from gold through coral to dusky purple.",
+
+    "SaddleOcean_Name": "Ocean Tack",
+    "SaddleOcean_Description": "A saddle and bridle that fade from sea foam through blue to the deep.",
+
+    "SaddleAurora_Name": "Aurora Tack",
+    "SaddleAurora_Description": "A saddle and bridle that shimmer from green through cyan to violet.",
+
+    "SaddleMeadow_Name": "Meadow Tack",
+    "SaddleMeadow_Description": "A saddle and bridle that fade from sunlit yellow through grass to deep green.",
+
+    "SaddleCandy_Name": "Candy Tack",
+    "SaddleCandy_Description": "A saddle and bridle that fade from pink through orchid to sky blue.",
+
+    "SaddleSky_Name": "Sky Tack",
+    "SaddleSky_Description": "A breezy baby-blue saddle and matching bridle.",
+
+    "SaddleMint_Name": "Mint Tack",
+    "SaddleMint_Description": "A cool mint-green saddle and matching bridle.",
+
+    "SaddleEmber_Name": "Ember Tack",
+    "SaddleEmber_Description": "A saddle and bridle that burn from flame yellow through orange to ember red.",
+
     "IVPotionSpeed_Name": "Speed Potion",
     "IVPotionSpeed_Description": "A shimmering blue potion. Give it to a horse to permanently improve its natural speed.",
 

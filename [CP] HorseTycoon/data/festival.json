@@ -67,48 +67,17 @@
 						}
 					],
 					"Items": [
-						{
-							"Id": "SaddleBlack",
-							"ItemId": "(O)HorseTycoon.SaddleBlack",
-							"Price": 1000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "SaddleRed",
-							"ItemId": "(O)HorseTycoon.SaddleRed",
-							"Price": 2000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "SaddleOrange",
-							"ItemId": "(O)HorseTycoon.SaddleOrange",
-							"Price": 3000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "SaddleTeal",
-							"ItemId": "(O)HorseTycoon.SaddleTeal",
-							"Price": 3000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "SaddleLavender",
-							"ItemId": "(O)HorseTycoon.SaddleLavender",
-							"Price": 3000,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
-						{
-							"Id": "WoodHorseMannequin",
-							"ItemId": "(F){{ModId}}.WoodHorseMannequin",
-							"Price": 2500,
-							"AvailableStock": 1,
-							"AvailableStockLimit": "Player"
-						},
+						{ "Id": "SaddleBlack", "ItemId": "(O)HorseTycoon.SaddleBlack", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleOrange", "ItemId": "(O)HorseTycoon.SaddleOrange", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleTeal", "ItemId": "(O)HorseTycoon.SaddleTeal", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleRed", "ItemId": "(O)HorseTycoon.SaddleRed", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
+						{ "Id": "SaddlePeach", "ItemId": "(O)HorseTycoon.SaddlePeach", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
+						{ "Id": "SaddlePink", "ItemId": "(O)HorseTycoon.SaddlePink", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 0" },
+						{ "Id": "SaddleSky", "ItemId": "(O)HorseTycoon.SaddleSky", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 0" },
+						{ "Id": "SaddleMeadow", "ItemId": "(O)HorseTycoon.SaddleMeadow", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 2" },
+						{ "Id": "SaddleCandy", "ItemId": "(O)HorseTycoon.SaddleCandy", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 0" },
+						{ "Id": "SaddleOcean", "ItemId": "(O)HorseTycoon.SaddleOcean", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 1" },
+						{ "Id": "WoodHorseMannequin", "ItemId": "(F){{ModId}}.WoodHorseMannequin", "Price": 2500, "AvailableStock": 1, "AvailableStockLimit": "Player" }
 					]
 				}
 			}
@@ -228,11 +197,16 @@
 						}
 					],
 					"Items": [
-						{ "Id": "SaddleBlack", "ItemId": "(O)HorseTycoon.SaddleBlack", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleRed", "ItemId": "(O)HorseTycoon.SaddleRed", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleOrange", "ItemId": "(O)HorseTycoon.SaddleOrange", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleTeal", "ItemId": "(O)HorseTycoon.SaddleTeal", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleWhite", "ItemId": "(O)HorseTycoon.SaddleWhite", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleGreen", "ItemId": "(O)HorseTycoon.SaddleGreen", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
+						{ "Id": "SaddlePlum", "ItemId": "(O)HorseTycoon.SaddlePlum", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
+						{ "Id": "SaddleNavy", "ItemId": "(O)HorseTycoon.SaddleNavy", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 1" },
+						{ "Id": "SaddleGold", "ItemId": "(O)HorseTycoon.SaddleGold", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 0" },
+						{ "Id": "SaddleMint", "ItemId": "(O)HorseTycoon.SaddleMint", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "HorseTycoon_YEAR_MOD 2 0" },
+						{ "Id": "SaddleSunset", "ItemId": "(O)HorseTycoon.SaddleSunset", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 2" },
+						{ "Id": "SaddleEmber", "ItemId": "(O)HorseTycoon.SaddleEmber", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 0" },
+						{ "Id": "SaddleAurora", "ItemId": "(O)HorseTycoon.SaddleAurora", "Price": 4000, "AvailableStock": 1, "AvailableStockLimit": "Player", "Condition": "YEAR 2, HorseTycoon_YEAR_MOD 3 1" },
 						{ "Id": "ClothHorseMannequin", "ItemId": "(F){{ModId}}.ClothHorseMannequin", "Price": 2500, "AvailableStock": 1, "AvailableStockLimit": "Player" }
 					]
 				}
@@ -304,32 +278,6 @@
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_SummerBusFestival",
 			"FromFile": "assets/maps/Desert-HorseRace.tmx"
-		},
-		{
-			"LogName": "Summer Horse Festival - Leah's saddle shop",
-			"Action": "EditData",
-			"Target": "Data/Shops",
-			"Entries": {
-				"Festival_SummerHorseFestival_Leah": {
-					"Currency": 0,
-					"Owners": [
-						{
-							"Id": "Leah",
-							"Name": "Leah",
-							"Dialogues": [],
-							"RandomizeDialogueOnOpen": false,
-							"ClosedMessage": null
-						}
-					],
-					"Items": [
-						{ "Id": "SaddleBlack", "ItemId": "(O)HorseTycoon.SaddleBlack", "Price": 1000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleRed", "ItemId": "(O)HorseTycoon.SaddleRed", "Price": 2000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleOrange", "ItemId": "(O)HorseTycoon.SaddleOrange", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleTeal", "ItemId": "(O)HorseTycoon.SaddleTeal", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" },
-						{ "Id": "SaddleLavender", "ItemId": "(O)HorseTycoon.SaddleLavender", "Price": 3000, "AvailableStock": 1, "AvailableStockLimit": "Player" }
-					]
-				}
-			}
 		},
 		{
 			"LogName": "Summer Horse Festival - Pierre's shop (carrots)",

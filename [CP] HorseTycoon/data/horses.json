@@ -9,7 +9,7 @@
 	{
 		"LogName": "Load tack assets",
 		"Action": "Load",
-		"Target": "{{ModId}}/SaddleBrown, {{ModId}}/SaddleWhite, {{ModId}}/SaddleBlack, {{ModId}}/SaddleRed, {{ModId}}/SaddleOrange, {{ModId}}/SaddleTeal, {{ModId}}/SaddleIce, {{ModId}}/SaddleLavender, {{ModId}}/SaddleRainbow, {{ModId}}/SaddleTrans, {{ModId}}/SaddleLesbian, {{ModId}}/SaddleAce, {{ModId}}/SaddleNonBinary, {{ModId}}/SaddleBisexual, {{ModId}}/SaddleGreen",
+		"Target": "{{ModId}}/SaddleBrown, {{ModId}}/SaddleWhite, {{ModId}}/SaddleBlack, {{ModId}}/SaddleRed, {{ModId}}/SaddleOrange, {{ModId}}/SaddleTeal, {{ModId}}/SaddleIce, {{ModId}}/SaddleLavender, {{ModId}}/SaddleRainbow, {{ModId}}/SaddleTrans, {{ModId}}/SaddleLesbian, {{ModId}}/SaddleAce, {{ModId}}/SaddleNonBinary, {{ModId}}/SaddleBisexual, {{ModId}}/SaddleGreen, {{ModId}}/SaddleNavy, {{ModId}}/SaddlePink, {{ModId}}/SaddleGold, {{ModId}}/SaddlePeach, {{ModId}}/SaddlePlum, {{ModId}}/SaddleSunset, {{ModId}}/SaddleOcean, {{ModId}}/SaddleAurora, {{ModId}}/SaddleMeadow, {{ModId}}/SaddleCandy, {{ModId}}/SaddleSky, {{ModId}}/SaddleEmber, {{ModId}}/SaddleMint",
 		"FromFile": "assets/tack/{{TargetWithoutPath}}.png"
 		},
 		{
