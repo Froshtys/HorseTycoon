@@ -138,6 +138,10 @@ namespace HorseTycoon
             // Horse mannequin furniture: hang a saddle set on it, drawn from the same tack overlays
             MannequinPatches.Apply(harmony);
 
+            // Horse Computer furniture: opens the read-only stable records ledger
+            HorseComputerPatches.Initialize(helper);
+            HorseComputerPatches.Apply(harmony);
+
             // Horse-face markers on the Billboard calendar for all three horse festivals
             CalendarPatches.Apply(harmony);
 
@@ -439,7 +443,11 @@ namespace HorseTycoon
             // Saddle state lives on the barn horse; rebuild each stable character's tack from it
             // (and migrate saves where the saddle was only recorded on the character).
             if (Context.IsMainPlayer)
+            {
                 HorseHelper.SyncStableHorseAppearance();
+                // Fixes up saves where a pregnant mare had already wandered out of her barn.
+                BreedingManager.ReturnPregnantMaresToBarn();
+            }
 
             // Data/Mail may have been cached before the save loaded, without the spring-festival
             // winner's name from farm modData, so drop it and let the next read re-resolve with the name.
@@ -847,7 +855,7 @@ namespace HorseTycoon
             if (args.Length >= 2 && int.TryParse(args[1], out int daysLeft))
             {
                 mare.modData[HorseHelper.PregnancyDaysLeftKey] = Math.Max(1, daysLeft).ToString();
-                BreedingManager.SendToBirthingArea(mare);
+                BreedingManager.ReturnToBarn(mare);
                 this.Monitor.Log($"{mare.Name} is now pregnant with {Math.Max(1, daysLeft)} day(s) left.", LogLevel.Info);
             }
             else

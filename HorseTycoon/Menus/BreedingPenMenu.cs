@@ -26,7 +26,8 @@ namespace HorseTycoon.Menus
         private const int SlotHeight = 320;
 
         public BreedingPenMenu(Building pen)
-            : base(Game1.uiViewport.Width / 2 - 360, Game1.uiViewport.Height / 2 - 240, 720, 480, showUpperRightCloseButton: true)
+            // Height leaves a clear band under the slots for the status line drawn at (height - 64).
+            : base(Game1.uiViewport.Width / 2 - 360, Game1.uiViewport.Height / 2 - 256, 720, 512, showUpperRightCloseButton: true)
         {
             this.Pen = pen;
             int slotY = this.yPositionOnScreen + 96;
@@ -128,7 +129,7 @@ namespace HorseTycoon.Menus
                 : "Add a mare and a stallion, then feed each a Gold Carrot.";
             Vector2 statusSize = Game1.smallFont.MeasureString(status);
             Utility.drawTextWithShadow(b, status, Game1.smallFont,
-                new Vector2(this.xPositionOnScreen + this.width / 2 - statusSize.X / 2, this.yPositionOnScreen + this.height - 64),
+                new Vector2(this.xPositionOnScreen + this.width / 2 - statusSize.X / 2, this.yPositionOnScreen + this.height - 76),
                 days > 0 ? Color.MediumVioletRed : Game1.textColor);
 
             base.draw(b);

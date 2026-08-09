@@ -142,6 +142,10 @@
     "WoodHorseMannequin_Name": "Wooden Horse Mannequin",
     "ClothHorseMannequin_Name": "Cloth Horse Mannequin",
 
+    "HorseComputer_Name": "Horse Computer",
+
+    "BooksellerInTown": "The bookseller and a horse trader are in town.",
+
     "FestivalSpectator_Dialog_0": "Every year this race gets more exciting. I love seeing how the horses have grown!",
     "FestivalSpectator_Dialog_1": "",
     "FestivalSpectator_Dialog_2": "I always look forward to this. There's nothing like watching the race on a day like today.",

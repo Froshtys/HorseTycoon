@@ -99,12 +99,8 @@ namespace HorseTycoon.Menus
             b.Draw(stud.Sprite.Texture, new Vector2(rowX + 2, rowY + 2), stud.Sprite.SourceRect,
                 sellable ? Color.White : Color.White * 0.45f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0.88f);
 
-            if (sold)
-                DrawNameWithTag(b, stud.Name, "(sold)", Color.Gray, rowX, rowY);
-            else if (tooWeak)
-                DrawNameWithTag(b, stud.Name, "(skills too low)", Color.Gray, rowX, rowY);
-            else
-                DrawCenteredName(b, stud.Name, Game1.textColor, rowX, rowY);
+            string? tag = sold ? "(sold)" : tooWeak ? "(skills too low)" : null;
+            DrawNameWithGender(b, stud.Name, stud.isMale(), tag, Color.Gray, rowX, rowY, alpha: sellable ? 1f : 0.5f);
 
             var stats = stud.GetHorseStats();
             this.DrawStatSegments(b, rowX, rowY, stats.SpeedIV, stats.SpeedEV, stats.SprintIV, stats.SprintEV, stats.JumpIV, stats.JumpEV);

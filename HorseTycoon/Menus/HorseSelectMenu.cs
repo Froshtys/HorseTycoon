@@ -69,8 +69,10 @@ namespace HorseTycoon.Menus
 
             bool baby = animal.isBaby();
             bool pregnant = !baby && HorseHelper.IsPregnant(animal);
-            string? tag = baby ? "(baby)" : pregnant ? "(pregnant)" : null;
-            DrawNameWithTag(b, animal.Name, tag, baby ? Color.Gray : Color.MediumVioletRed, rowX, rowY);
+            // A hidden horse listed here is one that's currently active in a stable: choosing it pulls
+            // it out and leaves that stable empty, so flag it rather than surprising the player.
+            string? tag = baby ? "(baby)" : pregnant ? "(pregnant)" : HorseHelper.IsHidden(animal) ? "(in stable)" : null;
+            DrawNameWithGender(b, animal.Name, animal.isMale(), tag, baby ? Color.Gray : Color.MediumVioletRed, rowX, rowY);
 
             var stats = animal.GetHorseStats();
             this.DrawStatSegments(b, rowX, rowY, stats.SpeedIV, stats.SpeedEV, stats.SprintIV, stats.SprintEV, stats.JumpIV, stats.JumpEV);

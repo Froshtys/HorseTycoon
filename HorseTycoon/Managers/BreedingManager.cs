@@ -7,8 +7,8 @@ namespace HorseTycoon
 {
     /// <summary>
     /// Horse pregnancy lifecycle: replaces the instant vanilla barn birth with a 7-day
-    /// gestation. The pregnant mare rests at the bottom-left of her home barn until the
-    /// foal arrives.
+    /// gestation. The pregnant mare behaves normally inside her home barn, but stays in it
+    /// until the foal arrives.
     /// </summary>
     public static class BreedingManager
     {
@@ -37,7 +37,7 @@ namespace HorseTycoon
         }
 
         /// <summary>
-        /// Marks a mare as pregnant and sends her to the birthing area. Unless a sire is already
+        /// Marks a mare as pregnant and makes sure she's in her barn. Unless a sire is already
         /// recorded (festival Stud Shop path), a specific stallion is chosen from her home barn
         /// and his IVs are saved on the mare for inheritance at birth.
         /// </summary>
@@ -57,7 +57,7 @@ namespace HorseTycoon
             }
 
             mare.modData[HorseHelper.PregnancyDaysLeftKey] = GestationDays.ToString();
-            SendToBirthingArea(mare);
+            ReturnToBarn(mare);
             Logger.LogVerbose($"{mare.Name} ({mare.myID.Value}) is now pregnant, due in {GestationDays} days." +
                 (sire != null ? $" Sired by {sire.Name} ({sire.myID.Value})." : " No barn sire recorded."));
             return sire;
@@ -77,7 +77,7 @@ namespace HorseTycoon
                 if (daysLeft > 0)
                 {
                     mare.modData[HorseHelper.PregnancyDaysLeftKey] = daysLeft.ToString();
-                    SendToBirthingArea(mare);
+                    ReturnToBarn(mare);
                     Logger.LogVerbose($"{mare.Name} is pregnant: {daysLeft} day(s) until birth.");
                 }
                 else
@@ -109,27 +109,49 @@ namespace HorseTycoon
             DeliverFoals(due, 0);
         }
 
-        /// <summary>Parks the mare at the bottom-left corner of her home barn and stops her wandering.</summary>
-        public static void SendToBirthingArea(FarmAnimal mare)
+        /// <summary>Host-only: makes sure every pregnant mare is inside her barn (save-load fixup).</summary>
+        public static void ReturnPregnantMaresToBarn()
+        {
+            foreach (FarmAnimal mare in HorseHelper.GetAllBarnHorses())
+            {
+                if (HorseHelper.IsPregnant(mare))
+                    ReturnToBarn(mare);
+            }
+        }
+
+        /// <summary>
+        /// Keeps a pregnant mare indoors: if she's anywhere but her home barn she's moved back to a
+        /// random open spot inside it. She's free to wander around in there — this only reverses trips
+        /// out through the animal door (see <see cref="Patches.FarmAnimalPatches"/>), so a mare can't
+        /// end up grazing halfway across the farm while she's carrying a foal.
+        /// </summary>
+        public static void ReturnToBarn(FarmAnimal mare)
         {
             if (mare.home?.GetIndoors() is not AnimalHouse interior)
                 return;
+            if (mare.IsHome && mare.currentLocation == interior)
+                return;
 
-            // Make sure the mare is registered indoors (mirrors HorseHelper.RestoreHorse).
-            if (mare.currentLocation != interior)
+            // Sweeping every location rather than trusting currentLocation matters: vanilla's
+            // animal-door code moves an animal by editing the locations' animal dictionaries, which
+            // can leave currentLocation pointing at the barn while she's really out on the farm.
+            long id = mare.myID.Value;
+            Utility.ForEachLocation(loc =>
             {
-                mare.currentLocation?.animals.Remove(mare.myID.Value);
-                if (!interior.animals.ContainsKey(mare.myID.Value))
-                    interior.animals.Add(mare.myID.Value, mare);
-                mare.currentLocation = interior;
-            }
+                if (loc != interior)
+                    loc.animals.Remove(id);
+                return true;
+            });
+            if (!interior.animals.ContainsKey(id))
+                interior.animals.Add(id, mare);
+            mare.currentLocation = interior;
+            mare.homeInterior = interior;
 
-            int mapHeight = interior.map.Layers[0].LayerHeight;
-            Vector2 restTile = Utility.recursiveFindOpenTileForCharacter(mare, interior, new Vector2(2, mapHeight - 4), 12);
-            mare.Position = restTile * 64f;
-            mare.Halt();
-            mare.FacingDirection = 2;
+            // Drop the grass-pathfinding controller the door exit gave her, or she'll keep walking
+            // toward a target that isn't in this room.
             mare.controller = null;
+            mare.Halt();
+            mare.setRandomPosition(interior);
         }
 
         /// <summary>Delivers foals one at a time so each gets its own naming menu.</summary>

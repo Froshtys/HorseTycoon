@@ -30,6 +30,14 @@ namespace HorseTycoon
                 prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(Update_Prefix))
             );
 
+            // The off-screen path: same freeze for hidden horses, plus it's the one that walks animals
+            // out through an open animal door, which pregnant mares aren't allowed to do.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.updateWhenNotCurrentLocation)),
+                prefix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(UpdateAway_Prefix)),
+                postfix: new HarmonyMethod(typeof(FarmAnimalPatches), nameof(UpdateAway_Postfix))
+            );
+
             // Patch Collision
             harmony.Patch(
                 original: AccessTools.Method(typeof(FarmAnimal), nameof(FarmAnimal.GetBoundingBox)),
@@ -82,8 +90,25 @@ namespace HorseTycoon
 
         private static bool Update_Prefix(FarmAnimal __instance, GameTime time, GameLocation location)
         {
-            // Pregnant mares rest in place: skip AI so they don't wander or head outside.
-            return !HorseHelper.IsHidden(__instance) && !HorseHelper.IsPregnant(__instance);
+            return !HorseHelper.IsHidden(__instance);
+        }
+
+        /// <summary>The off-screen twin of <see cref="Update_Prefix"/>.</summary>
+        private static bool UpdateAway_Prefix(FarmAnimal __instance)
+        {
+            return !HorseHelper.IsHidden(__instance);
+        }
+
+        /// <summary>
+        /// Confines pregnant mares to their barn. Vanilla's only indoors→outdoors move is the animal-door
+        /// walk-out inside <c>updateWhenNotCurrentLocation</c>, and it fires only when no farmer is in the
+        /// barn, so a mare would silently turn up out on the farm. Undoing it here — in the same tick that
+        /// did it, before anything draws — leaves her free to wander inside without ever getting out.
+        /// </summary>
+        private static void UpdateAway_Postfix(FarmAnimal __instance)
+        {
+            if (!HorseHelper.IsHidden(__instance) && HorseHelper.IsPregnant(__instance))
+                BreedingManager.ReturnToBarn(__instance);
         }
 
         private static bool GetBoundingBox_Prefix(FarmAnimal __instance, ref Rectangle __result)

@@ -475,13 +475,13 @@ namespace HorseTycoon
 
         /// <summary>
         /// TESTING ONLY: same Spring 19 Forest festival as <see cref="Forest"/>, but also triggerable on
-        /// Spring 9 so it can be reached quickly without fast-forwarding. Remove when done testing.
+        /// Spring 26 so it can be reached quickly without fast-forwarding. Remove when done testing.
         /// </summary>
         public static FestivalDefinition ForestSpringTest()
         {
             FestivalDefinition def = Forest();
-            def.EventId = "festival_spring9";
-            def.Day = 9;
+            def.EventId = "festival_spring26";
+            def.Day = 26;
             // The real Spring 19 festival already sends the advance notice; a second copy of the same
             // letter (and a negative notice day) makes no sense for the test slot.
             def.AnnouncementMailId = null;

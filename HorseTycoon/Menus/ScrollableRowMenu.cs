@@ -97,6 +97,10 @@ namespace HorseTycoon.Menus
         /// <summary>Draw extra widgets after the shared chrome (rows, close button).</summary>
         protected virtual void DrawExtras(SpriteBatch b) { }
 
+        /// <summary>Draw widgets that belong *behind* the dialogue box, so the box's frame covers their
+        /// lower edge — how vanilla menus tuck in their tabs (see <see cref="StardewValley.Menus.GameMenu"/>).</summary>
+        protected virtual void DrawUnderChrome(SpriteBatch b) { }
+
         // ---------------------------------------------------------------------
         // Shared behavior
         // ---------------------------------------------------------------------
@@ -233,6 +237,7 @@ namespace HorseTycoon.Menus
         public override void draw(SpriteBatch b)
         {
             b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
+            this.DrawUnderChrome(b);
             Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
 
             string title = this.Title;
@@ -302,6 +307,34 @@ namespace HorseTycoon.Menus
             Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(rowX + NameColumnX + (NameColumnWidth - nameSize.X) / 2, rowY + 16), Game1.textColor);
             Vector2 tagSize = Game1.smallFont.MeasureString(tag);
             Utility.drawTextWithShadow(b, tag, Game1.smallFont, new Vector2(rowX + NameColumnX + (NameColumnWidth - tagSize.X) / 2, rowY + 58), tagColor);
+        }
+
+        /// <summary>Name with the vanilla male/female symbol beside it, the pair centered together in
+        /// the name column, and the optional status tag underneath (same slot
+        /// <see cref="DrawNameWithTag"/> uses).</summary>
+        /// <param name="alpha">Fades the name and symbol together for rows that can't be picked
+        /// (unaffordable, sold, ...); the tag keeps its own colour.</param>
+        protected static void DrawNameWithGender(SpriteBatch b, string name, bool isMale, string? tag, Color tagColor, int rowX, int rowY, float alpha = 1f)
+        {
+            const float genderScale = 2.5f;
+            const int genderSize = 40; // 16px sprite at genderScale
+            const int genderGap = 6;
+            Rectangle genderSource = isMale ? new Rectangle(128, 192, 16, 16) : new Rectangle(144, 192, 16, 16);
+
+            Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
+            float pairWidth = nameSize.X + genderGap + genderSize;
+            float nameX = rowX + NameColumnX + (NameColumnWidth - pairWidth) / 2;
+            float nameY = tag == null ? rowY + 32 : rowY + 16;
+
+            Utility.drawTextWithShadow(b, name, Game1.dialogueFont, new Vector2(nameX, nameY), Game1.textColor * alpha);
+            b.Draw(Game1.mouseCursors, new Vector2(nameX + nameSize.X + genderGap, nameY + (nameSize.Y - genderSize) / 2),
+                genderSource, Color.White * alpha, 0f, Vector2.Zero, genderScale, SpriteEffects.None, 0.9f);
+
+            if (tag != null)
+            {
+                Vector2 tagSize = Game1.smallFont.MeasureString(tag);
+                Utility.drawTextWithShadow(b, tag, Game1.smallFont, new Vector2(rowX + NameColumnX + (NameColumnWidth - tagSize.X) / 2, rowY + 58), tagColor);
+            }
         }
 
         /// <summary>Load a "Portraits/&lt;name&gt;" sheet for <see cref="DrawKeeperPortrait"/>; null when

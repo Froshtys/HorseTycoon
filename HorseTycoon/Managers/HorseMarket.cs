@@ -16,6 +16,10 @@ namespace HorseTycoon
         public int SprintIV;
         public int JumpIV;
         public int Price;
+        /// <summary>Advertised sex. Horses use Data/FarmAnimals "MaleOrFemale", so the delivered
+        /// animal's <see cref="FarmAnimal.isMale"/> is really its id's parity - the host picks a
+        /// matching id so the buyer gets the sex the shop row showed. Stud offers are always male.</summary>
+        public bool IsMale;
         /// <summary>Sale offers: bought by someone, so it's off the market for everyone (synced).</summary>
         public bool Purchased;
         /// <summary>Stud offers: the local player already paid this stallion's fee today, so he's off
@@ -27,6 +31,18 @@ namespace HorseTycoon
 
         /// <summary>Total IV segments (each segment = 10 stat points); drives pricing.</summary>
         public int IvPoints => (SpeedIV + SprintIV + JumpIV) / 10;
+
+        /// <summary>
+        /// Billable IV segments for the sale list: <see cref="IvPoints"/>, but a stat rolled at the
+        /// <see cref="HorseMarket.MaxRolledIV"/> cap bills its top segment twice, so a horse that
+        /// maxes all three stats costs 15 segments rather than 12. Stud offers don't use this - they
+        /// price off the flat segment count.
+        /// </summary>
+        public int PremiumIvPoints =>
+            this.IvPoints
+            + (this.SpeedIV >= HorseMarket.MaxRolledIV ? 1 : 0)
+            + (this.SprintIV >= HorseMarket.MaxRolledIV ? 1 : 0)
+            + (this.JumpIV >= HorseMarket.MaxRolledIV ? 1 : 0);
     }
 
     /// <summary>
@@ -37,15 +53,17 @@ namespace HorseTycoon
     /// </summary>
     public static class HorseMarket
     {
-        public const int SaleGoldPerIvPoint = 1000;
-        public const int StudGoldPerIvPoint = 500;
+        public const int SaleGoldPerIvPoint = 2000;
+        public const int StudGoldPerIvPoint = 1000;
         public const int SaleOfferCount = 6;
         public const int StudOfferCount = 4;
+        /// <summary>Best IV a generated offer can roll per stat (Special quality tops out here).</summary>
+        public const int MaxRolledIV = 40;
 
         private const string MsgBuyHorse = "MarketBuyHorse";
         private const string MsgStudService = "MarketStudService";
         private const string MsgOfferSold = "MarketOfferSold";
-        private record BuyHorseMessage(string Name, string SkinId, int SpeedIV, int SprintIV, int JumpIV, long OwnerId);
+        private record BuyHorseMessage(string Name, string SkinId, int SpeedIV, int SprintIV, int JumpIV, bool IsMale, long OwnerId);
         private record StudServiceMessage(long MareId, int SpeedIV, int SprintIV, int JumpIV);
         // Sale offers are generated deterministically on every client, so an index (plus the day, to
         // ignore stale messages across a day rollover) identifies the same offer everywhere.
@@ -105,17 +123,21 @@ namespace HorseTycoon
             // Same seed base as the festival's pen-slot shuffle so all clients agree.
             var rng = new System.Random((int)(Game1.uniqueIDForThisGame ^ (uint)today) + 7);
             var usedNames = new HashSet<string>();
-            _saleOffers = GenerateOffers(rng, SaleOfferCount, SaleGoldPerIvPoint, usedNames);
-            _studOffers = GenerateOffers(rng, StudOfferCount, StudGoldPerIvPoint, usedNames);
+            _saleOffers = GenerateOffers(rng, SaleOfferCount, SaleGoldPerIvPoint, usedNames, allMale: false, premiumTopIv: true);
+            _studOffers = GenerateOffers(rng, StudOfferCount, StudGoldPerIvPoint, usedNames, allMale: true, premiumTopIv: false);
             Logger.LogVerbose($"HorseMarket: generated {SaleOfferCount} sale + {StudOfferCount} stud offers for day {today}.");
         }
 
-        private static List<HorseOffer> GenerateOffers(System.Random rng, int count, int goldPerIvPoint, HashSet<string> usedNames)
+        /// <param name="allMale">Stud lists are stallions by definition; sale lists roll a sex per horse.</param>
+        /// <param name="premiumTopIv">Charge double for a maxed stat's top segment (see
+        /// <see cref="HorseOffer.PremiumIvPoints"/>). Sale list only - stud fees stay linear.</param>
+        private static List<HorseOffer> GenerateOffers(System.Random rng, int count, int goldPerIvPoint, HashSet<string> usedNames, bool allMale, bool premiumTopIv)
         {
             var offers = new List<HorseOffer>(count);
             for (int i = 0; i < count; i++)
             {
-                // Special-quality IV rolls: 20/30/40 per stat (mirrors HorseStats.RandomizeStats).
+                // Special-quality IV rolls: 20/30/40 (= MaxRolledIV) per stat, mirroring
+                // HorseStats.RandomizeStats.
                 var offer = new HorseOffer
                 {
                     Name = GenerateName(rng, usedNames),
@@ -123,8 +145,9 @@ namespace HorseTycoon
                     SpeedIV = rng.Next(2, 5) * 10,
                     SprintIV = rng.Next(2, 5) * 10,
                     JumpIV = rng.Next(2, 5) * 10,
+                    IsMale = allMale || rng.Next(2) == 0,
                 };
-                offer.Price = offer.IvPoints * goldPerIvPoint;
+                offer.Price = (premiumTopIv ? offer.PremiumIvPoints : offer.IvPoints) * goldPerIvPoint;
                 offers.Add(offer);
             }
             return offers;
@@ -169,12 +192,12 @@ namespace HorseTycoon
 
             if (IsHost)
             {
-                DeliverPurchasedHorse(offer.Name, offer.SkinId, offer.SpeedIV, offer.SprintIV, offer.JumpIV, Game1.player.UniqueMultiplayerID);
+                DeliverPurchasedHorse(offer.Name, offer.SkinId, offer.SpeedIV, offer.SprintIV, offer.JumpIV, offer.IsMale, Game1.player.UniqueMultiplayerID);
             }
             else
             {
                 _helper.Multiplayer.SendMessage(
-                    new BuyHorseMessage(offer.Name, offer.SkinId, offer.SpeedIV, offer.SprintIV, offer.JumpIV, Game1.player.UniqueMultiplayerID),
+                    new BuyHorseMessage(offer.Name, offer.SkinId, offer.SpeedIV, offer.SprintIV, offer.JumpIV, offer.IsMale, Game1.player.UniqueMultiplayerID),
                     MsgBuyHorse,
                     modIDs: new[] { _helper.ModRegistry.ModID });
             }
@@ -243,7 +266,7 @@ namespace HorseTycoon
             if (e.Type == MsgBuyHorse)
             {
                 var msg = e.ReadAs<BuyHorseMessage>();
-                DeliverPurchasedHorse(msg.Name, msg.SkinId, msg.SpeedIV, msg.SprintIV, msg.JumpIV, msg.OwnerId);
+                DeliverPurchasedHorse(msg.Name, msg.SkinId, msg.SpeedIV, msg.SprintIV, msg.JumpIV, msg.IsMale, msg.OwnerId);
             }
             else if (e.Type == MsgStudService)
             {
@@ -258,7 +281,7 @@ namespace HorseTycoon
 
         /// <summary>Host-side: creates the purchased FarmAnimal in an available barn (mirrors
         /// HorseHelper.ConvertStableHorseToFarmAnimal's adult-horse setup).</summary>
-        private static void DeliverPurchasedHorse(string name, string skinId, int speedIV, int sprintIV, int jumpIV, long ownerId)
+        private static void DeliverPurchasedHorse(string name, string skinId, int speedIV, int sprintIV, int jumpIV, bool isMale, long ownerId)
         {
             Building? barn = HorseHelper.GetBarnWithHorseSpace();
             if (barn?.GetIndoors() is not AnimalHouse interior)
@@ -269,7 +292,7 @@ namespace HorseTycoon
                 return;
             }
 
-            FarmAnimal horse = new FarmAnimal("Tycoon.Horse", Game1.Multiplayer.getNewID(), ownerId);
+            FarmAnimal horse = new FarmAnimal("Tycoon.Horse", GetNewIdForGender(isMale), ownerId);
             horse.Name = name;
             horse.displayName = name;
             if (!string.IsNullOrEmpty(skinId))
@@ -288,7 +311,22 @@ namespace HorseTycoon
             // Reload after age/home/skin are set so the adult sprite and skin texture apply.
             horse.reload(barn);
 
-            _monitor.Log($"Delivered purchased horse '{name}' (skin '{skinId}', IVs {speedIV}/{sprintIV}/{jumpIV}) to {barn.buildingType.Value}.", LogLevel.Info);
+            _monitor.Log($"Delivered purchased horse '{name}' ({(isMale ? "male" : "female")}, skin '{skinId}', IVs {speedIV}/{sprintIV}/{jumpIV}) to {barn.buildingType.Value}.", LogLevel.Info);
+        }
+
+        /// <summary>
+        /// An animal id whose parity gives the requested sex. The Tycoon.Horse Data/FarmAnimals entry
+        /// is "MaleOrFemale", which FarmAnimal.isMale() resolves as <c>myID % 2 == 0</c>, so the only
+        /// way to deliver the sex the shop advertised is to pick the id. Multiplayer.getNewID() puts an
+        /// incrementing counter in its low byte, so the parity flips every call and the second attempt
+        /// always matches; the loop bound is just belt-and-braces against a future id scheme.
+        /// </summary>
+        private static long GetNewIdForGender(bool isMale)
+        {
+            long id = Game1.Multiplayer.getNewID();
+            for (int attempt = 0; attempt < 8 && (id % 2 == 0) != isMale; attempt++)
+                id = Game1.Multiplayer.getNewID();
+            return id;
         }
 
         /// <summary>Host-side: stores the sire's IVs on the mare and starts the pregnancy.</summary>

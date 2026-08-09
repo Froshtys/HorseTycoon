@@ -94,7 +94,7 @@ namespace HorseTycoon.Menus
             if (skinTexture != null)
                 b.Draw(skinTexture, new Vector2(rowX + 2, rowY + 2), new Rectangle(0, 0, 32, 32), canAfford ? Color.White : Color.White * 0.45f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0.88f);
 
-            DrawCenteredName(b, offer.Name, canAfford ? Game1.textColor : Game1.textColor * 0.5f, rowX, rowY);
+            DrawNameWithGender(b, offer.Name, offer.IsMale, tag: null, Color.Gray, rowX, rowY, alpha: canAfford ? 1f : 0.5f);
 
             this.DrawStatSegments(b, rowX, rowY, offer.SpeedIV, 0, offer.SprintIV, 0, offer.JumpIV, 0);
 

@@ -119,11 +119,15 @@ namespace HorseTycoon
                 OpenMenu(pen);
         }
 
-        /// <summary>Horses eligible to be penned: adult, not a baby, not pregnant, not already penned/hidden.</summary>
+        /// <summary>
+        /// Horses eligible to be penned: adult, not pregnant, and either resting in a barn or active
+        /// in a stable. A stable horse only counts if it's standing on the farm and nobody is riding
+        /// it — assigning it pulls it out of its stable (see <see cref="AssignHorse"/>).
+        /// </summary>
         public static List<FarmAnimal> GetEligible(bool wantMale)
         {
             return HorseHelper.GetAllBarnHorses()
-                .Where(h => !HorseHelper.IsHidden(h)
+                .Where(h => (!HorseHelper.IsHidden(h) || HorseHelper.IsStableAnimalAvailable(h, mustBeOnFarm: true))
                             && !h.isBaby()
                             && !HorseHelper.IsPregnant(h)
                             && h.isMale() == wantMale)
@@ -135,6 +139,11 @@ namespace HorseTycoon
         {
             // Free whatever was in this slot first.
             RemoveHorse(pen, asMare, refresh: false);
+
+            // A horse coming straight out of a stable leaves it empty; the pen proxy is now the only
+            // physical copy of it, so the live stable Horse has to go.
+            if (HorseHelper.IsHidden(animal))
+                HorseHelper.VacateStableForAnimal(animal);
 
             pen.modData[asMare ? MareIdKey : StallionIdKey] = animal.myID.Value.ToString();
             animal.modData[HorseHelper.HideKey] = "true";
@@ -279,9 +288,11 @@ namespace HorseTycoon
             HorseStats sireStats = stallion.GetHorseStats();
             mare.modData[HorseHelper.SireIVsKey] = $"{sireStats.SpeedIV},{sireStats.SprintIV},{sireStats.JumpIV}";
 
-            // Release both back to their barns first, then start the pregnancy on the mare.
-            ReleaseFromPen(pen, mare: false);
+            // Only the mare leaves: she goes back to her barn to carry the foal, while the stallion
+            // stays in the pen ready for the next mare (his fed flag resets, so he must eat again).
             ReleaseFromPen(pen, mare: true);
+            pen.modData.Remove(StallionFedKey);
+            RefreshProxies();
 
             BreedingManager.MakePregnant(mare); // sends the mare to the birthing area, 7-day gestation
             Game1.showGlobalMessage($"{mare.displayName} is now pregnant! Sired by {stallion.displayName}.");

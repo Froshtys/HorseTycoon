@@ -1027,6 +1027,37 @@
 			"{{ModId}}.WoodHorseMannequin": "Wooden Horse Mannequin/decor/2 2/2 1/1/2500/-1/{{i18n:WoodHorseMannequin_Name}}/0/{{ModId}}_WoodHorseMannequin/true",
 			"{{ModId}}.ClothHorseMannequin": "Cloth Horse Mannequin/decor/2 2/2 1/1/2500/-1/{{i18n:ClothHorseMannequin_Name}}/0/{{ModId}}_ClothHorseMannequin/true"
 		}
+	},
+	{
+		"LogName": "Horse Computer - Load Texture",
+		"Action": "Load",
+		"Target": "{{ModId}}_HorseComputer",
+		"FromFile": "assets/horse_pc.png"
+	},
+	{
+		// 16x32 sprite = "1 2" tiles; bounding box "1 1" blocks only the tile the tower stands on
+		// and leaves the upper half drawn over whatever is behind it.
+		"LogName": "Horse Computer - Furniture Data",
+		"Action": "EditData",
+		"Target": "Data/Furniture",
+		"Entries": {
+			"{{ModId}}.HorseComputer": "Horse Computer/decor/1 2/1 1/1/5000/-1/{{i18n:HorseComputer_Name}}/0/{{ModId}}_HorseComputer/true"
+		}
+	},
+	{
+		// Robin sells it year-round: it's a piece of furniture, and the stable records are farm
+		// paperwork rather than anything the festival vendors deal in.
+		"LogName": "Horse Computer - Robin's furniture stock",
+		"Action": "EditData",
+		"Target": "Data/Shops",
+		"TargetField": [ "Carpenter", "Items" ],
+		"Entries": {
+			"{{ModId}}_HorseComputer": {
+				"Id": "{{ModId}}_HorseComputer",
+				"ItemId": "(F){{ModId}}.HorseComputer",
+				"Price": 5000
+			}
+		}
 	}
 	]
 }

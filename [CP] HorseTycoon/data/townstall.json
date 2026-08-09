@@ -8,9 +8,16 @@
 	  (Managers/TownStallManager.cs) stamps it onto Town with ApplyMapOverride on the days
 	  the wagon is in, and stamps it back off again afterwards.
 
-	  The counter carries an "OpenShop CP.HorseTycoon_IsaacFestivalShop" tile action, so the
-	  stall sells exactly what Jadu sells at the Summer Horse Festival - the shop and its
-	  Owners/portrait entry live in data/ivpotions.json and stay the single source of truth.
+	  The counter carries an "OpenShop CP.HorseTycoon_IsaacFestivalShop" tile action, so on
+	  Jadu's days the stall sells exactly what he sells at the Summer Horse Festival - the shop
+	  and its Owners/portrait entry live in data/ivpotions.json and stay the single source of
+	  truth.
+
+	  Jadu is only one of three vendors, though: each Bookseller day rolls one of Jadu, the
+	  Horse Seller (Alesia) or the Stud Master (Isaac). Their shops are menus in code, not
+	  Data/Shops entries, so on their days TownStallManager rewrites the Action property on
+	  these four counter tiles after stamping the map - don't assume this file's action is
+	  what the counter ends up carrying.
 	*/
 	"Changes": [
 		{
@@ -18,6 +25,21 @@
 			"Action": "Load",
 			"Target": "Maps/{{ModId}}_TownHorseStall",
 			"FromFile": "assets/maps/Town-HorseStall.tmx"
+		},
+		{
+			/*
+			  The morning "The Bookseller is in town today." toast is a global message shown from
+			  Game1 off the same getDaysOfBooksellerThisSeason() day list the stall uses, so the
+			  two are always in sync - whenever the player sees this line, one of the three horse
+			  vendors is set up next to the wagon. Rewriting the string is the only hook: the
+			  message is loaded straight from Strings\1_6_Strings, not raised as an event.
+			*/
+			"LogName": "Bookseller-in-town toast mentions the horse trader",
+			"Action": "EditData",
+			"Target": "Strings/1_6_Strings",
+			"Entries": {
+				"BooksellerInTown": "{{i18n:BooksellerInTown}}"
+			}
 		}
 	]
 }

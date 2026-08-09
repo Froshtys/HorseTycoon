@@ -139,63 +139,11 @@ namespace HorseTycoon
                 Def.HorseSellerSprite, "Buy one of these beauties and I'll have it delivered straight to your farm!");
         }
 
+        /// <summary>Shared with the Town stall — see <see cref="HorseShopFlows.ConfirmPurchase"/>.
+        /// Every exit path returns to <see cref="ShowHorseSaleMenu"/>, which handles the
+        /// everything-sold case itself.</summary>
         private void ConfirmHorsePurchase(HorseOffer offer)
-        {
-            Response[] yesNo =
-            {
-                new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
-                new("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
-            };
-            Game1.currentLocation.createQuestionDialogue(
-                $"Buy {offer.Name} for {Utility.getNumberWithCommas(offer.Price)}g?",
-                yesNo,
-                (_, answer) =>
-                {
-                    if (answer != "Yes")
-                    {
-                        Game1.afterDialogues = this.ShowHorseSaleMenu;
-                        return;
-                    }
-
-                    // Another player may have bought this offer while the confirm dialogue was open.
-                    if (offer.Purchased)
-                    {
-                        this.SayThenReturnToSaleMenu("Sorry, that horse was just sold to someone else!");
-                        return;
-                    }
-
-                    if (Game1.player.Money < offer.Price)
-                    {
-                        this.SayThenReturnToSaleMenu("You don't have enough gold.");
-                        return;
-                    }
-                    if (HorseHelper.GetAvailableBarn() == null)
-                    {
-                        this.SayThenReturnToSaleMenu("You'll need a barn on your farm before I can deliver a horse.");
-                        return;
-                    }
-                    if (HorseHelper.GetBarnWithHorseSpace() == null)
-                    {
-                        this.SayThenReturnToSaleMenu("Your barn is full! Make some room or build another stable and come see me again.");
-                        return;
-                    }
-
-                    HorseMarket.PurchaseHorse(offer);
-                    this.SayThenReturnToSaleMenu($"{offer.Name} has been delivered to your barn, ready and waiting for you at home!");
-                });
-        }
-
-        /// <summary>Show a message once the current dialogue closes, then drop the player back into
-        /// the sale menu (so a purchase or a failed check doesn't kick them out of the shop).
-        /// <see cref="ShowHorseSaleMenu"/> handles the everything-sold case itself.</summary>
-        private void SayThenReturnToSaleMenu(string message)
-        {
-            Game1.afterDialogues = () =>
-            {
-                Game1.drawObjectDialogue(message);
-                Game1.afterDialogues = this.ShowHorseSaleMenu;
-            };
-        }
+            => HorseShopFlows.ConfirmPurchase(offer, this.ShowHorseSaleMenu);
 
         // ====================================================================================
         // Item Shop (Isaac)
@@ -285,52 +233,11 @@ namespace HorseTycoon
                 Def.StudShopSprite, "Take your pick. Every one of my stallions is a proven champion.");
         }
 
+        /// <summary>Shared with the Town stall — see <see cref="HorseShopFlows.ConfirmStudService"/>.
+        /// Here the mares on offer are the ones the player loaded onto the bus.</summary>
         private void ConfirmStudService(HorseOffer stud)
-        {
-            Response[] yesNo =
-            {
-                new("Yes", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_Yes")),
-                new("No", Game1.content.LoadString("Strings\\Lexicon:QuestionDialogue_No")),
-            };
-            Game1.currentLocation.createQuestionDialogue(
-                $"Hire {stud.Name} for a {Utility.getNumberWithCommas(stud.Price)}g stud fee?",
-                yesNo,
-                (_, answer) =>
-                {
-                    if (answer != "Yes")
-                    {
-                        Game1.afterDialogues = this.ShowStudMenu;
-                        return;
-                    }
-
-                    var mares = this.GetBroughtBreedableHorses();
-                    if (mares.Count == 0)
-                    {
-                        Game1.afterDialogues = () => Game1.drawObjectDialogue("It doesn't look like you brought a mare today. Bring one along next time!");
-                        return;
-                    }
-
-                    // Fee is charged when the mare is picked, so closing the picker cancels cleanly.
-                    Game1.afterDialogues = () =>
-                        Game1.activeClickableMenu = new HorseSelectMenu(
-                            $"Breed with {stud.Name}",
-                            mares,
-                            mare =>
-                            {
-                                if (Game1.player.Money < stud.Price)
-                                {
-                                    Game1.drawObjectDialogue("You don't have enough gold.");
-                                    Game1.afterDialogues = this.ShowStudMenu;
-                                    return;
-                                }
-                                HorseMarket.PurchaseStudService(stud, mare);
-                                Game1.drawObjectDialogue(
-                                    $"{mare.Name} and {stud.Name} hit it off! {mare.Name} is now pregnant. " +
-                                    $"The foal is due in {BreedingManager.GestationDays} days.");
-                                Game1.afterDialogues = this.ShowStudMenu;
-                            });
-                });
-        }
+            => HorseShopFlows.ConfirmStudService(stud, this.GetBroughtBreedableHorses, this.ShowStudMenu,
+                "It doesn't look like you brought a mare today. Bring one along next time!");
 
         /// <summary>The player's horses whose stud services can be offered to the Stud Shop: grown
         /// stallions from any barn (they don't need to have been brought to the festival). Horses

@@ -1004,25 +1004,12 @@ namespace HorseTycoon
 
         /// <summary>True for a hidden (stable-assigned) FarmAnimal whose live Horse exists and isn't
         /// currently being ridden by another farmer, so it can be loaded onto the bus.</summary>
-        private static bool IsStableAnimalAvailable(FarmAnimal animal)
-        {
-            if (!HorseHelper.IsHidden(animal)) return false;
-            Horse? horse = FindStableHorseForAnimal(animal.myID.Value);
-            return horse != null
-                && !Game1.getOnlineFarmers().Any(f => f != Game1.player && f.mount?.HorseId == horse.HorseId);
-        }
+        private static bool IsStableAnimalAvailable(FarmAnimal animal) =>
+            HorseHelper.IsStableAnimalAvailable(animal);
 
         /// <summary>Finds the live stable Horse entity backing a hidden FarmAnimal, if any.</summary>
-        private static Horse? FindStableHorseForAnimal(long animalId)
-        {
-            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
-            {
-                if (stable.modData.TryGetValue(HorseHelper.CurrentFarmHorseIdKey, out string idStr)
-                    && long.TryParse(idStr, out long id) && id == animalId)
-                    return stable.getStableHorse();
-            }
-            return null;
-        }
+        private static Horse? FindStableHorseForAnimal(long animalId) =>
+            HorseHelper.FindStableHorseForAnimal(animalId);
 
         /// <summary>Charges the fare and replicates the vanilla bus boarding sequence (walk to the door, bus
         /// drives off) so the same departure animation plays, then redirects to the festival via
@@ -3486,6 +3473,38 @@ namespace HorseTycoon
                 modIDs: new[] { this.Helper.ModRegistry.ModID });
             // Host handles it locally, since SendMessage does not deliver to the sender.
             this.StartCeremony(orderedIds, endBarrierId);
+
+            // The result goes in the farm's race log for the Horse Computer. Written here rather than in
+            // StartCeremony because only the host's npcRacers/FinishOrder give the full picture, and the
+            // Farm's modData syncs the entry out to every farmhand's copy.
+            this.RecordRaceResult(orderedIds);
+        }
+
+        /// <summary>Files the finished race in <see cref="RaceHistoryManager"/>: the winner's name plus
+        /// each human racer's 1-based placement (NPC racers count toward the field size but aren't
+        /// listed individually).</summary>
+        private void RecordRaceResult(List<long> rankedIds)
+        {
+            if (rankedIds.Count == 0)
+                return;
+
+            // A racer is an NPC exactly when it has a fake id in npcRacers — testing the sign instead
+            // would misread the real players, whose UniqueMultiplayerID is a random 64-bit value that
+            // is very often negative.
+            Dictionary<long, int> placements = new();
+            for (int i = 0; i < rankedIds.Count; i++)
+            {
+                if (!npcRacers.Any(racer => racer.FakeId == rankedIds[i]))
+                    placements[rankedIds[i]] = i + 1;
+            }
+
+            RaceHistoryManager.RecordRace(
+                season: Def.Season,
+                year: Game1.year,
+                festivalName: Def.FestivalDisplayName,
+                winnerName: this.GetRacerName(rankedIds[0]),
+                totalRacers: rankedIds.Count,
+                placements: placements);
         }
 
         private void StartCeremony(List<long> rankedPlayerIds, string endBarrierId)

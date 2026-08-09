@@ -338,6 +338,78 @@ namespace HorseTycoon
                    value == "true";
         }
 
+        /// <summary>Finds the live stable <see cref="Horse"/> entity backing a hidden FarmAnimal, if any.</summary>
+        public static Horse? FindStableHorseForAnimal(long animalId)
+        {
+            foreach (Stable stable in Game1.getFarm().buildings.OfType<Stable>())
+            {
+                if (stable.modData.TryGetValue(CurrentFarmHorseIdKey, out string idStr)
+                    && long.TryParse(idStr, out long id) && id == animalId)
+                    return stable.getStableHorse();
+            }
+            return null;
+        }
+
+        /// <summary>The stable a hidden FarmAnimal is currently assigned to, if any.</summary>
+        public static Stable? FindStableForAnimal(long animalId) =>
+            Game1.getFarm().buildings.OfType<Stable>()
+                .FirstOrDefault(s => s.modData.TryGetValue(CurrentFarmHorseIdKey, out string idStr)
+                                     && long.TryParse(idStr, out long id) && id == animalId);
+
+        /// <summary>
+        /// True for a hidden (stable-assigned) FarmAnimal whose live Horse exists and isn't being
+        /// ridden by another farmer, so it can be taken out of its stable.
+        /// </summary>
+        /// <param name="mustBeOnFarm">Also require the horse to be standing on the farm and not
+        /// ridden by the local player either (used where the horse has to be physically collected,
+        /// e.g. the breeding pen).</param>
+        public static bool IsStableAnimalAvailable(FarmAnimal animal, bool mustBeOnFarm = false)
+        {
+            if (!IsHidden(animal)) return false;
+
+            Horse? horse = FindStableHorseForAnimal(animal.myID.Value);
+            if (horse == null) return false;
+
+            if (Game1.getOnlineFarmers().Any(f => f != Game1.player && f.mount?.HorseId == horse.HorseId))
+                return false;
+
+            if (mustBeOnFarm)
+            {
+                if (horse.currentLocation is not Farm) return false;
+                if (Game1.player.mount?.HorseId == horse.HorseId) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Takes a horse out of its stable: despawns the live Horse entity and leaves the stable
+        /// intentionally empty (mirrors the swap menu's "return to barn" path). The FarmAnimal itself
+        /// is left hidden — the caller decides where it goes next.
+        /// </summary>
+        public static void VacateStableForAnimal(FarmAnimal animal)
+        {
+            Stable? stable = FindStableForAnimal(animal.myID.Value);
+            if (stable == null) return;
+
+            Horse? stableHorse = stable.getStableHorse();
+            if (stableHorse != null)
+            {
+                Game1.getFarm().characters.Remove(stableHorse);
+                stableHorse.currentLocation?.characters.Remove(stableHorse);
+            }
+
+            stable.modData.Remove(CurrentFarmHorseIdKey);
+            stable.modData[StableEmptyKey] = "true";
+            stable.HorseId = Guid.Empty;
+            animal.modData.Remove("Froshty.HorseTycoon/CurrentStableId");
+
+            // The stable is still theirs, but empty: the owner's flute must stop calling this horse.
+            StableOwnershipManager.SyncHorseNameForStableOwner(stable);
+            if (stable.owner.Value == Game1.player.UniqueMultiplayerID)
+                StableOwnershipManager.SyncHorseNameForLocalPlayer();
+        }
+
         public static void RestoreHorse(FarmAnimal horse)
         {
             if (horse == null) return;
